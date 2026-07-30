@@ -1,0 +1,11 @@
+# Artefatos de build — cada workspace Rust (raiz e src-tauri) tem o seu
+/target/
+/src-tauri/target/
+/src-tauri/gen/
+
+# Fixtures de desenvolvimento: dados reais do usuário, nunca versionar
+# (ver frontend/fixtures/README.md — regenerar localmente quando precisar)
+/frontend/fixtures/*.json
+
+# Instaladores gerados localmente (o de produção sai do CI, ver .github/workflows)
+/src-tauri/target/release/bundle/

@@ -1,0 +1,19 @@
+[workspace]
+resolver = "2"
+members = ["bridge", "core-cli"]
+# src-tauri fica de fora do workspace (não de "exclude" no sentido de não
+# existir — continua endereçável via --manifest-path) deliberadamente: é a
+# única parte que depende de WebKitGTK/WebView2, que este ambiente Linux não
+# tem instalado (e o alvo final é Windows mesmo). Isso permite `cargo build
+# --workspace` compilar tudo que É testável aqui sem tropeçar nela.
+exclude = ["src-tauri"]
+
+# Build de produção: binário menor e mais rápido. src-tauri fica fora deste
+# workspace (ver acima), então tem o mesmo bloco duplicado no seu próprio
+# Cargo.toml — é o que "cargo tauri build" realmente usa.
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true
+

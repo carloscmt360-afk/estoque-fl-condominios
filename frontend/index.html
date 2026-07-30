@@ -1,0 +1,341 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Estoque FL Condomínios</title>
+<link rel="stylesheet" href="css/tokens.css" />
+<link rel="stylesheet" href="css/layout.css" />
+<link rel="stylesheet" href="css/components.css" />
+</head>
+<body>
+
+<div id="startupError" class="startup-error" style="display:none;">
+  <div class="big">⚠</div>
+  <h2>Não foi possível iniciar o aplicativo</h2>
+  <p class="muted">A pasta de dados não pôde ser criada ou aberta.</p>
+  <pre id="startupErrorDetail"></pre>
+  <button class="btn-primary" id="btnRetryInit">Tentar novamente</button>
+</div>
+
+<div class="app-shell" id="appShell" style="display:none;">
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <div class="logo">FL</div>
+      <div>
+        <div class="name">Estoque FL</div>
+        <div class="sub">Condomínios</div>
+      </div>
+    </div>
+    <nav class="sidebar-nav" id="sidebarNav">
+      <button class="nav-item active" data-view="dashboard"><span class="ico">📊</span> Relatório Mensal</button>
+      <button class="nav-item" data-view="products"><span class="ico">📦</span> Produtos</button>
+      <button class="nav-item" data-view="movements"><span class="ico">🕒</span> Linha do Tempo</button>
+      <button class="nav-item" data-view="departments"><span class="ico">🏢</span> Departamentos</button>
+      <button class="nav-item" data-view="importExport"><span class="ico">⇄</span> Importar / Exportar</button>
+    </nav>
+    <div class="sidebar-foot">Dados salvos localmente em<br/><code>dados/estoque.db</code>, ao lado do programa.</div>
+  </aside>
+
+  <main class="content">
+
+    <!-- ============================== DASHBOARD / RELATÓRIO ============================== -->
+    <section class="view active" id="view-dashboard">
+      <div class="content-header">
+        <div>
+          <h1>Relatório Mensal</h1>
+          <div class="sub">Estoque, consumo e custo por departamento</div>
+        </div>
+      </div>
+
+      <div class="toolbar">
+        <div class="field"><label for="repMes">Mês</label><select id="repMes"></select></div>
+        <div class="field"><label for="repAno">Ano</label><select id="repAno"></select></div>
+        <div class="field"><label for="repDepto">Departamento</label><select id="repDepto"><option value="">Todos</option></select></div>
+        <div class="field">
+          <label for="repJanela">Janela de consumo</label>
+          <select id="repJanela">
+            <option value="3">Últimos 3 meses</option>
+            <option value="6" selected>Últimos 6 meses</option>
+            <option value="12">Últimos 12 meses</option>
+          </select>
+        </div>
+        <span class="spacer"></span>
+        <button class="btn-outline" id="btnMesAtual">↺ Mês atual</button>
+        <button class="btn-primary" id="btnExportarRelatorio">⬇ Exportar (CSV)</button>
+      </div>
+
+      <div id="repScopeNote" style="display:none;margin-bottom:16px;"></div>
+
+      <div class="section-title">Indicadores do período</div>
+      <div class="card" style="padding:16px 20px;display:grid;grid-template-columns:minmax(220px,1fr) minmax(220px,1.1fr);gap:20px;align-items:center;margin-bottom:12px;">
+        <div>
+          <div class="stat-tile-label muted" style="font-size:11px;font-weight:700;text-transform:uppercase;">Consumo do mês</div>
+          <div id="repHeroValor" style="font-size:38px;font-weight:800;color:var(--ink-primary);margin:4px 0 6px;">R$ 0,00</div>
+          <div style="display:flex;gap:14px;font-size:12px;">
+            <span id="repHeroDeltaMes"></span><span id="repHeroDeltaAno"></span>
+          </div>
+        </div>
+        <div>
+          <div class="muted" style="font-size:10.5px;text-transform:uppercase;margin-bottom:4px;">Últimos 12 meses</div>
+          <div class="chart-host" id="repSpark"></div>
+        </div>
+      </div>
+
+      <div class="stat-grid" id="repTiles"></div>
+
+      <div class="section-title">Evolução e comparativos</div>
+      <div class="charts-grid">
+        <div class="card chart-card" id="cardConsumoAnual">
+          <div class="card-head"><div><h3>Consumo mensal — <span class="ry"></span> vs <span class="ry-1"></span></h3><div class="sub">Meses ainda não decorridos ficam sem barra.</div></div>
+            <button class="btn-ghost btn-sm" data-toggle-table="cardConsumoAnual">Ver tabela</button></div>
+          <div class="legend" id="legConsumoAnual"></div>
+          <div class="card-body"><div class="chart-host" id="chartConsumoAnual"></div><div class="tbl-view" id="tblConsumoAnual" style="display:none"></div></div>
+        </div>
+        <div class="card chart-card" id="cardValorEstoque">
+          <div class="card-head"><div><h3>Valor do estoque — 12 meses</h3><div class="sub">Reconstruído pelas movimentações.</div></div>
+            <button class="btn-ghost btn-sm" data-toggle-table="cardValorEstoque">Ver tabela</button></div>
+          <div class="card-body"><div class="chart-host" id="chartValorEstoque"></div><div class="tbl-view" id="tblValorEstoque" style="display:none"></div></div>
+        </div>
+        <div class="card chart-card" id="cardDeptoMes">
+          <div class="card-head"><div><h3>Custo por departamento — <span class="rmes"></span></h3><div class="sub">Ordenado por valor.</div></div>
+            <button class="btn-ghost btn-sm" data-toggle-table="cardDeptoMes">Ver tabela</button></div>
+          <div class="card-body"><div class="chart-host" id="chartDeptoMes"></div><div class="tbl-view" id="tblDeptoMes" style="display:none"></div></div>
+        </div>
+        <div class="card chart-card" id="cardDeptoYTD">
+          <div class="card-head"><div><h3>Acumulado por departamento</h3><div class="sub">Mesmo nº de meses nos dois anos.</div></div>
+            <button class="btn-ghost btn-sm" data-toggle-table="cardDeptoYTD">Ver tabela</button></div>
+          <div class="legend" id="legDeptoYTD"></div>
+          <div class="card-body"><div class="chart-host" id="chartDeptoYTD"></div><div class="tbl-view" id="tblDeptoYTD" style="display:none"></div></div>
+        </div>
+        <div class="card chart-card" id="cardABC">
+          <div class="card-head"><div><h3>Curva ABC</h3><div class="sub">A = até 80% do valor · B = 80–95% · C = 5% finais.</div></div>
+            <button class="btn-ghost btn-sm" data-toggle-table="cardABC">Ver tabela</button></div>
+          <div class="legend" id="legABC"></div>
+          <div class="card-body"><div class="chart-host" id="chartABC"></div><div class="tbl-view" id="tblABC" style="display:none"></div></div>
+        </div>
+        <div class="card chart-card" id="cardTopConsumo">
+          <div class="card-head"><div><h3>Materiais mais consumidos</h3><div class="sub">Top 10 por valor no período.</div></div>
+            <button class="btn-ghost btn-sm" data-toggle-table="cardTopConsumo">Ver tabela</button></div>
+          <div class="card-body"><div class="chart-host" id="chartTopConsumo"></div><div class="tbl-view" id="tblTopConsumo" style="display:none"></div></div>
+        </div>
+      </div>
+
+      <div class="section-title">Alertas e consistência dos dados</div>
+      <div class="panel">
+        <table><thead><tr><th>Ocorrência</th><th class="num">Itens</th><th class="num">Valor</th><th>Detalhe</th></tr></thead>
+          <tbody id="repAlertasTbody"></tbody></table>
+      </div>
+
+      <div class="section-title">Posição de estoque</div>
+      <div class="panel">
+        <div class="panel-head">
+          <h2>Saldo, custo médio e criticidade por item</h2>
+          <div class="toolbar" style="margin:0;">
+            <input type="text" id="repFiltroProduto" placeholder="Buscar material..." />
+            <select id="repFiltroClasse"><option value="">Todas as classes</option><option value="A">A</option><option value="B">B</option><option value="C">C</option></select>
+            <select id="repFiltroSituacao">
+              <option value="">Todas as situações</option>
+              <option value="ruptura">Em ruptura</option>
+              <option value="baixo">Abaixo do mínimo</option>
+              <option value="parado">Capital parado</option>
+              <option value="ok">Normal</option>
+            </select>
+          </div>
+        </div>
+        <div style="overflow-x:auto;">
+          <table>
+            <thead><tr><th>Material</th><th>Categoria</th><th>Unid.</th><th class="num">Saldo</th><th class="num">Custo médio</th>
+              <th class="num">Valor</th><th class="num">% valor</th><th>ABC</th><th class="num">Consumo/mês</th>
+              <th class="num">Cobertura</th><th>Situação</th></tr></thead>
+            <tbody id="repPosicaoTbody"></tbody>
+            <tfoot id="repPosicaoTfoot"></tfoot>
+          </table>
+        </div>
+      </div>
+
+      <div class="section-title">Custo por departamento</div>
+      <div class="panel">
+        <table>
+          <thead><tr><th>Departamento</th><th class="num"><span class="rmes"></span></th><th class="num">Acum. atual</th>
+            <th class="num">Acum. anterior</th><th class="num">Variação R$</th><th class="num">Δ %</th><th class="num">% total</th></tr></thead>
+          <tbody id="repDeptoTbody"></tbody>
+          <tfoot id="repDeptoTfoot"></tfoot>
+        </table>
+      </div>
+
+      <div class="section-title">Pedidos do período</div>
+      <div class="panel">
+        <div class="panel-head"><h2>Detalhamento das saídas</h2>
+          <input type="text" id="repFiltroPedido" placeholder="Buscar..." /></div>
+        <div style="overflow-x:auto;">
+          <table>
+            <thead><tr><th>Data</th><th>Departamento</th><th>Material</th><th class="num">Qtd.</th>
+              <th class="num">Valor unit.</th><th class="num">Valor total</th><th>Solicitante</th><th>Encarregado</th></tr></thead>
+            <tbody id="repPedidosTbody"></tbody>
+            <tfoot id="repPedidosTfoot"></tfoot>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================== PRODUTOS ============================== -->
+    <section class="view" id="view-products">
+      <div class="content-header"><div><h1>Produtos</h1><div class="sub">Catálogo e posição de estoque</div></div></div>
+      <div class="stat-grid" id="productsStatGrid"></div>
+      <div class="toolbar">
+        <button class="btn-primary" id="btnNovoProduto">＋ Novo Produto</button>
+        <button class="btn-outline" id="btnRegistrarEntrada">↓ Entrada</button>
+        <button class="btn-outline" id="btnBaixaProdutos">↑ Baixa</button>
+        <button class="btn-outline" id="btnCorrigirEstoque">🛠 Corrigir</button>
+        <span class="spacer"></span>
+        <input type="text" id="filtroProdutoNome" placeholder="Buscar produto..." />
+        <select id="filtroProdutoStatus"><option value="">Todos os status</option><option value="ok">Estoque OK</option><option value="low">Abaixo do mínimo</option></select>
+      </div>
+      <div class="panel"><div style="overflow-x:auto;">
+        <table>
+          <thead><tr><th>Produto</th><th>Categoria</th><th>Unid.</th><th class="num">Qtd.</th><th class="num">Mín.</th>
+            <th class="num">Custo médio</th><th class="num">Valor total</th><th>Status</th><th>Ações</th></tr></thead>
+          <tbody id="productsTbody"></tbody>
+        </table>
+      </div></div>
+    </section>
+
+    <!-- ============================== LINHA DO TEMPO ============================== -->
+    <section class="view" id="view-movements">
+      <div class="content-header"><div><h1>Linha do Tempo</h1><div class="sub">Todas as movimentações registradas</div></div></div>
+      <div class="toolbar">
+        <select id="filtroTimelineProduto"><option value="">Todos os produtos</option></select>
+        <select id="filtroTimelineTipo"><option value="">Todos os tipos</option><option value="entrada">Entradas</option><option value="saida">Saídas</option><option value="ajuste">Correções</option></select>
+      </div>
+      <div class="panel"><div style="overflow-x:auto;">
+        <table>
+          <thead><tr><th>Data</th><th>Tipo</th><th>Produto</th><th class="num">Qtd.</th><th>Detalhes</th><th class="num">Saldo após</th></tr></thead>
+          <tbody id="timelineTbody"></tbody>
+        </table>
+      </div></div>
+    </section>
+
+    <!-- ============================== DEPARTAMENTOS ============================== -->
+    <section class="view" id="view-departments">
+      <div class="content-header"><div><h1>Departamentos</h1><div class="sub">Clientes internos que retiram material</div></div></div>
+      <div class="toolbar"><button class="btn-primary" id="btnNovoDepartamento">＋ Novo Departamento</button></div>
+      <div class="panel"><div style="overflow-x:auto;">
+        <table>
+          <thead><tr><th>Departamento</th><th>Encarregado</th><th>Ações</th></tr></thead>
+          <tbody id="departmentsTbody"></tbody>
+        </table>
+      </div></div>
+    </section>
+
+    <!-- ============================== IMPORTAR / EXPORTAR ============================== -->
+    <section class="view" id="view-importExport">
+      <div class="content-header"><div><h1>Importar / Exportar</h1><div class="sub">Backup completo dos dados</div></div></div>
+      <div class="panel" style="padding:20px;display:flex;flex-direction:column;gap:14px;max-width:560px;">
+        <div>
+          <h2 style="margin-bottom:6px;">Backup (JSON)</h2>
+          <p class="muted" style="margin:0 0 10px;">Contém produtos, departamentos e todas as movimentações — o mesmo formato usado para migrar do app web anterior.</p>
+          <div style="display:flex;gap:8px;">
+            <button class="btn-primary" id="btnExportarBackup">⬇ Exportar backup</button>
+            <button class="btn-outline" id="btnImportarBackup">⬆ Importar backup</button>
+            <input type="file" id="importFile" accept=".json" style="display:none" />
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<div id="toast"></div>
+<div id="vizTip" role="status" aria-live="polite"></div>
+
+<!-- MODAL: Produto -->
+<div class="overlay" id="modalProduto"><div class="modal">
+  <div class="modal-head"><h3 id="modalProdutoTitulo">Novo Produto</h3><button class="btn-ghost" data-close="modalProduto">✕</button></div>
+  <div class="modal-body">
+    <input type="hidden" id="prodId" />
+    <div class="field"><label>Nome do produto *</label><input type="text" id="prodNome" /></div>
+    <div class="field-row">
+      <div class="field"><label>Unidade *</label>
+        <select id="prodUnidadeSelect">
+          <option>Unidade</option><option>Pacote</option><option>Caixa</option><option>Kit</option>
+          <option>Rolo</option><option>Resma</option><option>Frasco</option><option>Galão</option>
+          <option>Litro</option><option>Quilo</option><option>Metro</option><option>Par</option>
+        </select>
+      </div>
+      <div class="field"><label>Estoque mínimo *</label><input type="number" id="prodMinimo" min="0" step="any" value="0" /></div>
+    </div>
+    <div class="field"><label>Categoria</label><input type="text" id="prodCategoria" list="listaCategorias" /><datalist id="listaCategorias"></datalist></div>
+    <div class="field-row" id="prodInicialBox">
+      <div class="field"><label>Qtd. inicial</label><input type="number" id="prodQtdInicial" min="0" step="any" value="0" /></div>
+      <div class="field"><label>Custo unitário inicial (R$)</label><input type="number" id="prodCustoInicial" min="0" step="any" value="0" /></div>
+    </div>
+    <div class="info-box">A quantidade e custo iniciais geram automaticamente o primeiro registro de entrada.</div>
+  </div>
+  <div class="modal-foot"><button class="btn-outline" data-close="modalProduto">Cancelar</button><button class="btn-primary" id="btnSalvarProduto">Salvar</button></div>
+</div></div>
+
+<!-- MODAL: Entrada -->
+<div class="overlay" id="modalEntrada"><div class="modal">
+  <div class="modal-head"><h3>↓ Registrar Entrada</h3><button class="btn-ghost" data-close="modalEntrada">✕</button></div>
+  <div class="modal-body">
+    <div class="field"><label>Produto *</label><select id="entProduto"></select></div>
+    <div class="field-row">
+      <div class="field"><label>Quantidade recebida *</label><input type="number" id="entQtd" min="0.0001" step="any" /></div>
+      <div class="field"><label>Preço unitário (R$) *</label><input type="number" id="entPreco" min="0" step="any" /></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Fornecedor *</label><input type="text" id="entFornecedor" /></div>
+      <div class="field"><label>Nº da Nota Fiscal *</label><input type="text" id="entNF" /></div>
+    </div>
+    <div class="field"><label>Data</label><input type="datetime-local" id="entData" /></div>
+    <div class="field"><label>Observações</label><input type="text" id="entObs" /></div>
+    <div class="info-box" id="entInfoBox">Selecione um produto para ver o novo custo médio ponderado.</div>
+  </div>
+  <div class="modal-foot"><button class="btn-outline" data-close="modalEntrada">Cancelar</button><button class="btn-primary" id="btnSalvarEntrada">Registrar</button></div>
+</div></div>
+
+<!-- MODAL: Saída -->
+<div class="overlay" id="modalSaida"><div class="modal">
+  <div class="modal-head"><h3>↑ Baixa de Produtos</h3><button class="btn-ghost" data-close="modalSaida">✕</button></div>
+  <div class="modal-body">
+    <div class="field"><label>Produto *</label><select id="saiProduto"></select></div>
+    <div class="field"><label>Quantidade *</label><input type="number" id="saiQtd" min="0.0001" step="any" /></div>
+    <div class="field"><label>Departamento *</label><select id="saiDepartamento"></select><div class="muted" id="saiEncarregadoHint"></div></div>
+    <div class="field"><label>Solicitante</label><input type="text" id="saiSolicitante" list="listaSolicitantes" /><datalist id="listaSolicitantes"></datalist></div>
+    <div class="field"><label>Data</label><input type="datetime-local" id="saiData" /></div>
+    <div class="field"><label>Observações</label><input type="text" id="saiObs" /></div>
+    <div class="info-box" id="saiInfoBox">Selecione um produto para ver o estoque disponível.</div>
+  </div>
+  <div class="modal-foot"><button class="btn-outline" data-close="modalSaida">Cancelar</button><button class="btn-primary" id="btnSalvarSaida">Registrar</button></div>
+</div></div>
+
+<!-- MODAL: Correção -->
+<div class="overlay" id="modalCorrecao"><div class="modal">
+  <div class="modal-head"><h3>🛠 Corrigir Estoque</h3><button class="btn-ghost" data-close="modalCorrecao">✕</button></div>
+  <div class="modal-body">
+    <div class="info-box">Use após uma contagem física, sem apagar entradas/saídas anteriores.</div>
+    <div class="field"><label>Produto *</label><select id="corProduto"></select></div>
+    <div class="field"><label>Quantidade contada (real) *</label><input type="number" id="corQtdReal" min="0" step="any" /></div>
+    <div class="field"><label>Motivo *</label><input type="text" id="corMotivo" /></div>
+    <div class="field"><label>Data</label><input type="datetime-local" id="corData" /></div>
+    <div class="info-box" id="corInfoBox"></div>
+  </div>
+  <div class="modal-foot"><button class="btn-outline" data-close="modalCorrecao">Cancelar</button><button class="btn-primary" id="btnSalvarCorrecao">Aplicar</button></div>
+</div></div>
+
+<!-- MODAL: Departamento -->
+<div class="overlay" id="modalDepartamento"><div class="modal">
+  <div class="modal-head"><h3 id="modalDepartamentoTitulo">Novo Departamento</h3><button class="btn-ghost" data-close="modalDepartamento">✕</button></div>
+  <div class="modal-body">
+    <input type="hidden" id="depId" />
+    <div class="field"><label>Nome *</label><input type="text" id="depNome" /></div>
+    <div class="field"><label>Encarregado *</label><input type="text" id="depEncarregado" /></div>
+  </div>
+  <div class="modal-foot"><button class="btn-outline" data-close="modalDepartamento">Cancelar</button><button class="btn-primary" id="btnSalvarDepartamento">Salvar</button></div>
+</div></div>
+
+<script type="module" src="js/app.js"></script>
+</body>
+</html>

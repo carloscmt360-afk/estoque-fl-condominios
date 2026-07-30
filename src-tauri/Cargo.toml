@@ -1,0 +1,30 @@
+[package]
+name = "estoque-fl-app"
+version = "0.1.0"
+edition = "2021"
+
+# Casca fina: nenhuma lógica de negócio mora aqui — só abre a sessão (via
+# `bridge`), resolve o caminho portátil no startup e expõe comandos Tauri
+# que fazem lock()+delegam para a ponte cxx. É a ÚNICA parte do workspace
+# que depende de WebKitGTK/WebView2 (por isso fica fora do build padrão do
+# workspace — ver Cargo.toml raiz).
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+bridge = { path = "../bridge" }
+cxx = "1"
+tauri = { version = "2", features = [] }
+serde = { version = "1", features = ["derive"] }
+
+[[bin]]
+name = "estoque-fl-app"
+path = "src/main.rs"
+
+# src-tauri não faz parte do workspace raiz (ver Cargo.toml lá) — por isso
+# repete aqui o mesmo perfil de release, que é o que "cargo tauri build" usa.
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true

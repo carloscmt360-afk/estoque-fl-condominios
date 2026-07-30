@@ -1,0 +1,98 @@
+/* Tokens de design — "moderno e sóbrio": superfícies planas, acento único,
+   bordas finas no lugar de sombra pesada. A paleta categórica dos gráficos
+   (--chart-*) é a mesma já validada para acessibilidade no app anterior —
+   não mexer nela ao ajustar o visual. */
+:root {
+  /* Só existe tema claro por enquanto (mesmo escopo do app anterior) —
+     declarar isso explicitamente impede o navegador de "auto-escurecer"
+     elementos sem cor declarada (ex.: fill="transparent" em SVG), o que
+     pintava os retângulos de captura dos gráficos de preto sólido. */
+  color-scheme: light;
+
+  /* Superfícies */
+  --page-bg: #f5f5f6;
+  --surface: #ffffff;
+  --surface-sunken: #fafafa;
+  --border: #e2e2e5;
+  --border-strong: #cfcfd3;
+
+  /* Tinta (texto) */
+  --ink-primary: #1a1a1e;
+  --ink-secondary: #63636a;
+  --ink-muted: #9a9aa0;
+  --ink-on-accent: #ffffff;
+
+  /* Acento único — mesmo azul já usado como série primária dos gráficos
+     (consistência de marca, contraste já validado) */
+  --accent: #2a78d6;
+  --accent-hover: #1f63b8;
+  --accent-soft: #eaf2fc;
+
+  /* Estado (reaproveita os tons de status já validados nos gráficos) */
+  --success: #0ca30c;
+  --success-soft: #e8f7e8;
+  --warning: #8a5b00;
+  --warning-soft: #fdf3e0;
+  --danger: #d03b3b;
+  --danger-soft: #fbeaea;
+
+  /* Paleta categórica dos gráficos — intocada */
+  --chart-s1: #2a78d6;
+  --chart-s2: #eb6834;
+  --chart-prior: #86b6ef;
+  --chart-abc-a: #184f95;
+  --chart-abc-b: #3987e5;
+  --chart-abc-c: #86b6ef;
+  --chart-grid: #e4e9f0;
+  --chart-axis: #c3c2b7;
+  --chart-muted: #6b7280;
+
+  /* Espaçamento (escala 4px) */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+
+  /* Raio e sombra — sombra só para overlays transitórios (modal/toast) */
+  --radius: 8px;
+  --radius-sm: 6px;
+  --shadow-overlay: 0 12px 32px rgba(0, 0, 0, 0.18);
+
+  /* Tipografia — pilha de sistema (Segoe UI no Windows, reforça app nativo) */
+  --font-sans: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+
+  --sidebar-w: 232px;
+}
+
+* {
+  box-sizing: border-box;
+}
+html,
+body {
+  height: 100%;
+}
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  background: var(--page-bg);
+  color: var(--ink-primary);
+  font-size: 13.5px;
+  line-height: 1.45;
+}
+h1,
+h2,
+h3,
+h4 {
+  margin: 0;
+  font-weight: 700;
+}
+button,
+input,
+select,
+textarea {
+  font-family: inherit;
+  font-size: inherit;
+}

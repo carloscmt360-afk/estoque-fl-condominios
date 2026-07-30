@@ -1,0 +1,11 @@
+[package]
+name = "core-cli"
+version = "0.1.0"
+edition = "2021"
+
+# Depende SÓ da ponte cxx + do núcleo C++ — nenhuma dependência de `tauri`
+# nem de WebKitGTK. É o que permite validar a lógica de negócio inteira
+# neste ambiente Linux, mesmo o alvo final sendo um app Windows.
+[dependencies]
+bridge = { path = "../bridge" }
+serde_json = "1"

@@ -1,0 +1,6 @@
+{
+  "identifier": "default",
+  "description": "Capacidades da janela principal — nenhum plugin externo, só os comandos definidos em commands.rs (não precisam de permissão explícita, ela é para plugins) e as operações básicas de janela/webview.",
+  "windows": ["main"],
+  "permissions": ["core:default"]
+}
