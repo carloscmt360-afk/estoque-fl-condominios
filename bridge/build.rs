@@ -42,9 +42,17 @@ fn main() {
     ] {
         bridge_build.file(core_cpp.join("src").join(src));
     }
-    bridge_build
-        .flag_if_supported("-std=c++17")
-        .warnings(true);
+    // "-std=c++17" é sintaxe GCC/Clang; o MSVC (cl.exe) não reconhece essa
+    // flag e a descarta silenciosamente via flag_if_supported, compilando em
+    // modo pré-C++17 (o que quebra `namespace a::b { ... }` no shim — MSVC
+    // exige "/std:c++17" explicitamente para nested-namespace-definition).
+    let target_env = std::env::var("CARGO_CFG_TARGET_ENV").unwrap_or_default();
+    if target_env == "msvc" {
+        bridge_build.flag("/std:c++17");
+    } else {
+        bridge_build.flag_if_supported("-std=c++17");
+    }
+    bridge_build.warnings(true);
     bridge_build.compile("estoque_bridge");
 
     println!("cargo:rerun-if-changed={}", cpp_dir.display());

@@ -8,6 +8,10 @@
 // departamentos em JSON na pasta indicada — usado para regenerar
 // frontend/fixtures/ (dados REAIS, nunca versionados — ver fixtures/README.md)
 // quando for iterar no mock de desenvolvimento do frontend.
+//
+// `--db <caminho>`: cria/atualiza o banco SQLite exatamente nesse caminho em
+// vez da pasta temporária padrão — usado para popular de verdade uma pasta
+// dados/ de produção (ex.: ao lado de onde o .exe vai rodar).
 use bridge::ffi;
 use std::fs;
 use std::path::PathBuf;
@@ -15,27 +19,35 @@ use std::path::PathBuf;
 const BACKUP_PATH: &str = "/home/cruz/Área de trabalho/Projetos/Carlos FL/carga_inicial_ref_jun26.json";
 
 fn main() {
-    let dump_dir = std::env::args()
-        .collect::<Vec<_>>()
-        .windows(2)
-        .find(|w| w[0] == "--dump-fixtures")
-        .map(|w| w[1].clone());
+    let args: Vec<String> = std::env::args().collect();
+    let dump_dir = args.windows(2).find(|w| w[0] == "--dump-fixtures").map(|w| w[1].clone());
+    let db_override = args.windows(2).find(|w| w[0] == "--db").map(|w| w[1].clone());
 
-    if let Err(e) = run(dump_dir.as_deref()) {
+    if let Err(e) = run(dump_dir.as_deref(), db_override.as_deref()) {
         eprintln!("[core-cli] FALHOU — {e}");
         std::process::exit(1);
     }
 }
 
-fn run(dump_dir: Option<&str>) -> Result<(), String> {
-    // Armazenamento portátil: dados/ criado numa pasta temporária que simula
-    // "ao lado do executável" (o resolvedor de produção usa o diretório real
-    // do binário — testado via resolveDataDir(exeDir) em core-cpp/tests).
-    let mut data_dir = std::env::temp_dir();
-    data_dir.push("estoque_core_cli_demo");
-    fs::create_dir_all(&data_dir).map_err(|e| e.to_string())?;
-    let db_path: PathBuf = data_dir.join("estoque.db");
-    let _ = fs::remove_file(&db_path); // roda limpo a cada chamada
+fn run(dump_dir: Option<&str>, db_override: Option<&str>) -> Result<(), String> {
+    // Armazenamento portátil: por padrão, dados/ numa pasta temporária que
+    // simula "ao lado do executável" (o resolvedor de produção usa o
+    // diretório real do binário — testado via resolveDataDir(exeDir) em
+    // core-cpp/tests). --db permite apontar para um caminho real.
+    let db_path: PathBuf = match db_override {
+        Some(p) => PathBuf::from(p),
+        None => {
+            let mut data_dir = std::env::temp_dir();
+            data_dir.push("estoque_core_cli_demo");
+            fs::create_dir_all(&data_dir).map_err(|e| e.to_string())?;
+            let p = data_dir.join("estoque.db");
+            let _ = fs::remove_file(&p); // roda limpo a cada chamada
+            p
+        }
+    };
+    if let Some(parent) = db_path.parent() {
+        fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
 
     println!("[core-cli] banco: {}", db_path.display());
     let mut session = ffi::open_session(db_path.to_str().unwrap()).map_err(|e| e.to_string())?;
