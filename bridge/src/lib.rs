@@ -100,3 +100,17 @@ pub mod ffi {
         fn resolve_data_dir_default() -> Result<String>;
     }
 }
+
+// cxx não sabe se um tipo opaco C++ é thread-safe, então Session nasce
+// !Send/!Sync por padrão — o que impede AppState (Mutex<Option<UniquePtr<Session>>>)
+// de satisfazer o bound `Send + Sync` que tauri::State exige.
+//
+// Send é seguro de afirmar aqui porque todo acesso a Session passa por
+// Pin<&mut Session> atrás do Mutex único em AppState (src-tauri/src/main.rs):
+// nunca há duas threads chamando um método ao mesmo tempo, só uso sequencial
+// possivelmente em threads diferentes do pool do Tauri — exatamente o caso
+// coberto pelo SQLITE_THREADSAFE=1 (modo serializado) já configurado no
+// vendored sqlite3.c. Não implementamos Sync: como todo método usa `&mut`
+// (nunca `&`), nunca existe acesso compartilhado a uma mesma Session; o
+// Mutex<T> já é Sync automaticamente para qualquer T: Send.
+unsafe impl Send for ffi::Session {}

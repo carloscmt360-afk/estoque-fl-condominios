@@ -8,6 +8,7 @@ mod dto;
 
 use bridge::ffi;
 use std::sync::Mutex;
+use tauri::Manager;
 
 /// Estado da aplicação: ou há uma sessão pronta, ou há um erro de
 /// inicialização (tipicamente a pasta `dados/` não pôde ser criada) que o
