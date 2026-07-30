@@ -57,8 +57,13 @@ fn main() {
 
     println!("cargo:rerun-if-changed={}", cpp_dir.display());
 
-    println!("cargo:rustc-link-lib=pthread");
-    println!("cargo:rustc-link-lib=dl");
+    // pthread/dl são bibliotecas do mundo Unix — não existem no MSVC (LNK1181
+    // "cannot open input file 'pthread.lib'"). No Windows o runtime C++ já
+    // embute as primitivas de thread; nada equivalente a linkar.
+    if target_env != "msvc" {
+        println!("cargo:rustc-link-lib=pthread");
+        println!("cargo:rustc-link-lib=dl");
+    }
 
     println!("cargo:rerun-if-changed=src/lib.rs");
     println!("cargo:rerun-if-changed={}", core_cpp.join("src").display());
