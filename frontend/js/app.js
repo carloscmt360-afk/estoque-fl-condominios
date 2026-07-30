@@ -37,34 +37,41 @@ function wireSidebar() {
 }
 
 async function boot() {
-  // Fora do Tauri (aberto direto num navegador): instala o mock de
-  // desenvolvimento alimentado por fixtures reais, só para revisão visual.
-  if (!(window.__TAURI__ && window.__TAURI__.core)) {
-    const { installDevMock } = await import('./devMock.js');
-    await installDevMock();
-  }
-
-  installOverlayClickToClose();
-  wireSidebar();
-
   try {
-    await api.appStatus();
-  } catch (err) {
-    showStartupError(String(err));
-    document.getElementById('btnRetryInit').addEventListener('click', async () => {
-      try {
-        await api.retryInit();
-        location.reload();
-      } catch (e2) {
-        showStartupError(String(e2));
-      }
-    });
-    return;
-  }
+    // Fora do Tauri (aberto direto num navegador): instala o mock de
+    // desenvolvimento alimentado por fixtures reais, só para revisão visual.
+    if (!(window.__TAURI__ && window.__TAURI__.core)) {
+      const { installDevMock } = await import('./devMock.js');
+      await installDevMock();
+    }
 
-  document.getElementById('startupError').style.display = 'none';
-  document.getElementById('appShell').style.display = 'grid';
-  await switchView('dashboard');
+    installOverlayClickToClose();
+    wireSidebar();
+
+    try {
+      await api.appStatus();
+    } catch (err) {
+      showStartupError(String(err));
+      document.getElementById('btnRetryInit').addEventListener('click', async () => {
+        try {
+          await api.retryInit();
+          location.reload();
+        } catch (e2) {
+          showStartupError(String(e2));
+        }
+      });
+      return;
+    }
+
+    document.getElementById('startupError').style.display = 'none';
+    document.getElementById('appShell').style.display = 'grid';
+    await switchView('dashboard');
+  } catch (err) {
+    // Qualquer falha inesperada aqui (ex.: mock de desenvolvimento sem
+    // fixtures) nunca deve resultar em tela branca silenciosa — sempre
+    // mostra algo acionável, mesmo que a mensagem seja genérica.
+    showStartupError(String(err && err.stack ? err.stack : err));
+  }
 }
 
 function showStartupError(detail) {
