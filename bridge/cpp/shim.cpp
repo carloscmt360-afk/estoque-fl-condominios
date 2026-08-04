@@ -157,7 +157,11 @@ std::unique_ptr<Session> open_session(rust::Str db_path) {
 rust::String resolve_data_dir_default() {
   auto result = estoque::portable_paths::resolveDataDir();
   if (!result.ok) throw std::runtime_error(result.error);
-  return rust::String(result.dataDir.string());
+  // path::string() no Windows converte para a codepage ANSI local, não
+  // UTF-8 — caminhos com acento (ex.: "Área de Trabalho") viram bytes
+  // inválidos e o rust::String do cxx rejeita com "data for rust::String
+  // is not utf-8". u8string() sempre devolve UTF-8, em qualquer plataforma.
+  return rust::String(result.dataDir.u8string());
 }
 
 }  // namespace estoque::shim

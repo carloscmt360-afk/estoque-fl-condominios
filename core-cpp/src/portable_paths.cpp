@@ -46,8 +46,11 @@ ResolveResult resolveDataDir(const std::filesystem::path& exeDir) {
   std::filesystem::create_directories(dataDir, ec);
   if (ec) {
     result.ok = false;
+    // u8string(), não string(): no Windows, path::string() usa a codepage
+    // ANSI local e corrompe acentos (ex.: em "Área de Trabalho"), o que
+    // quebraria a validação UTF-8 estrita do rust::String na ponte cxx.
     result.error =
-        "Não foi possível criar a pasta de dados em '" + dataDir.string() +
+        "Não foi possível criar a pasta de dados em '" + dataDir.u8string() +
         "'. Verifique se o programa está numa pasta com permissão de escrita "
         "(evite rodar de dentro de 'Arquivos de Programas'; copie a pasta do aplicativo "
         "para a Área de Trabalho, Documentos, ou mantenha no pendrive) e tente novamente. "
@@ -61,7 +64,7 @@ ResolveResult resolveDataDir(const std::filesystem::path& exeDir) {
   bool isDir = std::filesystem::is_directory(dataDir, ec);
   if (ec || !isDir) {
     result.ok = false;
-    result.error = "O caminho '" + dataDir.string() + "' existe mas não é uma pasta válida.";
+    result.error = "O caminho '" + dataDir.u8string() + "' existe mas não é uma pasta válida.";
     return result;
   }
 
