@@ -69,7 +69,13 @@ fn main() {
             commands::apply_entrada,
             commands::apply_saida,
             commands::apply_correcao,
+            commands::list_movements,
+            commands::update_movement,
+            commands::delete_movement,
             commands::compute_report,
+            commands::compute_retrospect,
+            commands::save_budget_params,
+            commands::import_dept_cost_history,
             commands::backup,
             commands::restore_backup,
         ])

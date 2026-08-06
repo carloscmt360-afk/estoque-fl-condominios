@@ -45,11 +45,65 @@ pub struct DepartmentInput {
     pub name: String,
     #[serde(default)]
     pub encarregado: String,
+    /// Teto mensal de gasto do setor. `default` porque o formulário pode não
+    /// mandar o campo (0 = sem limite, que é o comportamento anterior).
+    #[serde(default)]
+    pub monthly_limit: f64,
     pub created_at: String,
 }
 
 impl From<DepartmentInput> for ffi::DepartmentDto {
     fn from(d: DepartmentInput) -> Self {
-        ffi::DepartmentDto { id: d.id, name: d.name, encarregado: d.encarregado, created_at: d.created_at }
+        ffi::DepartmentDto {
+            id: d.id,
+            name: d.name,
+            encarregado: d.encarregado,
+            monthly_limit: d.monthly_limit,
+            created_at: d.created_at,
+        }
+    }
+}
+
+/// Edição de um lançamento existente. Todo campo opcional tem `default`: o
+/// formulário só manda o subconjunto que o tipo do lançamento usa (uma
+/// entrada não tem departamento, um ajuste não tem fornecedor).
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MovementPatchInput {
+    pub id: String,
+    #[serde(default)]
+    pub qty: f64,
+    #[serde(default)]
+    pub qty_real: f64,
+    #[serde(default)]
+    pub unit_price: f64,
+    #[serde(default)]
+    pub supplier: String,
+    #[serde(default)]
+    pub nf: String,
+    #[serde(default)]
+    pub department_id: String,
+    #[serde(default)]
+    pub requester: String,
+    #[serde(default)]
+    pub obs: String,
+    #[serde(default)]
+    pub date: String,
+}
+
+impl From<MovementPatchInput> for ffi::MovementPatchDto {
+    fn from(m: MovementPatchInput) -> Self {
+        ffi::MovementPatchDto {
+            id: m.id,
+            qty: m.qty,
+            qty_real: m.qty_real,
+            unit_price: m.unit_price,
+            supplier: m.supplier,
+            nf: m.nf,
+            department_id: m.department_id,
+            requester: m.requester,
+            obs: m.obs,
+            date: m.date,
+        }
     }
 }

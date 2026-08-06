@@ -3,6 +3,7 @@
 #include <vector>
 
 #include "estoque/db.hpp"
+#include "estoque/inventory_engine.hpp"  // MovementPatch
 #include "estoque/models.hpp"
 
 // Fachada única do domínio: junta banco + inventory_engine + report_engine
@@ -35,12 +36,24 @@ class Api {
   Movement applyCorrecao(const std::string& movementId, const std::string& productId, double qtyReal,
                         const std::string& motivo, const std::string& date, const std::string& createdAt);
 
+  std::vector<Movement> listMovements();
+  Movement updateMovement(const MovementPatch& patch);
+  void deleteMovement(const std::string& id);
+
   std::string computeReportJson(int year, int month0, const std::string& deptFilter, int windowMonths,
                                 const std::string& nowIso);
 
+  // Retrospecto anual (matriz departamento × mês, totais do ano, comparativo
+  // e teto de gastos) — ver retrospect_engine.hpp.
+  std::string computeRetrospectJson(int year, const std::string& source, const std::string& nowIso);
+  void saveBudgetParams(double metaReducao, double ipca, double pisoMensal);
+  int importDeptCostHistory(const std::string& payload);
+
   // JSON no MESMO formato do antigo localStorage (products/movements/departments
   // com as mesmas chaves camelCase) — permite importar os backups já existentes
-  // (ex.: carga_inicial_ref_jun26.json) sem nenhuma conversão.
+  // (ex.: carga_inicial_ref_jun26.json) sem nenhuma conversão. As chaves
+  // `deptCostHistory` e `settings` são acréscimos posteriores: backups antigos
+  // que não as tenham continuam válidos (ver restoreFromJson).
   std::string backupJson();
 
   // Substitui TODOS os dados atuais pelo conteúdo do payload — mesma

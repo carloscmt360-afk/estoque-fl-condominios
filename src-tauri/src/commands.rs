@@ -1,6 +1,6 @@
 // Comandos Tauri: cada um só faz lock() no estado e delega para a ponte
 // cxx — nenhuma regra de negócio mora aqui (isso é papel do core-cpp).
-use crate::dto::{DepartmentInput, ProductInput};
+use crate::dto::{DepartmentInput, MovementPatchInput, ProductInput};
 use crate::AppState;
 use tauri::State;
 
@@ -161,6 +161,21 @@ pub fn apply_correcao(state: State<AppState>, input: CorrecaoInput) -> Result<St
     })
 }
 
+#[tauri::command]
+pub fn list_movements(state: State<AppState>) -> Result<String, String> {
+    with_session(&state, |s| s.list_movements_json())
+}
+
+#[tauri::command]
+pub fn update_movement(state: State<AppState>, patch: MovementPatchInput) -> Result<String, String> {
+    with_session(&state, |s| s.update_movement(patch.into()))
+}
+
+#[tauri::command]
+pub fn delete_movement(state: State<AppState>, id: String) -> Result<(), String> {
+    with_session(&state, |s| s.delete_movement(&id))
+}
+
 #[derive(serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ReportInput {
@@ -177,6 +192,39 @@ pub fn compute_report(state: State<AppState>, input: ReportInput) -> Result<Stri
     with_session(&state, |s| {
         s.compute_report_json(input.year, input.month0, &input.dept_filter, input.window_months, &input.now_iso)
     })
+}
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RetrospectInput {
+    pub year: i32,
+    /// "auto" (planilha onde houver, movimentações no resto) ou "ledger".
+    #[serde(default)]
+    pub source: String,
+    pub now_iso: String,
+}
+
+#[tauri::command]
+pub fn compute_retrospect(state: State<AppState>, input: RetrospectInput) -> Result<String, String> {
+    with_session(&state, |s| s.compute_retrospect_json(input.year, &input.source, &input.now_iso))
+}
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BudgetParamsInput {
+    pub meta_reducao: f64,
+    pub ipca: f64,
+    pub piso_mensal: f64,
+}
+
+#[tauri::command]
+pub fn save_budget_params(state: State<AppState>, input: BudgetParamsInput) -> Result<(), String> {
+    with_session(&state, |s| s.save_budget_params(input.meta_reducao, input.ipca, input.piso_mensal))
+}
+
+#[tauri::command]
+pub fn import_dept_cost_history(state: State<AppState>, payload: String) -> Result<i32, String> {
+    with_session(&state, |s| s.import_dept_cost_history(&payload))
 }
 
 #[tauri::command]

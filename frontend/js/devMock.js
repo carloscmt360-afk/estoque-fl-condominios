@@ -10,6 +10,15 @@ async function loadJson(path) {
   return res.json();
 }
 
+async function loadJsonOptional(path) {
+  try {
+    const res = await fetch(path);
+    return res.ok ? await res.json() : null;
+  } catch (e) {
+    return null;
+  }
+}
+
 export async function installDevMock() {
   const [backup, report, products, departments] = await Promise.all([
     loadJson('fixtures/backup.json'),
@@ -17,6 +26,9 @@ export async function installDevMock() {
     loadJson('fixtures/products.json'),
     loadJson('fixtures/departments.json'),
   ]);
+  // Opcional: a fixture do retrospecto só existe se tiver sido gerada de um
+  // banco com o histórico da planilha importado (ver core-cli --retrospect).
+  const retrospect = await loadJsonOptional('fixtures/retrospect_2026.json');
 
   // Estado mutável em memória — CRUD do mock opera sobre isso, então criar/
   // editar/excluir na sessão de revisão visual funciona de verdade (só não
@@ -24,6 +36,49 @@ export async function installDevMock() {
   let state = { products, departments, movements: backup.movements };
 
   function uid(p) { return (p || 'id_') + Math.random().toString(36).slice(2, 10); }
+
+  const cmp = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
+  function ordemCronologica(a, b) {
+    return cmp(a.date, b.date) || cmp(a.createdAt || '', b.createdAt || '');
+  }
+  function passo(s, m) {
+    if (m.type === 'entrada') {
+      const base = Math.max(s.qty, 0);
+      s.avgCost = base + m.qty > 0 ? (base * s.avgCost + m.qty * (m.unitPrice || 0)) / (base + m.qty) : 0;
+      s.qty += m.qty;
+    } else if (m.type === 'saida') s.qty -= m.qty;
+    else s.qty += m.qty;
+  }
+  /* Espelha inventory_engine.cpp::recomputeProduct, inclusive a preservação
+     do offset entre o razão e o saldo gravado — sem isso o mock mostraria um
+     comportamento de edição diferente do app real. */
+  function recompute(productId, offsetQty) {
+    const p = state.products.find((x) => x.id === productId);
+    const doProduto = state.movements.filter((m) => m.productId === productId).sort(ordemCronologica);
+    const s = { qty: 0, avgCost: 0 };
+    for (const m of doProduto) {
+      passo(s, m);
+      if (m.type === 'ajuste') m.unitPrice = s.avgCost;
+      m.resultingQty = s.qty + offsetQty;
+      m.resultingAvgCost = s.avgCost;
+    }
+    if (p) { p.qty = s.qty + offsetQty; p.avgCost = s.avgCost; }
+  }
+  function offsetDe(productId) {
+    const p = state.products.find((x) => x.id === productId);
+    const s = { qty: 0, avgCost: 0 };
+    state.movements.filter((m) => m.productId === productId).sort(ordemCronologica).forEach((m) => passo(s, m));
+    return (p ? p.qty : 0) - s.qty;
+  }
+  function posicaoAntes(productId, date, createdAt, excluirId, offsetQty) {
+    const s = { qty: 0, avgCost: 0 };
+    state.movements
+      .filter((m) => m.productId === productId && m.id !== excluirId &&
+        (m.date < date || (m.date === date && (m.createdAt || '') < createdAt)))
+      .sort(ordemCronologica)
+      .forEach((m) => passo(s, m));
+    return { qty: s.qty + offsetQty, avgCost: s.avgCost };
+  }
 
   useMock(async (cmd, args) => {
     switch (cmd) {
@@ -57,40 +112,111 @@ export async function installDevMock() {
         state.departments = state.departments.filter((d) => d.id !== args.id);
         return null;
       case 'apply_entrada': {
-        const p = state.products.find((x) => x.id === args.input.productId);
-        const baseQty = Math.max(p.qty, 0);
-        const novaQty = p.qty + args.input.qty;
-        p.avgCost = (baseQty + args.input.qty) > 0 ? (baseQty * p.avgCost + args.input.qty * args.input.unitPrice) / (baseQty + args.input.qty) : 0;
-        p.qty = novaQty;
-        const m = { id: uid('m_'), type: 'entrada', productId: p.id, qty: args.input.qty, unitPrice: args.input.unitPrice,
-          supplier: args.input.supplier, nf: args.input.nf, date: args.input.date, obs: args.input.obs,
-          resultingQty: p.qty, resultingAvgCost: p.avgCost, createdAt: args.input.createdAt };
+        const i = args.input;
+        const offset = offsetDe(i.productId);
+        const m = { id: uid('m_'), type: 'entrada', productId: i.productId, qty: i.qty, unitPrice: i.unitPrice,
+          supplier: i.supplier, nf: i.nf, departmentId: '', recipient: '', encarregado: '', requester: '',
+          date: i.date, obs: i.obs, resultingQty: 0, resultingAvgCost: 0, createdAt: i.createdAt };
         state.movements.push(m);
+        recompute(i.productId, offset);
         return JSON.stringify(m);
       }
       case 'apply_saida': {
-        const p = state.products.find((x) => x.id === args.input.productId);
-        const dept = state.departments.find((x) => x.id === args.input.departmentId);
-        p.qty -= args.input.qty;
-        const m = { id: uid('m_'), type: 'saida', productId: p.id, qty: args.input.qty, unitPrice: p.avgCost,
-          departmentId: dept.id, recipient: dept.name, encarregado: dept.encarregado, requester: args.input.requester,
-          date: args.input.date, obs: args.input.obs, resultingQty: p.qty, resultingAvgCost: p.avgCost, createdAt: args.input.createdAt };
+        const i = args.input;
+        const dept = state.departments.find((x) => x.id === i.departmentId);
+        const offset = offsetDe(i.productId);
+        const m = { id: uid('m_'), type: 'saida', productId: i.productId, qty: i.qty,
+          unitPrice: posicaoAntes(i.productId, i.date, i.createdAt, null, offset).avgCost,
+          departmentId: dept.id, recipient: dept.name, encarregado: dept.encarregado, requester: i.requester,
+          date: i.date, obs: i.obs, resultingQty: 0, resultingAvgCost: 0, createdAt: i.createdAt };
         state.movements.push(m);
+        recompute(i.productId, offset);
         return JSON.stringify(m);
       }
       case 'apply_correcao': {
-        const p = state.products.find((x) => x.id === args.input.productId);
-        const delta = args.input.qtyReal - p.qty;
-        p.qty = args.input.qtyReal;
-        const m = { id: uid('m_'), type: 'ajuste', productId: p.id, qty: delta, unitPrice: p.avgCost,
-          obs: args.input.motivo, date: args.input.date, resultingQty: p.qty, resultingAvgCost: p.avgCost, createdAt: args.input.createdAt };
+        const i = args.input;
+        const offset = offsetDe(i.productId);
+        const antes = posicaoAntes(i.productId, i.date, i.createdAt, null, offset);
+        const m = { id: uid('m_'), type: 'ajuste', productId: i.productId, qty: i.qtyReal - antes.qty,
+          unitPrice: antes.avgCost, departmentId: '', recipient: '', encarregado: '', requester: '',
+          obs: i.motivo, date: i.date, resultingQty: 0, resultingAvgCost: 0, createdAt: i.createdAt };
         state.movements.push(m);
+        recompute(i.productId, offset);
         return JSON.stringify(m);
       }
-      case 'compute_report':
+      case 'list_movements':
+        return JSON.stringify([...state.movements].sort(ordemCronologica));
+      case 'update_movement': {
+        const patch = args.patch;
+        const m = state.movements.find((x) => x.id === patch.id);
+        if (!m) throw new Error('lançamento não encontrado: ' + patch.id);
+        const offset = offsetDe(m.productId);
+        const date = patch.date || m.date;
+
+        if (m.type === 'entrada') {
+          if (!(patch.qty > 0)) throw new Error('a quantidade da entrada deve ser maior que zero');
+          Object.assign(m, { qty: patch.qty, unitPrice: patch.unitPrice, supplier: patch.supplier, nf: patch.nf });
+        } else if (m.type === 'saida') {
+          if (!(patch.qty > 0)) throw new Error('a quantidade da saída deve ser maior que zero');
+          const dept = state.departments.find((x) => x.id === patch.departmentId);
+          if (!dept) throw new Error('departamento não encontrado: ' + patch.departmentId);
+          Object.assign(m, { qty: patch.qty, unitPrice: patch.unitPrice, departmentId: dept.id,
+            recipient: dept.name, encarregado: dept.encarregado, requester: patch.requester });
+        } else {
+          m.qty = patch.qtyReal - posicaoAntes(m.productId, date, m.createdAt, m.id, offset).qty;
+        }
+        m.obs = patch.obs;
+        m.date = date;
+        recompute(m.productId, offset);
+        return JSON.stringify(m);
+      }
+      case 'delete_movement': {
+        const m = state.movements.find((x) => x.id === args.id);
+        if (!m) throw new Error('lançamento não encontrado: ' + args.id);
+        const offset = offsetDe(m.productId);
+        state.movements = state.movements.filter((x) => x.id !== args.id);
+        recompute(m.productId, offset);
+        return null;
+      }
+      case 'compute_report': {
         // fixture pré-computada (junho/2026) — não recalcula ao vivo no mock;
-        // suficiente para revisar o layout, que é o objetivo deste modo.
-        return JSON.stringify(report);
+        // suficiente para revisar o layout, que é o objetivo deste modo. Só o
+        // bloco de limites é recalculado, porque ele depende do limite mensal
+        // que o mock deixa editar na tela de Departamentos.
+        const gastoPorDepto = {};
+        for (const p of report.pedidos || []) {
+          const k = String(p.recipient || '').trim().toUpperCase();
+          gastoPorDepto[k] = (gastoPorDepto[k] || 0) + p.qty * p.unitPrice;
+        }
+        const linhas = state.departments.map((d) => {
+          const gasto = gastoPorDepto[String(d.name || '').trim().toUpperCase()] || 0;
+          const limite = d.monthlyLimit || 0;
+          const pct = limite > 0 ? gasto / limite : null;
+          return { id: d.id, name: d.name, encarregado: d.encarregado, limite, gasto,
+            temLimite: limite > 0, pct, saldo: limite > 0 ? limite - gasto : null,
+            status: limite > 0 ? (pct >= 1 ? 'estourado' : pct >= 0.9 ? 'atencao' : 'ok') : 'sem-limite' };
+        });
+        const comLim = linhas.filter((l) => l.temLimite);
+        return JSON.stringify({ ...report, limites: {
+          linhas,
+          comLimite: comLim.length,
+          atencao: linhas.filter((l) => l.status === 'atencao').length,
+          estourado: linhas.filter((l) => l.status === 'estourado').length,
+          tetoTotal: comLim.reduce((s, l) => s + l.limite, 0),
+          gastoTotal: comLim.reduce((s, l) => s + l.gasto, 0),
+        } });
+      }
+      case 'compute_retrospect':
+        // fixture pré-computada (2026) — mesma lógica do compute_report acima.
+        if (!retrospect) {
+          throw new Error('fixture fixtures/retrospect_2026.json ausente — gere com: ' +
+            'cargo run -p core-cli -- --db <estoque.db> --retrospect 2026 --dump-fixtures frontend/fixtures');
+        }
+        return JSON.stringify(retrospect);
+      case 'save_budget_params':
+      case 'import_dept_cost_history':
+        // sem efeito no mock: o retrospecto vem de fixture pré-computada
+        return null;
       case 'backup':
         return JSON.stringify(state);
       case 'restore_backup':

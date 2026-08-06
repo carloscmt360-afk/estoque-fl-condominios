@@ -62,6 +62,18 @@ export function deltaCell(cur, prev) {
   return `<span class="flag ${cls}">${d.kind === 'up' ? '▲' : '▼'} ${d.text}</span>`;
 }
 
+/* Medidor de uso de um teto (limite mensal do departamento, teto de gastos do
+   retrospecto). A barra satura em 100% — uma barra 3× mais longa que a caixa
+   não cabe —, mas o número ao lado sempre mostra o valor real, e a barra nunca
+   é a única forma de ler o dado. */
+export function meterHTML(pct) {
+  if (pct === null || pct === undefined) return '<span class="muted">—</span>';
+  const cls = pct >= 1 ? 'is-critical' : pct >= 0.9 ? 'is-warn' : '';
+  const w = Math.max(0, Math.min(1, pct)) * 100;
+  return `<div class="meter-row"><span class="meter ${cls}"><i style="width:${w.toFixed(1)}%"></i></span>
+    <span class="pctv">${fmtPct(pct, 0)}</span></div>`;
+}
+
 export function uid(prefix) {
   return (prefix || 'id_') + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 }

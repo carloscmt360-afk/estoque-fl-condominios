@@ -6,8 +6,9 @@ import { drawValorEstoque } from '../charts/stockValueLine.js';
 import { drawBarrasH } from '../charts/deptHBars.js';
 import { drawDumbbell } from '../charts/dumbbell.js';
 import { drawABC } from '../charts/abcStacked.js';
-import { fmtBRL, fmtNum, fmtPct, fmtDateBR, deltaHTML, deltaCell, escapeHtml } from '../format.js';
+import { fmtBRL, fmtNum, fmtPct, fmtDateBR, deltaHTML, deltaCell, escapeHtml, meterHTML } from '../format.js';
 import { toast } from '../components/toast.js';
+import { printDocument, buildEstoqueDoc, buildAnaliticoDoc } from '../print.js';
 
 const MESES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
 const MESES_ABR = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
@@ -28,6 +29,9 @@ function wireStaticControls() {
     document.getElementById(id).addEventListener('change', renderReport));
   document.getElementById('btnMesAtual').addEventListener('click', goToCurrentMonth);
   document.getElementById('btnExportarRelatorio').addEventListener('click', exportReportCSV);
+  document.getElementById('btnImprimirEstoque').addEventListener('click', () => imprimir(buildEstoqueDoc));
+  document.getElementById('btnImprimirAnalitico').addEventListener('click', () => imprimir(buildAnaliticoDoc));
+  document.getElementById('repLimiteSoConfig').addEventListener('change', renderLimites);
   document.getElementById('repFiltroProduto').addEventListener('input', renderPosicao);
   document.getElementById('repFiltroClasse').addEventListener('change', renderPosicao);
   document.getElementById('repFiltroSituacao').addEventListener('change', renderPosicao);
@@ -120,12 +124,88 @@ export async function renderReport() {
     nota.innerHTML = avisos.map((a) => `<div>${a}</div>`).join('<div style="height:6px"></div>');
   } else nota.style.display = 'none';
 
+  renderLimiteAvisos(R);
   renderKPIs(R);
   renderCharts(R);
+  renderLimites();
   renderAlertas(R);
   renderPosicao();
   renderDeptos(R);
   renderPedidos();
+}
+
+function imprimir(builder) {
+  if (!repData) { toast('Abra o relatório antes de imprimir.', 'error'); return; }
+  printDocument(builder(repData));
+}
+
+/* Avisos de limite mensal. Não têm botão de fechar: enquanto um setor estiver
+   em 90% ou tiver estourado o teto, o aviso continua na tela a cada abertura
+   do relatório. Os dois níveis aparecem juntos quando existem os dois. */
+function renderLimiteAvisos(R) {
+  const host = document.getElementById('repLimiteAvisos');
+  const lim = R.limites || { linhas: [] };
+  const mesRef = `${MESES[R.m].toLowerCase()}/${R.y}`;
+  const estourados = lim.linhas.filter((l) => l.status === 'estourado').sort((a, b) => b.pct - a.pct);
+  const atencao = lim.linhas.filter((l) => l.status === 'atencao').sort((a, b) => b.pct - a.pct);
+
+  const detalhe = (l) => `<b>${escapeHtml(l.name)}</b> ${fmtBRL(l.gasto)} de ${fmtBRL(l.limite)} (${fmtPct(l.pct, 0)})`;
+  const blocos = [];
+  if (estourados.length) {
+    blocos.push(`<div class="danger-box" style="margin-bottom:8px;">
+      ⛔ <b>Limite mensal estourado em ${estourados.length} departamento(s)</b> — ${mesRef}:
+      ${estourados.map(detalhe).join(' · ')}.
+      <div style="margin-top:4px;">Excesso total: <b>${fmtBRL(estourados.reduce((s, l) => s + (l.gasto - l.limite), 0))}</b>.</div>
+    </div>`);
+  }
+  if (atencao.length) {
+    blocos.push(`<div class="warn-box" style="margin-bottom:8px;">
+      ⚠ <b>Limite mensal em 90% ou mais</b> — ${mesRef}: ${atencao.map(detalhe).join(' · ')}.
+    </div>`);
+  }
+  host.innerHTML = blocos.join('');
+}
+
+function renderLimites() {
+  const R = repData;
+  if (!R) return;
+  const lim = R.limites || { linhas: [], comLimite: 0, tetoTotal: 0, gastoTotal: 0 };
+  const soConfig = document.getElementById('repLimiteSoConfig').checked;
+  const tbody = document.getElementById('repLimitesTbody');
+  const tfoot = document.getElementById('repLimitesTfoot');
+
+  const linhas = lim.linhas
+    .filter((l) => !soConfig || l.temLimite)
+    .sort((a, b) => (b.pct === null ? -1 : b.pct) - (a.pct === null ? -1 : a.pct) || a.name.localeCompare(b.name, 'pt-BR'));
+
+  if (!linhas.length) {
+    tbody.innerHTML = `<tr class="empty-row"><td colspan="7">${lim.linhas.length
+      ? 'Nenhum departamento tem limite mensal definido. Cadastre em Departamentos, ou desmarque o filtro acima.'
+      : 'Nenhum departamento cadastrado.'}</td></tr>`;
+    tfoot.innerHTML = '';
+    return;
+  }
+  const sit = {
+    estourado: { cls: 'flag-critical', ico: '⛔', txt: 'Estourou' },
+    atencao: { cls: 'flag-warn', ico: '⚠', txt: 'Atenção' },
+    ok: { cls: 'flag-good', ico: '✓', txt: 'Dentro do limite' },
+  };
+  tbody.innerHTML = linhas.map((l) => {
+    const s = sit[l.status];
+    return `<tr><td><b>${escapeHtml(l.name)}</b></td><td>${escapeHtml(l.encarregado || '—')}</td>
+      <td class="num">${l.temLimite ? fmtBRL(l.limite) : '<span class="muted">sem limite</span>'}</td>
+      <td class="num">${fmtBRL(l.gasto)}</td>
+      <td class="num">${l.temLimite
+        ? `<span class="${l.saldo < 0 ? 'flag flag-critical' : ''}">${fmtBRL(l.saldo)}</span>`
+        : '<span class="muted">—</span>'}</td>
+      <td>${meterHTML(l.pct)}</td>
+      <td>${s ? `<span class="flag ${s.cls}">${s.ico} ${s.txt}</span>` : '<span class="muted">não controlado</span>'}</td></tr>`;
+  }).join('');
+
+  const pct = lim.tetoTotal > 0 ? lim.gastoTotal / lim.tetoTotal : null;
+  tfoot.innerHTML = `<tr><td colspan="2">TOTAL — ${fmtNum(lim.comLimite)} departamento(s) com limite</td>
+    <td class="num">${fmtBRL(lim.tetoTotal)}</td><td class="num">${fmtBRL(lim.gastoTotal)}</td>
+    <td class="num">${fmtBRL(lim.tetoTotal - lim.gastoTotal)}</td><td>${meterHTML(pct)}</td><td></td></tr>`;
 }
 
 function renderKPIs(R) {
@@ -208,7 +288,20 @@ function renderAlertas(R) {
   const negativo = R.itens.filter((i) => i.qty < 0);
   const semSolic = R.pedidos.filter((p) => !(p.requester || '').trim());
 
+  const lim = R.limites || { linhas: [] };
+  const limEstourado = lim.linhas.filter((l) => l.status === 'estourado');
+  const limAtencao = lim.linhas.filter((l) => l.status === 'atencao');
+  const nomesDepto = (arr) => arr.length
+    ? escapeHtml(arr.slice(0, 4).map((l) => l.name).join(', ')) + (arr.length > 4 ? ` e mais ${arr.length - 4}` : '')
+    : '—';
+
   const linhas = [
+    { sev: 'critical', nome: 'Limite mensal estourado', itens: limEstourado.length,
+      valor: limEstourado.reduce((s, l) => s + (l.gasto - l.limite), 0),
+      det: limEstourado.length ? 'Gasto acima do teto combinado: ' + nomesDepto(limEstourado) : 'Nenhum setor passou do limite.' },
+    { sev: 'warn', nome: 'Limite mensal em 90% ou mais', itens: limAtencao.length,
+      valor: limAtencao.reduce((s, l) => s + l.gasto, 0),
+      det: limAtencao.length ? 'Perto do teto do mês: ' + nomesDepto(limAtencao) : 'Nenhum setor perto do limite.' },
     { sev: 'critical', nome: 'Ruptura de estoque', itens: ruptura.length, valor: null, det: 'Saldo zerado ou negativo: ' + nomes(ruptura) },
     { sev: 'critical', nome: 'Saldo negativo (erro de lançamento)', itens: negativo.length, valor: null, det: negativo.length ? 'Use "Corrigir Estoque": ' + nomes(negativo) : 'Nenhum saldo negativo.' },
     { sev: 'warn', nome: 'Abaixo do estoque mínimo', itens: baixo.length, valor: baixo.reduce((s, i) => s + i.valor, 0), det: 'Repor antes da ruptura: ' + nomes(baixo) },
@@ -349,11 +442,16 @@ function exportReportCSV() {
   push('Giro anualizado', k.giro === null ? 'n/d' : k.giro.toFixed(2));
   push('Acuracidade (%)', k.acuracidade === null ? 'n/d' : (k.acuracidade * 100).toFixed(1));
   push('');
-  push('2. POSICAO DE ESTOQUE');
+  push('2. LIMITE MENSAL POR DEPARTAMENTO');
+  push('Departamento', 'Encarregado', 'Limite mensal', 'Gasto no mes', 'Saldo', '% do limite', 'Situacao');
+  (R.limites ? R.limites.linhas : []).forEach((l) => push(l.name, l.encarregado, l.temLimite ? money(l.limite) : '',
+    money(l.gasto), l.temLimite ? money(l.saldo) : '', l.pct === null ? '' : (l.pct * 100).toFixed(1), l.status));
+  push('');
+  push('3. POSICAO DE ESTOQUE');
   push('Material', 'Unidade', 'Saldo', 'Custo medio', 'Valor', 'Classe ABC', 'Situacao');
   [...R.itens].sort((a, b) => b.valor - a.valor).forEach((i) => push(i.name, i.unit, i.qty.toFixed(3), money(i.avgCost), money(i.valor), i.classe, i.situacao));
   push('');
-  push('3. PEDIDOS DE ' + ref.toUpperCase());
+  push('4. PEDIDOS DE ' + ref.toUpperCase());
   push('Data', 'Departamento', 'Material', 'Qtd', 'Valor unit.', 'Valor total', 'Solicitante');
   const byId = new Map(R.itens.map((i) => [i.id, i]));
   R.pedidos.forEach((p) => push(fmtDateBR(p._ts), p.recipient, byId.get(p.productId)?.name || '', p.qty.toFixed(3), money(p.unitPrice), money(p.qty * p.unitPrice), p.requester || ''));

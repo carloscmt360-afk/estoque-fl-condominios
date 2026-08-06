@@ -1,12 +1,13 @@
 import { api } from './api.js';
 import { installOverlayClickToClose } from './components/modal.js';
 import { initDashboard, renderReport } from './views/dashboard.js';
+import { initRetrospect, reload as reloadRetrospect } from './views/retrospect.js';
 import { initProducts, reload as reloadProducts } from './views/products.js';
 import { initDepartments, reload as reloadDepartments } from './views/departments.js';
 import { initMovements, reload as reloadMovements } from './views/movements.js';
 import { initImportExport } from './views/importExport.js';
 
-const VIEWS = ['dashboard', 'products', 'movements', 'departments', 'importExport'];
+const VIEWS = ['dashboard', 'retrospect', 'products', 'movements', 'departments', 'importExport'];
 const initialized = new Set();
 
 async function switchView(view) {
@@ -17,6 +18,7 @@ async function switchView(view) {
   if (!initialized.has(view)) {
     initialized.add(view);
     if (view === 'dashboard') await initDashboard();
+    else if (view === 'retrospect') await initRetrospect();
     else if (view === 'products') await initProducts();
     else if (view === 'movements') await initMovements();
     else if (view === 'departments') await initDepartments();
@@ -24,6 +26,7 @@ async function switchView(view) {
   } else {
     // views já inicializadas recarregam os dados ao voltar a ficar visíveis
     if (view === 'dashboard') await renderReport();
+    else if (view === 'retrospect') await reloadRetrospect();
     else if (view === 'products') await reloadProducts();
     else if (view === 'movements') await reloadMovements();
     else if (view === 'departments') await reloadDepartments();

@@ -6,8 +6,16 @@ import { toast } from '../components/toast.js';
 let products = [];
 let departments = [];
 
+let wired = false;
+
+// Idempotente: a Linha do Tempo também chama isto para abrir os modais de
+// novo lançamento (que moram aqui). Sem a guarda, cada chamada empilharia
+// mais um listener em cada botão e "Salvar" gravaria duas vezes.
 export async function initProducts() {
-  wireControls();
+  if (!wired) {
+    wireControls();
+    wired = true;
+  }
   await reload();
 }
 
@@ -22,7 +30,6 @@ function wireControls() {
   document.getElementById('btnSalvarEntrada').addEventListener('click', saveEntrada);
   document.getElementById('btnSalvarSaida').addEventListener('click', saveSaida);
   document.getElementById('btnSalvarCorrecao').addEventListener('click', saveCorrecao);
-  document.querySelectorAll('[data-close]').forEach((b) => b.addEventListener('click', () => closeModal(b.dataset.close)));
   ['entProduto', 'entQtd', 'entPreco'].forEach((id) => document.getElementById(id).addEventListener('input', updateEntradaInfo));
   ['saiProduto', 'saiQtd', 'saiDepartamento'].forEach((id) => document.getElementById(id).addEventListener('input', updateSaidaInfo));
   ['corProduto', 'corQtdReal'].forEach((id) => document.getElementById(id).addEventListener('input', updateCorrecaoInfo));
@@ -32,6 +39,10 @@ export async function reload() {
   [products, departments] = await Promise.all([api.listProducts(), api.listDepartments()]);
   renderStatGrid();
   renderTable();
+  // Os modais desta view também são usados pela Linha do Tempo; avisar que os
+  // dados mudaram evita que ela mostre uma tabela defasada depois de um
+  // lançamento novo feito de lá.
+  document.dispatchEvent(new CustomEvent('estoque:dados-alterados'));
 }
 
 function renderStatGrid() {
@@ -94,9 +105,10 @@ function fillCategoriasDatalist() {
   const cats = [...new Set(products.map((p) => (p.category || '').trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
   document.getElementById('listaCategorias').innerHTML = cats.map((c) => `<option value="${escapeHtml(c)}"></option>`).join('');
 }
-function fillSolicitantesDatalist() {
-  document.getElementById('listaSolicitantes').innerHTML = '';
-}
+/* O datalist de solicitantes é preenchido pela Linha do Tempo, que é quem
+   carrega os lançamentos (a lista de nomes sai deles). Aqui só NÃO se apaga
+   o que já estiver lá — era o que esta função fazia antes, deixando o campo
+   sempre sem sugestões. */
 
 function openProductModal(id) {
   fillCategoriasDatalist();
@@ -203,7 +215,6 @@ async function saveEntrada() {
 function openSaidaModal(productId) {
   fillProductSelect('saiProduto', productId);
   fillDepartmentSelect('saiDepartamento');
-  fillSolicitantesDatalist();
   document.getElementById('saiQtd').value = '';
   document.getElementById('saiObs').value = '';
   document.getElementById('saiSolicitante').value = '';

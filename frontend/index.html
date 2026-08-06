@@ -7,6 +7,7 @@
 <link rel="stylesheet" href="css/tokens.css" />
 <link rel="stylesheet" href="css/layout.css" />
 <link rel="stylesheet" href="css/components.css" />
+<link rel="stylesheet" href="css/print.css" />
 </head>
 <body>
 
@@ -29,6 +30,7 @@
     </div>
     <nav class="sidebar-nav" id="sidebarNav">
       <button class="nav-item active" data-view="dashboard"><span class="ico">📊</span> Relatório Mensal</button>
+      <button class="nav-item" data-view="retrospect"><span class="ico">📅</span> Retrospecto</button>
       <button class="nav-item" data-view="products"><span class="ico">📦</span> Produtos</button>
       <button class="nav-item" data-view="movements"><span class="ico">🕒</span> Linha do Tempo</button>
       <button class="nav-item" data-view="departments"><span class="ico">🏢</span> Departamentos</button>
@@ -62,10 +64,17 @@
         </div>
         <span class="spacer"></span>
         <button class="btn-outline" id="btnMesAtual">↺ Mês atual</button>
+        <button class="btn-outline" id="btnImprimirEstoque">🖨 Imprimir estoque</button>
+        <button class="btn-outline" id="btnImprimirAnalitico">🖨 Imprimir analítico</button>
         <button class="btn-primary" id="btnExportarRelatorio">⬇ Exportar (CSV)</button>
       </div>
 
       <div id="repScopeNote" style="display:none;margin-bottom:16px;"></div>
+
+      <!-- Avisos de limite mensal: renderizados a cada relatório e sem botão de
+           fechar de propósito — enquanto o teto de algum setor estiver em 90%
+           ou estourado, o aviso continua na tela. -->
+      <div id="repLimiteAvisos"></div>
 
       <div class="section-title">Indicadores do período</div>
       <div class="card" style="padding:16px 20px;display:grid;grid-template-columns:minmax(220px,1fr) minmax(220px,1.1fr);gap:20px;align-items:center;margin-bottom:12px;">
@@ -118,6 +127,23 @@
           <div class="card-head"><div><h3>Materiais mais consumidos</h3><div class="sub">Top 10 por valor no período.</div></div>
             <button class="btn-ghost btn-sm" data-toggle-table="cardTopConsumo">Ver tabela</button></div>
           <div class="card-body"><div class="chart-host" id="chartTopConsumo"></div><div class="tbl-view" id="tblTopConsumo" style="display:none"></div></div>
+        </div>
+      </div>
+
+      <div class="section-title">Limite mensal por departamento</div>
+      <div class="panel">
+        <div class="panel-head">
+          <h2>Gasto de <span class="rmes"></span> contra o teto combinado com cada setor</h2>
+          <label class="check-inline"><input type="checkbox" id="repLimiteSoConfig" checked /> Só departamentos com limite</label>
+        </div>
+        <div style="overflow-x:auto;">
+          <table>
+            <thead><tr><th>Departamento</th><th>Encarregado</th><th class="num">Limite mensal</th>
+              <th class="num">Gasto no mês</th><th class="num">Saldo</th>
+              <th style="min-width:190px;">Consumo do limite</th><th>Situação</th></tr></thead>
+            <tbody id="repLimitesTbody"></tbody>
+            <tfoot id="repLimitesTfoot"></tfoot>
+          </table>
         </div>
       </div>
 
@@ -179,6 +205,109 @@
       </div>
     </section>
 
+    <!-- ============================== RETROSPECTO ============================== -->
+    <section class="view" id="view-retrospect">
+      <div class="content-header">
+        <div>
+          <h1>Retrospecto</h1>
+          <div class="sub">Custo mensal por departamento e total do ano</div>
+        </div>
+      </div>
+
+      <div class="toolbar">
+        <div class="field"><label for="retroAno">Ano</label><select id="retroAno"></select></div>
+        <div class="field">
+          <label for="retroFonte">Fonte dos valores</label>
+          <select id="retroFonte">
+            <option value="auto">Planilha + movimentações</option>
+            <option value="ledger">Só movimentações do sistema</option>
+          </select>
+        </div>
+        <span class="spacer"></span>
+        <button class="btn-outline" id="btnImprimirRetro">🖨 Imprimir</button>
+        <button class="btn-primary" id="btnExportarRetro">⬇ Exportar (CSV)</button>
+      </div>
+
+      <div id="retroFonteNota" style="display:none;margin-bottom:16px;"></div>
+
+      <div class="stat-grid" id="retroTiles"></div>
+
+      <div class="section-title">Custo mensal por departamento — <span class="retro-ano"></span></div>
+      <div class="panel">
+        <div class="panel-head">
+          <h2>Cada linha é um departamento; cada coluna, um mês — valores em R$</h2>
+          <label class="check-inline"><input type="checkbox" id="retroOcultarZeros" checked /> Ocultar meses sem lançamento</label>
+        </div>
+        <div class="matrix-wrap"><table class="matrix" id="retroMatrizRef"></table></div>
+        <div class="muted" style="padding:var(--sp-2) var(--sp-4);font-size:11px;border-top:1px solid var(--border);">
+          <b>0</b> = o setor não consumiu nada naquele mês · <b>—</b> = nenhuma fonte cobre aquele mês (não é zero).
+          O rótulo abaixo do mês diz de onde o valor veio.
+        </div>
+      </div>
+
+      <div class="section-title">Custo mensal por departamento — <span class="retro-ano-ant"></span></div>
+      <div class="panel">
+        <div class="matrix-wrap"><table class="matrix" id="retroMatrizAnt"></table></div>
+      </div>
+
+      <div class="section-title">Evolução e comparativo</div>
+      <div class="charts-grid">
+        <div class="card chart-card" id="cardRetroAnual">
+          <div class="card-head"><div><h3>Total mensal — <span class="retro-ano"></span> vs <span class="retro-ano-ant"></span></h3>
+            <div class="sub">Meses ainda não decorridos ficam sem barra.</div></div>
+            <button class="btn-ghost btn-sm" data-toggle-table="cardRetroAnual">Ver tabela</button></div>
+          <div class="legend" id="legRetroAnual"></div>
+          <div class="card-body"><div class="chart-host" id="chartRetroAnual"></div><div class="tbl-view" id="tblRetroAnual" style="display:none"></div></div>
+        </div>
+        <div class="card chart-card" id="cardRetroDeptos">
+          <div class="card-head"><div><h3>Total do ano por departamento</h3><div class="sub">Ordenado por valor.</div></div>
+            <button class="btn-ghost btn-sm" data-toggle-table="cardRetroDeptos">Ver tabela</button></div>
+          <div class="card-body"><div class="chart-host" id="chartRetroDeptos"></div><div class="tbl-view" id="tblRetroDeptos" style="display:none"></div></div>
+        </div>
+      </div>
+
+      <div class="section-title">Mesmo período nos dois anos</div>
+      <div class="panel">
+        <div class="panel-head"><h2 id="retroCompTitulo">Comparativo</h2></div>
+        <div style="overflow-x:auto;">
+          <table>
+            <thead><tr><th>Departamento</th><th class="num"><span class="retro-ano-ant"></span></th>
+              <th class="num"><span class="retro-ano"></span></th><th class="num">Variação R$</th><th class="num">Δ %</th></tr></thead>
+            <tbody id="retroCompTbody"></tbody>
+            <tfoot id="retroCompTfoot"></tfoot>
+          </table>
+        </div>
+      </div>
+
+      <div class="section-title">Teto de gastos sugerido</div>
+      <div class="panel">
+        <div class="panel-head">
+          <h2>Base <span class="retro-ano-ant"></span> × fator de ajuste, com piso mensal</h2>
+          <div class="row-actions">
+            <button class="btn-ghost btn-sm" id="btnAplicarTeto">Usar como limite mensal dos departamentos</button>
+          </div>
+        </div>
+        <div class="toolbar" style="padding:var(--sp-3) var(--sp-4);margin:0;border-bottom:1px solid var(--border);">
+          <div class="field"><label for="retroMeta">Meta de redução (%)</label><input type="number" id="retroMeta" min="0" max="100" step="any" style="width:110px;" /></div>
+          <div class="field"><label for="retroIpca">Inflação projetada (%)</label><input type="number" id="retroIpca" min="0" max="100" step="any" style="width:130px;" /></div>
+          <div class="field"><label for="retroPiso">Piso mensal (R$)</label><input type="number" id="retroPiso" min="0" step="any" style="width:120px;" /></div>
+          <div class="field"><label>Fator de ajuste</label><div id="retroFator" style="font-weight:800;padding:7px 0;"></div></div>
+          <span class="spacer"></span>
+          <button class="btn-primary btn-sm" id="btnSalvarTetoParams">Salvar premissas</button>
+        </div>
+        <div style="overflow-x:auto;">
+          <table>
+            <thead><tr><th>Departamento</th><th class="num">Base <span class="retro-ano-ant"></span></th>
+              <th class="num">Teto mensal</th><th class="num">Teto anual</th>
+              <th class="num">Realizado <span class="retro-ano"></span></th>
+              <th class="num">Teto do período</th><th style="min-width:170px;">Uso do teto no período</th><th>Situação</th></tr></thead>
+            <tbody id="retroTetoTbody"></tbody>
+            <tfoot id="retroTetoTfoot"></tfoot>
+          </table>
+        </div>
+      </div>
+    </section>
+
     <!-- ============================== PRODUTOS ============================== -->
     <section class="view" id="view-products">
       <div class="content-header"><div><h1>Produtos</h1><div class="sub">Catálogo e posição de estoque</div></div></div>
@@ -203,26 +332,65 @@
 
     <!-- ============================== LINHA DO TEMPO ============================== -->
     <section class="view" id="view-movements">
-      <div class="content-header"><div><h1>Linha do Tempo</h1><div class="sub">Todas as movimentações registradas</div></div></div>
+      <div class="content-header">
+        <div><h1>Linha do Tempo</h1><div class="sub">Todas as movimentações registradas</div></div>
+        <div class="row-actions">
+          <button class="btn-outline btn-sm" id="btnMovEntrada">↓ Entrada</button>
+          <button class="btn-outline btn-sm" id="btnMovSaida">↑ Baixa</button>
+          <button class="btn-outline btn-sm" id="btnMovCorrecao">🛠 Corrigir</button>
+        </div>
+      </div>
+
+      <div class="stat-grid" id="movementsStatGrid"></div>
+
       <div class="toolbar">
+        <input type="text" id="filtroTimelineBusca" class="grow"
+               placeholder="Buscar em produto, fornecedor, NF, departamento, solicitante, observação..." />
         <select id="filtroTimelineProduto"><option value="">Todos os produtos</option></select>
         <select id="filtroTimelineTipo"><option value="">Todos os tipos</option><option value="entrada">Entradas</option><option value="saida">Saídas</option><option value="ajuste">Correções</option></select>
+        <select id="filtroTimelineDepto"><option value="">Todos os departamentos</option></select>
+        <select id="filtroTimelineSolicitante"><option value="">Todos os solicitantes</option></select>
       </div>
+
+      <div class="toolbar">
+        <div class="segmented" id="filtroTimelinePeriodo" role="group" aria-label="Período">
+          <button type="button" data-periodo="tudo" class="active">Tudo</button>
+          <button type="button" data-periodo="hoje">Hoje</button>
+          <button type="button" data-periodo="7d">7 dias</button>
+          <button type="button" data-periodo="30d">30 dias</button>
+          <button type="button" data-periodo="mes">Este mês</button>
+          <button type="button" data-periodo="ano">Este ano</button>
+        </div>
+        <input type="date" id="filtroTimelineInicio" aria-label="Data inicial" />
+        <span class="muted">até</span>
+        <input type="date" id="filtroTimelineFim" aria-label="Data final" />
+        <button class="btn-ghost btn-sm" id="btnLimparFiltrosTimeline">Limpar filtros</button>
+        <span class="spacer"></span>
+        <button class="btn-ghost btn-sm" id="btnExportarTimelineCSV">⬇ Exportar CSV do que está filtrado</button>
+      </div>
+
       <div class="panel"><div style="overflow-x:auto;">
         <table>
-          <thead><tr><th>Data</th><th>Tipo</th><th>Produto</th><th class="num">Qtd.</th><th>Detalhes</th><th class="num">Saldo após</th></tr></thead>
+          <thead><tr><th>Data</th><th>Tipo</th><th>Produto</th><th class="num">Qtd.</th><th>Detalhes</th>
+            <th class="num">Valor</th><th class="num">Saldo após</th><th>Ações</th></tr></thead>
           <tbody id="timelineTbody"></tbody>
         </table>
       </div></div>
+      <div class="muted" id="timelineRodape" style="margin-top:var(--sp-3);"></div>
     </section>
 
     <!-- ============================== DEPARTAMENTOS ============================== -->
     <section class="view" id="view-departments">
       <div class="content-header"><div><h1>Departamentos</h1><div class="sub">Clientes internos que retiram material</div></div></div>
       <div class="toolbar"><button class="btn-primary" id="btnNovoDepartamento">＋ Novo Departamento</button></div>
+      <div class="info-box" style="margin-bottom:var(--sp-4);max-width:760px;">
+        O <b>limite mensal</b> é o teto de gasto combinado com o setor. O Relatório Mensal avisa quando o
+        consumo passa de 90% do limite e mantém o aviso enquanto o teto estiver estourado.
+        Deixe em <b>0</b> para não controlar limite naquele departamento.
+      </div>
       <div class="panel"><div style="overflow-x:auto;">
         <table>
-          <thead><tr><th>Departamento</th><th>Encarregado</th><th>Ações</th></tr></thead>
+          <thead><tr><th>Departamento</th><th>Encarregado</th><th class="num">Limite mensal</th><th>Ações</th></tr></thead>
           <tbody id="departmentsTbody"></tbody>
         </table>
       </div></div>
@@ -249,6 +417,9 @@
 
 <div id="toast"></div>
 <div id="vizTip" role="status" aria-live="polite"></div>
+
+<!-- Documento montado na hora de imprimir; invisível na tela (ver css/print.css) -->
+<div id="printArea" aria-hidden="true"></div>
 
 <!-- MODAL: Produto -->
 <div class="overlay" id="modalProduto"><div class="modal">
@@ -325,6 +496,49 @@
   <div class="modal-foot"><button class="btn-outline" data-close="modalCorrecao">Cancelar</button><button class="btn-primary" id="btnSalvarCorrecao">Aplicar</button></div>
 </div></div>
 
+<!-- MODAL: Editar lançamento (um só modal; os blocos por tipo aparecem conforme o lançamento) -->
+<div class="overlay" id="modalEditarMov"><div class="modal">
+  <div class="modal-head"><h3 id="modalEditarMovTitulo">Editar lançamento</h3><button class="btn-ghost" data-close="modalEditarMov">✕</button></div>
+  <div class="modal-body">
+    <input type="hidden" id="edtMovId" />
+    <div class="info-box" id="edtMovCabecalho"></div>
+
+    <!-- entrada / saída -->
+    <div class="field-row" id="edtMovQtdBox">
+      <div class="field"><label id="edtMovQtdLabel">Quantidade *</label><input type="number" id="edtMovQtd" min="0.0001" step="any" /></div>
+      <div class="field"><label id="edtMovPrecoLabel">Preço unitário (R$) *</label><input type="number" id="edtMovPreco" min="0" step="any" /></div>
+    </div>
+
+    <!-- entrada -->
+    <div class="field-row" id="edtMovEntradaBox">
+      <div class="field"><label>Fornecedor</label><input type="text" id="edtMovFornecedor" /></div>
+      <div class="field"><label>Nº da Nota Fiscal</label><input type="text" id="edtMovNF" /></div>
+    </div>
+
+    <!-- saída -->
+    <div id="edtMovSaidaBox">
+      <div class="field"><label>Departamento *</label><select id="edtMovDepartamento"></select><div class="muted" id="edtMovEncarregadoHint"></div></div>
+      <div class="field"><label>Solicitante</label><input type="text" id="edtMovSolicitante" list="listaSolicitantes" /></div>
+    </div>
+
+    <!-- ajuste -->
+    <div class="field" id="edtMovAjusteBox">
+      <label>Quantidade contada (real) *</label>
+      <input type="number" id="edtMovQtdReal" min="0" step="any" />
+    </div>
+
+    <div class="field"><label>Data</label><input type="datetime-local" id="edtMovData" /></div>
+    <div class="field"><label id="edtMovObsLabel">Observações</label><input type="text" id="edtMovObs" /></div>
+    <div class="info-box" id="edtMovInfoBox"></div>
+  </div>
+  <div class="modal-foot">
+    <button class="btn-danger" id="btnExcluirMov">Excluir lançamento</button>
+    <span class="spacer"></span>
+    <button class="btn-outline" data-close="modalEditarMov">Cancelar</button>
+    <button class="btn-primary" id="btnSalvarEdicaoMov">Salvar alterações</button>
+  </div>
+</div></div>
+
 <!-- MODAL: Departamento -->
 <div class="overlay" id="modalDepartamento"><div class="modal">
   <div class="modal-head"><h3 id="modalDepartamentoTitulo">Novo Departamento</h3><button class="btn-ghost" data-close="modalDepartamento">✕</button></div>
@@ -332,6 +546,12 @@
     <input type="hidden" id="depId" />
     <div class="field"><label>Nome *</label><input type="text" id="depNome" /></div>
     <div class="field"><label>Encarregado *</label><input type="text" id="depEncarregado" /></div>
+    <div class="field">
+      <label>Limite mensal de gasto (R$)</label>
+      <input type="number" id="depLimite" min="0" step="any" value="0" />
+    </div>
+    <div class="info-box" id="depLimiteInfo">0 = sem limite. Com um limite definido, o Relatório Mensal
+      avisa a partir de 90% do teto e mantém o aviso enquanto estiver estourado.</div>
   </div>
   <div class="modal-foot"><button class="btn-outline" data-close="modalDepartamento">Cancelar</button><button class="btn-primary" id="btnSalvarDepartamento">Salvar</button></div>
 </div></div>

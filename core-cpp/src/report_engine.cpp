@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "estoque/inventory_engine.hpp"
+#include "estoque/retrospect_engine.hpp"  // canonDeptKey
 #include "estoque/time_utils.hpp"
 
 namespace estoque {
@@ -194,6 +195,10 @@ std::string computeReportJson(Database& db, const ReportParams& params) {
 
   std::map<int, MonthBucket> byMonth;
   std::map<std::string, double> deptMes;
+  // Gasto do mês por departamento IGNORANDO o filtro de departamento da tela:
+  // o painel de limite mensal precisa continuar acusando quem estourou mesmo
+  // quando o usuário está olhando o relatório de um setor só.
+  std::map<std::string, double> gastoMesPorDepto;
   struct YtdEntry {
     double cur = 0, prev = 0;
   };
@@ -228,6 +233,7 @@ std::string computeReportJson(Database& db, const ReportParams& params) {
       std::string dp = deptOf(mv);
       b.consumoGeral += val;
       prodUltimaSaida[mv.productId] = mv.ts;
+      if (mv.ts >= iniRef && mv.ts <= fimRef) gastoMesPorDepto[canonDeptKey(dp)] += val;
       if (matchDept(mv)) {
         b.consumo += val;
         b.pedidos++;
@@ -537,6 +543,52 @@ std::string computeReportJson(Database& db, const ReportParams& params) {
     abcJson[k] = b;
   }
 
+  // ---- limite mensal por departamento ----
+  // O limite é do CADASTRO do departamento (departments.monthly_limit), então
+  // a lista sai do cadastro e não das saídas: um setor com limite e zero gasto
+  // precisa aparecer, e um setor sem limite precisa aparecer como "não
+  // definido" em vez de sumir.
+  json limitesJson = json::array();
+  int limComLimite = 0, limAtencao = 0, limEstourado = 0;
+  double limTetoTotal = 0, limGastoTotal = 0;
+  for (auto& d : listDepartments(db)) {
+    auto gIt = gastoMesPorDepto.find(canonDeptKey(d.name));
+    double gasto = gIt == gastoMesPorDepto.end() ? 0.0 : gIt->second;
+    json l;
+    l["id"] = d.id;
+    l["name"] = d.name;
+    l["encarregado"] = d.encarregado;
+    l["limite"] = d.monthlyLimit;
+    l["gasto"] = gasto;
+    l["temLimite"] = d.monthlyLimit > 0;
+    if (d.monthlyLimit > 0) {
+      double pct = gasto / d.monthlyLimit;
+      l["pct"] = pct;
+      l["saldo"] = d.monthlyLimit - gasto;
+      l["status"] = pct >= 1.0 ? "estourado" : (pct >= 0.9 ? "atencao" : "ok");
+      limComLimite++;
+      limTetoTotal += d.monthlyLimit;
+      limGastoTotal += gasto;
+      if (pct >= 1.0)
+        limEstourado++;
+      else if (pct >= 0.9)
+        limAtencao++;
+    } else {
+      l["pct"] = nullptr;
+      l["saldo"] = nullptr;
+      l["status"] = "sem-limite";
+    }
+    limitesJson.push_back(l);
+  }
+
+  json limites;
+  limites["linhas"] = limitesJson;
+  limites["comLimite"] = limComLimite;
+  limites["atencao"] = limAtencao;
+  limites["estourado"] = limEstourado;
+  limites["tetoTotal"] = limTetoTotal;
+  limites["gastoTotal"] = limGastoTotal;
+
   json deptMesJson = json::object();
   for (auto& [k, v] : deptMes) deptMesJson[k] = v;
 
@@ -573,6 +625,7 @@ std::string computeReportJson(Database& db, const ReportParams& params) {
   result["serie12"] = serie12;
   result["anual"] = anual;
   result["deptMes"] = deptMesJson;
+  result["limites"] = limites;
   result["deptYTD"] = deptYTDJson;
   result["ytdCur"] = ytdCur;
   result["ytdPrev"] = ytdPrev;

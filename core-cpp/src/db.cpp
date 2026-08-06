@@ -39,6 +39,35 @@ CREATE INDEX idx_movements_dept_date    ON movements(department_id, date);
 CREATE INDEX idx_movements_type_date    ON movements(type, date);
 )SQL";
 
+// Migration 2 — retrospecto e teto de gastos.
+//
+// `dept_cost_history` é uma fonte de dados SEPARADA do razão de movimentações:
+// guarda o custo mensal por departamento vindo da planilha (aba RESTROSPECTO /
+// CUSTO POR DEPTO), que cobre anos anteriores à existência deste app e, nos
+// meses em que os dois coexistem, diverge do razão de propósito (a planilha
+// valoriza a saída pelo preço histórico da linha, o razão pelo custo médio da
+// data). Ver retrospect_engine.hpp para a regra de mesclagem.
+//
+// `departments.monthly_limit` é o teto de gasto acordado com cada setor (0 =
+// sem limite); vira ALTER TABLE e não recriação, para nunca tocar nas linhas
+// já gravadas no banco de produção.
+constexpr const char* kSchemaV2 = R"SQL(
+CREATE TABLE dept_cost_history (
+  year   INTEGER NOT NULL,
+  month0 INTEGER NOT NULL CHECK (month0 BETWEEN 0 AND 11),
+  dept_key  TEXT NOT NULL,  -- nome canônico (maiúsculas, espaços normalizados)
+  dept_name TEXT NOT NULL,  -- nome como exibir
+  amount REAL NOT NULL,
+  PRIMARY KEY (year, month0, dept_key)
+);
+
+CREATE TABLE app_settings (
+  key TEXT PRIMARY KEY, value TEXT NOT NULL
+);
+
+ALTER TABLE departments ADD COLUMN monthly_limit REAL NOT NULL DEFAULT 0;
+)SQL";
+
 }  // namespace
 
 Database::Database(const std::string& path) {
@@ -91,6 +120,10 @@ void Database::migrate() {
   if (version < 1) {
     execute(kSchemaV1);
     execute("PRAGMA user_version = 1;");
+  }
+  if (version < 2) {
+    execute(kSchemaV2);
+    execute("PRAGMA user_version = 2;");
   }
 }
 

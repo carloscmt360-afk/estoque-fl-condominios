@@ -35,10 +35,14 @@ export function drawConsumoAnual(host, anual, y, mesRefIdx) {
     g += txt(cx, H - 10, MESES_ABR[i], { anchor: 'middle', size: 10.5, weight: isRef ? 700 : 400, fill: isRef ? VIZ.ink : VIZ.muted });
     if (isRef && a.ref) g += txt(xRef + half / 2, yOf(a.ref) - 6, fmtAxisMoney(a.ref), { anchor: 'middle', size: 10.5, weight: 700, fill: VIZ.ink });
     const dc = deltaInfo(a.ref === null ? 0 : a.ref, a.ant);
+    // `semDado`/`antSemDado` só existem no retrospecto (onde um mês pode não
+    // estar em nenhuma fonte). No relatório mensal são undefined, e aí um zero
+    // é zero de verdade — o razão cobre o mês inteiro.
+    const semRef = a.futuro ? 'mês não decorrido' : a.semDado ? 'sem lançamento' : null;
     const tip = `<b>${MESES[i]}</b><br>` +
-      `<span class='tk' style='background:${VIZ.s1}'></span>${y}: ${a.futuro ? 'mês não decorrido' : fmtBRL(a.ref || 0)}<br>` +
-      `<span class='tk' style='background:${VIZ.s2}'></span>${y - 1}: ${fmtBRL(a.ant || 0)}<br>` +
-      `Variação: ${a.futuro ? '—' : dc.kind === 'novo' ? 'novo' : dc.text}`;
+      `<span class='tk' style='background:${VIZ.s1}'></span>${y}: ${semRef || fmtBRL(a.ref || 0)}<br>` +
+      `<span class='tk' style='background:${VIZ.s2}'></span>${y - 1}: ${a.antSemDado ? 'sem lançamento' : fmtBRL(a.ant || 0)}<br>` +
+      `Variação: ${semRef || a.antSemDado ? '—' : dc.kind === 'novo' ? 'novo' : dc.text}`;
     g += `<g class="band" tabindex="0" data-tip="${tipAttr(tip)}">
       <rect class="bandbg" x="${mL + band * i}" y="${mT}" width="${band}" height="${ph}" fill="transparent"></rect></g>`;
   });

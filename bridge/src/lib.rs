@@ -24,7 +24,25 @@ pub mod ffi {
         id: String,
         name: String,
         encarregado: String,
+        monthly_limit: f64, // teto mensal de gasto do setor; 0 = sem limite
         created_at: String,
+    }
+
+    // Campos editáveis de um lançamento já gravado. `type` e `product_id`
+    // não estão aqui de propósito: são imutáveis (ver MovementPatch em
+    // core-cpp/include/estoque/inventory_engine.hpp). Cada tipo usa só o
+    // subconjunto que faz sentido para ele — o C++ ignora e limpa o resto.
+    struct MovementPatchDto {
+        id: String,
+        qty: f64,        // entrada/saída
+        qty_real: f64,   // ajuste: quantidade contada
+        unit_price: f64, // entrada/saída
+        supplier: String,
+        nf: String,
+        department_id: String,
+        requester: String,
+        obs: String,
+        date: String,
     }
 
     unsafe extern "C++" {
@@ -81,6 +99,10 @@ pub mod ffi {
             created_at: &str,
         ) -> Result<String>;
 
+        fn list_movements_json(self: Pin<&mut Session>) -> Result<String>;
+        fn update_movement(self: Pin<&mut Session>, p: MovementPatchDto) -> Result<String>;
+        fn delete_movement(self: Pin<&mut Session>, id: &str) -> Result<()>;
+
         fn compute_report_json(
             self: Pin<&mut Session>,
             year: i32,
@@ -89,6 +111,22 @@ pub mod ffi {
             window_months: i32,
             now_iso: &str,
         ) -> Result<String>;
+
+        fn compute_retrospect_json(
+            self: Pin<&mut Session>,
+            year: i32,
+            source: &str,
+            now_iso: &str,
+        ) -> Result<String>;
+
+        fn save_budget_params(
+            self: Pin<&mut Session>,
+            meta_reducao: f64,
+            ipca: f64,
+            piso_mensal: f64,
+        ) -> Result<()>;
+
+        fn import_dept_cost_history(self: Pin<&mut Session>, payload: &str) -> Result<i32>;
 
         fn backup_json(self: Pin<&mut Session>) -> Result<String>;
         fn restore_from_json(self: Pin<&mut Session>, payload: &str) -> Result<()>;

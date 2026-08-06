@@ -62,8 +62,45 @@ button:active {
   flex-wrap: wrap;
   margin-bottom: var(--sp-4);
 }
-.toolbar .spacer {
+.toolbar .spacer,
+.modal-foot .spacer {
   flex: 1;
+}
+/* Campo de busca que ocupa a sobra da linha de filtros. A base é pequena de
+   propósito: assim os selects de filtro cabem todos na mesma linha em telas
+   normais, e é a busca que cede espaço primeiro quando a janela encolhe. */
+.toolbar .grow {
+  flex: 1 1 200px;
+  min-width: 150px;
+}
+
+/* Segmented control — atalhos de período da Linha do Tempo. Um grupo só,
+   visualmente uma peça: bordas compartilhadas em vez de N botões soltos. */
+.segmented {
+  display: inline-flex;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+.segmented button {
+  padding: 6px 11px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--ink-secondary);
+  background: var(--surface);
+  border: 0;
+  border-left: 1px solid var(--border);
+  border-radius: 0;
+}
+.segmented button:first-child {
+  border-left: 0;
+}
+.segmented button:hover {
+  background: var(--surface-sunken);
+}
+.segmented button.active {
+  background: var(--accent);
+  color: var(--ink-on-accent);
 }
 
 input[type="text"],
@@ -336,6 +373,15 @@ tfoot td {
   background: var(--danger-soft);
   color: var(--danger);
 }
+/* Tipos de lançamento: entrada = pill-ok (verde), saída = azul, ajuste = âmbar */
+.pill-accent {
+  background: var(--accent-soft);
+  color: var(--accent-hover);
+}
+.pill-warn {
+  background: var(--warning-soft);
+  color: var(--warning);
+}
 .abc-pill {
   padding: 2px 7px;
   border-radius: 5px;
@@ -442,6 +488,69 @@ tfoot td {
   font-size: 12px;
   color: var(--warning);
 }
+/* Aviso que NÃO se fecha: usado pelo estouro de limite mensal, que precisa
+   continuar visível enquanto a condição existir (não é um toast). */
+.danger-box {
+  background: var(--danger-soft);
+  border: 1px solid #f0c9c9;
+  border-radius: var(--radius-sm);
+  padding: 9px 12px;
+  font-size: 12px;
+  color: var(--danger);
+}
+.danger-box b,
+.warn-box b {
+  font-weight: 800;
+}
+
+/* Checkbox com rótulo na mesma linha (cabeçalho de painel) */
+.check-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--ink-secondary);
+  cursor: pointer;
+}
+
+/* Medidor de consumo do limite mensal — a barra é redundante com o % ao lado,
+   nunca a única forma de ler o valor. */
+.meter {
+  display: block;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+.meter > i {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+}
+.meter.is-warn > i {
+  background: #d9930b;
+}
+.meter.is-critical > i {
+  background: var(--danger);
+}
+.meter-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.meter-row .meter {
+  flex: 1;
+  min-width: 90px;
+}
+.meter-row .pctv {
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  min-width: 44px;
+  text-align: right;
+}
 
 /* Tooltip compartilhado dos gráficos */
 #vizTip {
@@ -490,6 +599,76 @@ tfoot td {
 }
 #toast.success {
   background: var(--success);
+}
+
+/* Matriz do Retrospecto (departamento × 12 meses): 14 colunas não cabem numa
+   tela normal, então rola na horizontal com a coluna do departamento e o
+   cabeçalho fixos — sem isso o usuário perde a referência da linha no meio
+   da rolagem. */
+.matrix-wrap {
+  overflow: auto;
+  max-height: 70vh;
+}
+.matrix {
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.matrix th,
+.matrix td {
+  border-bottom: 1px solid var(--border);
+  padding: 7px 10px;
+}
+.matrix thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+.matrix .col-dept {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  font-weight: 700;
+  min-width: 168px;
+}
+.matrix thead .col-dept {
+  z-index: 3;
+  background: var(--surface-sunken);
+}
+.matrix tbody tr:hover .col-dept {
+  background: var(--surface-sunken);
+}
+.matrix .col-total {
+  font-weight: 800;
+  background: var(--surface-sunken);
+}
+.matrix tfoot td {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+}
+.matrix tfoot .col-dept {
+  z-index: 3;
+}
+/* Mês sem nenhum lançamento em nenhuma fonte: fica visivelmente "vazio" em
+   vez de exibir R$ 0,00, que seria uma afirmação que não temos. */
+.matrix td.vazio {
+  color: var(--ink-muted);
+}
+.matrix .zero {
+  color: var(--ink-muted);
+}
+.fonte-tag {
+  font-size: 9.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  display: block;
+  margin-top: 2px;
+  color: var(--ink-muted);
 }
 
 /* Tela de erro de inicialização (pasta dados/ sem permissão de escrita) */
