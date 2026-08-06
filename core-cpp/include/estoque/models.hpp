@@ -46,6 +46,10 @@ struct Department {
   std::string id;
   std::string name;
   std::string encarregado;
+  // Teto de gasto mensal acordado com o setor, em R$. 0 = sem limite definido
+  // (é o padrão, e é o que faz o app não inventar alerta para quem nunca
+  // configurou um limite).
+  double monthlyLimit = 0;
   std::string createdAt;
 };
 

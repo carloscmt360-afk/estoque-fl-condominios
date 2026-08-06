@@ -21,6 +21,7 @@ namespace estoque::shim {
 // tradução).
 struct ProductDto;
 struct DepartmentDto;
+struct MovementPatchDto;
 
 // Nomes dos métodos em snake_case: `cxx` casa por igualdade literal de nome
 // com a declaração Rust em lib.rs (sem nenhuma conversão camelCase<->snake_case).
@@ -46,8 +47,16 @@ class Session {
   rust::String apply_correcao(rust::Str movement_id, rust::Str product_id, double qty_real, rust::Str motivo,
                                rust::Str date, rust::Str created_at);
 
+  rust::String list_movements_json();
+  rust::String update_movement(MovementPatchDto p);
+  void delete_movement(rust::Str id);
+
   rust::String compute_report_json(int year, int month0, rust::Str dept_filter, int window_months,
                                     rust::Str now_iso);
+
+  rust::String compute_retrospect_json(int year, rust::Str source, rust::Str now_iso);
+  void save_budget_params(double meta_reducao, double ipca, double piso_mensal);
+  int import_dept_cost_history(rust::Str payload);
 
   rust::String backup_json();
   void restore_from_json(rust::Str payload);

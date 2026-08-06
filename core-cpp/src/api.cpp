@@ -4,6 +4,7 @@
 
 #include "estoque/inventory_engine.hpp"
 #include "estoque/report_engine.hpp"
+#include "estoque/retrospect_engine.hpp"
 
 namespace estoque {
 
@@ -29,6 +30,7 @@ json departmentToJson(const Department& d) {
   j["id"] = d.id;
   j["name"] = d.name;
   j["encarregado"] = d.encarregado;
+  j["monthlyLimit"] = d.monthlyLimit;
   j["createdAt"] = d.createdAt;
   return j;
 }
@@ -72,10 +74,29 @@ Movement Api::applyCorrecao(const std::string& movementId, const std::string& pr
   return estoque::applyCorrecao(db_, movementId, productId, qtyReal, motivo, date, createdAt);
 }
 
+std::vector<Movement> Api::listMovements() { return estoque::listMovements(db_); }
+
+Movement Api::updateMovement(const MovementPatch& patch) { return estoque::updateMovement(db_, patch); }
+
+void Api::deleteMovement(const std::string& id) { estoque::deleteMovement(db_, id); }
+
 std::string Api::computeReportJson(int year, int month0, const std::string& deptFilter, int windowMonths,
                                    const std::string& nowIso) {
   ReportParams params{year, month0, deptFilter, windowMonths, nowIso};
   return estoque::computeReportJson(db_, params);
+}
+
+std::string Api::computeRetrospectJson(int year, const std::string& source, const std::string& nowIso) {
+  RetrospectParams params{year, source, nowIso};
+  return estoque::computeRetrospectJson(db_, params);
+}
+
+void Api::saveBudgetParams(double metaReducao, double ipca, double pisoMensal) {
+  estoque::saveBudgetParams(db_, BudgetParams{metaReducao, ipca, pisoMensal});
+}
+
+int Api::importDeptCostHistory(const std::string& payload) {
+  return estoque::importDeptCostHistoryJson(db_, payload);
 }
 
 std::string Api::backupJson() {
@@ -111,10 +132,18 @@ std::string Api::backupJson() {
     movements.push_back(m);
   }
 
+  json settings = json::object();
+  {
+    auto sq = db_.prepare("SELECT key, value FROM app_settings");
+    while (sq.step()) settings[sq.columnText(0)] = sq.columnText(1);
+  }
+
   json root;
   root["products"] = products;
   root["movements"] = movements;
   root["departments"] = departments;
+  root["deptCostHistory"] = json::parse(estoque::exportDeptCostHistoryJson(db_));
+  root["settings"] = settings;
   return root.dump();
 }
 
@@ -128,6 +157,11 @@ void Api::restoreFromJson(const std::string& payload) {
   db_.execute("DELETE FROM movements;");
   db_.execute("DELETE FROM products;");
   db_.execute("DELETE FROM departments;");
+  // Histórico e preferências só são zerados se o backup os trouxer: importar
+  // um backup antigo (anterior ao retrospecto) não pode apagar em silêncio o
+  // histórico da planilha nem o teto já configurado.
+  if (root.contains("deptCostHistory")) db_.execute("DELETE FROM dept_cost_history;");
+  if (root.contains("settings")) db_.execute("DELETE FROM app_settings;");
 
   for (auto& p : root["products"]) {
     auto st = db_.prepare(
@@ -141,8 +175,31 @@ void Api::restoreFromJson(const std::string& payload) {
 
   if (root.contains("departments")) {
     for (auto& d : root["departments"]) {
-      auto st = db_.prepare("INSERT INTO departments (id, name, encarregado, created_at) VALUES (?, ?, ?, ?)");
-      st.bind(1, jstr(d, "id")).bind(2, jstr(d, "name")).bind(3, jstr(d, "encarregado")).bind(4, jstr(d, "createdAt"));
+      auto st = db_.prepare(
+          "INSERT INTO departments (id, name, encarregado, monthly_limit, created_at) VALUES (?, ?, ?, ?, ?)");
+      st.bind(1, jstr(d, "id")).bind(2, jstr(d, "name")).bind(3, jstr(d, "encarregado"));
+      st.bind(4, jnum(d, "monthlyLimit")).bind(5, jstr(d, "createdAt"));
+      st.step();
+    }
+  }
+
+  if (root.contains("deptCostHistory")) {
+    for (auto& h : root["deptCostHistory"]) {
+      std::string key = canonDeptKey(jstr(h, "dept"));
+      if (key.empty()) continue;
+      auto st = db_.prepare(
+          "INSERT INTO dept_cost_history (year, month0, dept_key, dept_name, amount) VALUES (?, ?, ?, ?, ?) "
+          "ON CONFLICT(year, month0, dept_key) DO UPDATE SET amount = amount + excluded.amount");
+      st.bind(1, jnum(h, "year")).bind(2, jnum(h, "month0"));
+      st.bind(3, key).bind(4, jstr(h, "dept")).bind(5, jnum(h, "amount"));
+      st.step();
+    }
+  }
+
+  if (root.contains("settings")) {
+    for (auto& [k, v] : root["settings"].items()) {
+      auto st = db_.prepare("INSERT INTO app_settings (key, value) VALUES (?, ?)");
+      st.bind(1, k).bind(2, v.is_string() ? v.get<std::string>() : v.dump());
       st.step();
     }
   }

@@ -27,11 +27,27 @@ Product toProduct(const ProductDto& d) {
   return p;
 }
 
+MovementPatch toMovementPatch(const MovementPatchDto& d) {
+  MovementPatch p;
+  p.id = std::string(d.id);
+  p.qty = d.qty;
+  p.qtyReal = d.qty_real;
+  p.unitPrice = d.unit_price;
+  p.supplier = std::string(d.supplier);
+  p.nf = std::string(d.nf);
+  p.departmentId = std::string(d.department_id);
+  p.requester = std::string(d.requester);
+  p.obs = std::string(d.obs);
+  p.date = std::string(d.date);
+  return p;
+}
+
 Department toDepartment(const DepartmentDto& d) {
   Department dep;
   dep.id = std::string(d.id);
   dep.name = std::string(d.name);
   dep.encarregado = std::string(d.encarregado);
+  dep.monthlyLimit = d.monthly_limit;
   dep.createdAt = std::string(d.created_at);
   return dep;
 }
@@ -54,6 +70,7 @@ json departmentToJson(const Department& d) {
   j["id"] = d.id;
   j["name"] = d.name;
   j["encarregado"] = d.encarregado;
+  j["monthlyLimit"] = d.monthlyLimit;
   j["createdAt"] = d.createdAt;
   return j;
 }
@@ -140,10 +157,34 @@ rust::String Session::apply_correcao(rust::Str movement_id, rust::Str product_id
   return rust::String(movementToJson(m).dump());
 }
 
+rust::String Session::list_movements_json() {
+  json arr = json::array();
+  for (auto& m : api_.listMovements()) arr.push_back(movementToJson(m));
+  return rust::String(arr.dump());
+}
+
+rust::String Session::update_movement(MovementPatchDto p) {
+  return rust::String(movementToJson(api_.updateMovement(toMovementPatch(p))).dump());
+}
+
+void Session::delete_movement(rust::Str id) { api_.deleteMovement(std::string(id)); }
+
 rust::String Session::compute_report_json(int year, int month0, rust::Str dept_filter, int window_months,
                                            rust::Str now_iso) {
   return rust::String(api_.computeReportJson(year, month0, std::string(dept_filter), window_months,
                                               std::string(now_iso)));
+}
+
+rust::String Session::compute_retrospect_json(int year, rust::Str source, rust::Str now_iso) {
+  return rust::String(api_.computeRetrospectJson(year, std::string(source), std::string(now_iso)));
+}
+
+void Session::save_budget_params(double meta_reducao, double ipca, double piso_mensal) {
+  api_.saveBudgetParams(meta_reducao, ipca, piso_mensal);
+}
+
+int Session::import_dept_cost_history(rust::Str payload) {
+  return api_.importDeptCostHistory(std::string(payload));
 }
 
 rust::String Session::backup_json() { return rust::String(api_.backupJson()); }

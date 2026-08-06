@@ -33,7 +33,14 @@ export const api = {
   applySaida: async (input) => JSON.parse(await call('apply_saida', { input })),
   applyCorrecao: async (input) => JSON.parse(await call('apply_correcao', { input })),
 
+  listMovements: async () => JSON.parse(await call('list_movements')),
+  updateMovement: async (patch) => JSON.parse(await call('update_movement', { patch })),
+  deleteMovement: (id) => call('delete_movement', { id }),
+
   computeReport: async (input) => JSON.parse(await call('compute_report', { input })),
+  computeRetrospect: async (input) => JSON.parse(await call('compute_retrospect', { input })),
+  saveBudgetParams: (input) => call('save_budget_params', { input }),
+  importDeptCostHistory: (payload) => call('import_dept_cost_history', { payload }),
 
   backup: async () => JSON.parse(await call('backup')),
   restoreBackup: (payload) => call('restore_backup', { payload }),

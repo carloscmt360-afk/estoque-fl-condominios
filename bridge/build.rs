@@ -37,6 +37,7 @@ fn main() {
         "time_utils.cpp",
         "inventory_engine.cpp",
         "report_engine.cpp",
+        "retrospect_engine.cpp",
         "portable_paths.cpp",
         "api.cpp",
     ] {
