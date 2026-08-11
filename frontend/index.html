@@ -37,6 +37,7 @@
       <button class="nav-item" data-view="importExport"><span class="ico">⇄</span> Importar / Exportar</button>
     </nav>
     <div class="sidebar-foot">Dados salvos localmente em<br/><code>dados/estoque.db</code>, ao lado do programa.</div>
+    <div class="app-copyright">© 2026 CMT360 • Soluções Inteligentes.<br/>Todos os direitos reservados.</div>
   </aside>
 
   <main class="content">
@@ -63,9 +64,12 @@
           </select>
         </div>
         <span class="spacer"></span>
+        <label class="check-inline" title="Ao imprimir, omite materiais com saldo zerado">
+          <input type="checkbox" id="repImprimirSoComEstoque" /> Imprimir só com estoque</label>
         <button class="btn-outline" id="btnMesAtual">↺ Mês atual</button>
         <button class="btn-outline" id="btnImprimirEstoque">🖨 Imprimir estoque</button>
         <button class="btn-outline" id="btnImprimirAnalitico">🖨 Imprimir analítico</button>
+        <button class="btn-outline" id="btnImprimirCustoDepto">🖨 Imprimir custo por departamento</button>
         <button class="btn-primary" id="btnExportarRelatorio">⬇ Exportar (CSV)</button>
       </div>
 
