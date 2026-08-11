@@ -1,20 +1,38 @@
 // Impressão dos relatórios.
 //
 // Em vez de mandar a tela para a impressora, cada relatório monta um
-// documento próprio (só cabeçalho + tabelas) dentro de #printArea; o
-// css/print.css esconde o app e mostra só esse bloco. Motivos: a sidebar, os
-// filtros e os gráficos SVG não têm função no papel; o WebView do Tauri
-// bloqueia window.open (então não dá para abrir uma segunda janela); e uma
-// tabela impressa continua legível em preto e branco, o que um gráfico de
-// barras coloridas não garante.
+// documento próprio (só cabeçalho + tabelas, e no relatório de custo por
+// departamento também um gráfico) dentro de #printArea; o css/print.css
+// esconde o app e mostra só esse bloco. Motivos: a sidebar, os filtros e os
+// demais gráficos interativos não têm função no papel; o WebView do Tauri
+// bloqueia window.open (então não dá para abrir uma segunda janela). O
+// gráfico embutido usa barrasHSVG (versão de deptHBars.js que devolve a
+// string do SVG em vez de desenhar num host do DOM), porque o documento é
+// montado inteiro antes de existir qualquer elemento em #printArea.
 import { fmtBRL, fmtNum, fmtPct, fmtDateBR, fmtDateTimeBR, escapeHtml, deltaInfo } from './format.js';
+import { barrasHSVG } from './charts/deptHBars.js';
 
 const MESES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
 const MESES_ABR = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
 
 const SIT = {
-  ruptura: 'Ruptura', baixo: 'Abaixo do mínimo', parado: 'Capital parado', ok: 'Normal',
+  ruptura: { txt: 'Ruptura', cls: 'pr-st-critical' },
+  baixo: { txt: 'Abaixo do mínimo', cls: 'pr-st-warn' },
+  parado: { txt: 'Capital parado', cls: 'pr-st-serious' },
+  ok: { txt: 'Normal', cls: 'pr-st-good' },
 };
+function sitBadge(situacao) {
+  const d = SIT[situacao];
+  return d ? `<span class="${d.cls}">${escapeHtml(d.txt)}</span>` : escapeHtml(situacao);
+}
+
+const LIMITE_STATUS = {
+  estourado: 'pr-st-critical', atencao: 'pr-st-warn', ok: 'pr-st-good',
+};
+function limiteBadge(status, txt) {
+  const cls = LIMITE_STATUS[status];
+  return cls ? `<span class="${cls}">${escapeHtml(txt)}</span>` : escapeHtml(txt);
+}
 
 function head(titulo, sub, extras) {
   return `<div class="pr-head">
@@ -25,7 +43,8 @@ function head(titulo, sub, extras) {
 }
 
 function assinaturas() {
-  return `<div class="pr-sign"><div>Responsável pelo almoxarifado</div><div>Gerência</div></div>`;
+  return `<div class="pr-sign"><div>Responsável pelo almoxarifado</div><div>Gerência</div></div>` +
+    `<div class="pr-copy">© 2026 CMT360 • Soluções Inteligentes. Todos os direitos reservados.</div>`;
 }
 
 function rodape(nota) {
@@ -70,9 +89,11 @@ export function printDocument(html) {
 
 // ------------------------------------------------------- relatório de estoque
 
-export function buildEstoqueDoc(R) {
+export function buildEstoqueDoc(R, opts) {
+  opts = opts || {};
   const ref = `${MESES[R.m]}/${R.y}`;
-  const itens = [...R.itens].sort((a, b) => b.valor - a.valor || a.name.localeCompare(b.name, 'pt-BR'));
+  const base = opts.soComEstoque ? R.itens.filter((i) => i.qty > 0) : R.itens;
+  const itens = [...base].sort((a, b) => b.valor - a.valor || a.name.localeCompare(b.name, 'pt-BR'));
   const k = R.kpi;
 
   const linhas = itens.map((i) => `<tr>
@@ -84,13 +105,16 @@ export function buildEstoqueDoc(R) {
     <td class="num">${fmtBRL(i.avgCost)}</td>
     <td class="num">${fmtBRL(i.valor)}</td>
     <td class="num">${R.valorTotal > 0 ? fmtPct(i.valor / R.valorTotal, 1) : '—'}</td>
-    <td>${i.classe}</td>
+    <td class="pr-abc pr-abc-${i.classe}">${escapeHtml(i.classe)}</td>
     <td class="num">${i.consumoMesQtd > 0 ? fmtNum(Math.round(i.consumoMesQtd * 100) / 100) : '—'}</td>
     <td class="num">${i.cobertura === null ? '—' : (i.cobertura > 99 ? '99+' : fmtNum(Math.round(i.cobertura * 10) / 10)) + ' m'}</td>
-    <td>${SIT[i.situacao] || i.situacao}</td></tr>`).join('');
+    <td>${sitBadge(i.situacao)}</td></tr>`).join('');
 
-  return head('Relatório de Estoque', `Posição de fechamento de ${ref}`,
-      R.deptFilter ? `Departamento: ${R.deptFilter}` : '') +
+  const escopo = [];
+  if (R.deptFilter) escopo.push(`Departamento: ${R.deptFilter}`);
+  if (opts.soComEstoque) escopo.push('Somente itens com estoque (zerados omitidos)');
+
+  return head('Relatório de Estoque', `Posição de fechamento de ${ref}`, escopo.join(' · ')) +
     kpiGrid([
       { k: 'Valor em estoque', v: fmtBRL(k.valorEstoque), f: `${fmtNum(R.itens.length)} materiais cadastrados` },
       { k: 'Itens em ruptura', v: fmtNum(k.ruptura), f: `${fmtNum(k.baixo)} abaixo do mínimo` },
@@ -104,7 +128,7 @@ export function buildEstoqueDoc(R) {
        <thead><tr><th>Material</th><th>Categoria</th><th>Un.</th><th class="num">Saldo</th><th class="num">Mín.</th>
          <th class="num">Custo médio</th><th class="num">Valor</th><th class="num">% valor</th><th>ABC</th>
          <th class="num">Cons./mês</th><th class="num">Cobert.</th><th>Situação</th></tr></thead>
-       <tbody>${linhas || '<tr><td colspan="12">Nenhum produto cadastrado.</td></tr>'}</tbody>
+       <tbody>${linhas || `<tr><td colspan="12">${opts.soComEstoque && R.itens.length ? 'Nenhum item com saldo em estoque.' : 'Nenhum produto cadastrado.'}</td></tr>`}</tbody>
        <tfoot><tr><td colspan="6">TOTAL GERAL</td><td class="num">${fmtBRL(R.valorTotal)}</td>
          <td class="num">100%</td><td colspan="4"></td></tr></tfoot>
      </table>` +
@@ -115,6 +139,10 @@ export function buildEstoqueDoc(R) {
 
 // ----------------------------------------------------- relatório analítico
 
+// O filtro "só com estoque" (opts.soComEstoque) não se aplica aqui: nenhuma
+// seção deste relatório lista a posição de estoque item a item — "Materiais
+// mais consumidos" é sobre movimentação do período, não saldo atual, e
+// removê-los pelo saldo de hoje esconderia justamente o que mais girou.
 export function buildAnaliticoDoc(R) {
   const ref = `${MESES[R.m]}/${R.y}`;
   const k = R.kpi;
@@ -130,7 +158,7 @@ export function buildAnaliticoDoc(R) {
       `${escapeHtml(l.name)} (${fmtBRL(l.gasto)} de ${fmtBRL(l.limite)}, ${fmtPct(l.pct, 0)})`).join(' · ')}</div>`;
   }
   if (emAtencao.length) {
-    avisos += `<div class="pr-alert">LIMITE MENSAL EM ATENÇÃO (90% OU MAIS) — ${emAtencao.map((l) =>
+    avisos += `<div class="pr-alert pr-alert-warn">LIMITE MENSAL EM ATENÇÃO (90% OU MAIS) — ${emAtencao.map((l) =>
       `${escapeHtml(l.name)} (${fmtBRL(l.gasto)} de ${fmtBRL(l.limite)}, ${fmtPct(l.pct, 0)})`).join(' · ')}</div>`;
   }
 
@@ -212,7 +240,7 @@ export function buildAnaliticoDoc(R) {
          <tbody>${limLinhas.map((l) => `<tr><td>${escapeHtml(l.name)}</td><td>${escapeHtml(l.encarregado || '—')}</td>
            <td class="num">${fmtBRL(l.limite)}</td><td class="num">${fmtBRL(l.gasto)}</td>
            <td class="num">${fmtBRL(l.saldo)}</td><td class="num">${pctTxt(l.pct, 0)}</td>
-           <td>${l.status === 'estourado' ? 'ESTOUROU' : l.status === 'atencao' ? 'Atenção (≥90%)' : 'Dentro do limite'}</td></tr>`).join('')}</tbody>
+           <td>${limiteBadge(l.status, l.status === 'estourado' ? 'ESTOUROU' : l.status === 'atencao' ? 'Atenção (≥90%)' : 'Dentro do limite')}</td></tr>`).join('')}</tbody>
          <tfoot><tr><td colspan="2">TOTAL</td><td class="num">${fmtBRL(lim.tetoTotal)}</td>
            <td class="num">${fmtBRL(lim.gastoTotal)}</td><td class="num">${fmtBRL(lim.tetoTotal - lim.gastoTotal)}</td>
            <td class="num">${lim.tetoTotal > 0 ? fmtPct(lim.gastoTotal / lim.tetoTotal, 0) : '—'}</td><td></td></tr></tfoot>
@@ -243,6 +271,91 @@ export function buildAnaliticoDoc(R) {
 
     rodape('Saídas valorizadas pelo custo médio ponderado vigente na data de cada lançamento. ' +
       'O acumulado compara o mesmo número de meses nos dois anos.') +
+    assinaturas();
+}
+
+// ------------------------------------------- custo mensal por departamento
+
+export function buildCustoDeptoDoc(R) {
+  const ref = `${MESES[R.m]}/${R.y}`;
+  const k = R.kpi;
+  const byId = new Map(R.itens.map((i) => [i.id, i]));
+
+  // --- resumo por departamento: mesmo cálculo da tela (Relatório Mensal) ---
+  const nomes = new Set([...Object.keys(R.deptMes), ...Object.keys(R.deptYTD)]);
+  const resumo = [...nomes].map((n) => {
+    const yy = R.deptYTD[n] || { cur: 0, prev: 0 };
+    return { name: n, mes: R.deptMes[n] || 0, cur: yy.cur, prev: yy.prev };
+  }).filter((r) => r.mes || r.cur || r.prev).sort((a, b) => b.mes - a.mes || a.name.localeCompare(b.name, 'pt-BR'));
+  const totMes = resumo.reduce((s, r) => s + r.mes, 0);
+
+  // --- detalhamento: cada pedido do mês, agrupado por departamento (mesma
+  // fonte da seção "Pedidos" dos outros relatórios, só que reagrupada) ---
+  const porDepto = new Map();
+  for (const p of R.pedidos) {
+    const dep = p.recipient || '(sem departamento)';
+    if (!porDepto.has(dep)) porDepto.set(dep, []);
+    porDepto.get(dep).push(p);
+  }
+  const grupos = [...porDepto.entries()].map(([dep, ps]) => {
+    const linhas = [...ps].sort((a, b) => a._ts - b._ts);
+    const subtotal = linhas.reduce((s, p) => s + p.qty * p.unitPrice, 0);
+    return { dep, linhas, subtotal };
+  }).sort((a, b) => b.subtotal - a.subtotal || a.dep.localeCompare(b.dep, 'pt-BR'));
+
+  const detalhamento = grupos.map((g) => {
+    const linhas = g.linhas.map((p) => {
+      const prod = byId.get(p.productId);
+      const val = p.qty * p.unitPrice;
+      return `<tr><td>${fmtDateBR(p._ts)}</td>
+        <td>${escapeHtml(prod ? prod.name : '(produto excluído)')}</td>
+        <td class="num">${fmtNum(p.qty)} ${escapeHtml(prod ? prod.unit : '')}</td>
+        <td class="num">${fmtBRL(p.unitPrice)}</td><td class="num">${fmtBRL(val)}</td>
+        <td>${escapeHtml(p.requester || 'não informado')}</td></tr>`;
+    }).join('');
+    return `<tr class="pr-group"><td colspan="6"><b>${escapeHtml(g.dep)}</b> — ` +
+      `${fmtNum(g.linhas.length)} pedido(s), ${fmtBRL(g.subtotal)}</td></tr>${linhas}`;
+  }).join('');
+
+  const rows = resumo.map((r) => ({ label: r.name, value: r.mes }));
+  const grafico = rows.length
+    ? barrasHSVG(rows, 680, { tipLabel: `Custo em ${ref}`, aria: 'Custo por departamento no mês', interactive: false })
+    : `<div class="chart-empty">Nenhuma saída no mês de referência.</div>`;
+
+  const escopo = [];
+  if (R.deptFilter) escopo.push(`Departamento: ${R.deptFilter}`);
+  if (R.refEmCurso) escopo.push(`Mês em curso (${R.diasDecorridos} de ${R.diasNoMes} dias)`);
+
+  return head('Custo Mensal por Departamento', `Referência ${ref}`, escopo.join(' · ')) +
+    kpiGrid([
+      { k: 'Custo total do mês', v: fmtBRL(k.consumo), f: `${fmtNum(resumo.length)} departamento(s) com saída` },
+      { k: 'Pedidos atendidos', v: fmtNum(k.pedidos), f: `${fmtNum(k.itensDistintos)} materiais distintos` },
+      { k: 'Ticket médio', v: fmtBRL(k.ticket), f: 'custo do mês ÷ pedidos' },
+    ]) +
+
+    `<div class="pr-sec">1. Resumo por departamento</div>
+     <table><thead><tr><th>Departamento</th><th class="num">${ref}</th><th class="num">% do mês</th>
+       <th class="num">Acum. ${R.y}</th><th class="num">Acum. ${R.y - 1}</th><th class="num">Δ</th></tr></thead>
+       <tbody>${resumo.map((r) => `<tr><td>${escapeHtml(r.name)}</td><td class="num">${fmtBRL(r.mes)}</td>
+         <td class="num">${totMes > 0 ? fmtPct(r.mes / totMes, 1) : '—'}</td>
+         <td class="num">${fmtBRL(r.cur)}</td><td class="num">${fmtBRL(r.prev)}</td>
+         <td class="num">${deltaTxt(r.cur, r.prev)}</td></tr>`).join('')
+         || '<tr><td colspan="6">Nenhuma saída registrada.</td></tr>'}</tbody>
+       <tfoot><tr><td>TOTAL</td><td class="num">${fmtBRL(totMes)}</td><td class="num">100%</td>
+         <td class="num">${fmtBRL(R.ytdCur)}</td><td class="num">${fmtBRL(R.ytdPrev)}</td>
+         <td class="num">${deltaTxt(R.ytdCur, R.ytdPrev)}</td></tr></tfoot></table>` +
+
+    `<div class="pr-sec pr-break">2. Detalhamento por departamento — ${ref}</div>
+     <table><thead><tr><th>Data</th><th>Material</th><th class="num">Qtd.</th>
+       <th class="num">Vl. unit.</th><th class="num">Vl. total</th><th>Solicitante</th></tr></thead>
+       <tbody>${detalhamento || '<tr><td colspan="6">Nenhuma saída no mês de referência.</td></tr>'}</tbody>
+       <tfoot><tr><td colspan="4">TOTAL — ${fmtNum(R.pedidos.length)} pedido(s)</td>
+         <td class="num">${fmtBRL(k.consumo)}</td><td></td></tr></tfoot></table>` +
+
+    `<div class="pr-sec">3. Gráfico — custo por departamento em ${ref}</div>
+     <div class="chart-host pr-chart">${grafico}</div>` +
+
+    rodape('Saídas valorizadas pelo custo médio ponderado vigente na data de cada lançamento.') +
     assinaturas();
 }
 
@@ -295,7 +408,7 @@ export function buildRetrospectDoc(RE) {
          <td class="num">${fmtBRL(l.tetoMensal)}${l.noPiso ? ' *' : ''}</td><td class="num">${fmtBRL(l.tetoAnual)}</td>
          <td class="num">${fmtBRL(l.realizado)}</td><td class="num">${fmtBRL(l.tetoPeriodo)}</td>
          <td class="num">${pctTxt(l.pctPeriodo, 0)}</td>
-         <td>${l.status === 'estourado' ? 'ESTOUROU' : l.status === 'atencao' ? 'Atenção' : l.status === 'ok' ? 'Dentro' : '—'}</td></tr>`).join('')}</tbody>
+         <td>${l.status ? limiteBadge(l.status, l.status === 'estourado' ? 'ESTOUROU' : l.status === 'atencao' ? 'Atenção' : 'Dentro') : '—'}</td></tr>`).join('')}</tbody>
        <tfoot><tr><td>TOTAL</td><td class="num">${fmtBRL(teto.baseTotal)}</td><td class="num">${fmtBRL(teto.tetoMensalTotal)}</td>
          <td class="num">${fmtBRL(teto.tetoAnualTotal)}</td><td class="num">${fmtBRL(teto.realizadoTotal)}</td>
          <td class="num">${fmtBRL(teto.tetoPeriodoTotal)}</td>

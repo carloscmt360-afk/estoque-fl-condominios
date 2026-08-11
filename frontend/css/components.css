@@ -398,7 +398,7 @@ tfoot td {
 }
 .abc-C {
   background: var(--chart-abc-c);
-  color: #16324f;
+  color: var(--accent);
 }
 .flag {
   display: inline-flex;
@@ -474,7 +474,7 @@ tfoot td {
 }
 .info-box {
   background: var(--accent-soft);
-  border: 1px solid #d3e3f8;
+  border: 1px solid #cddce8;
   border-radius: var(--radius-sm);
   padding: 9px 12px;
   font-size: 12px;
@@ -482,7 +482,7 @@ tfoot td {
 }
 .warn-box {
   background: var(--warning-soft);
-  border: 1px solid #f2ddb0;
+  border: 1px solid #f0d9a8;
   border-radius: var(--radius-sm);
   padding: 9px 12px;
   font-size: 12px;
@@ -492,7 +492,7 @@ tfoot td {
    continuar visível enquanto a condição existir (não é um toast). */
 .danger-box {
   background: var(--danger-soft);
-  border: 1px solid #f0c9c9;
+  border: 1px solid #efc7c0;
   border-radius: var(--radius-sm);
   padding: 9px 12px;
   font-size: 12px;
@@ -530,7 +530,7 @@ tfoot td {
   background: var(--accent);
 }
 .meter.is-warn > i {
-  background: #d9930b;
+  background: var(--warning);
 }
 .meter.is-critical > i {
   background: var(--danger);

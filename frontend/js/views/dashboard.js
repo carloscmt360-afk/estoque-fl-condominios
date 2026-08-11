@@ -8,7 +8,7 @@ import { drawDumbbell } from '../charts/dumbbell.js';
 import { drawABC } from '../charts/abcStacked.js';
 import { fmtBRL, fmtNum, fmtPct, fmtDateBR, deltaHTML, deltaCell, escapeHtml, meterHTML } from '../format.js';
 import { toast } from '../components/toast.js';
-import { printDocument, buildEstoqueDoc, buildAnaliticoDoc } from '../print.js';
+import { printDocument, buildEstoqueDoc, buildAnaliticoDoc, buildCustoDeptoDoc } from '../print.js';
 
 const MESES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
 const MESES_ABR = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
@@ -31,12 +31,13 @@ function wireStaticControls() {
   document.getElementById('btnExportarRelatorio').addEventListener('click', exportReportCSV);
   document.getElementById('btnImprimirEstoque').addEventListener('click', () => imprimir(buildEstoqueDoc));
   document.getElementById('btnImprimirAnalitico').addEventListener('click', () => imprimir(buildAnaliticoDoc));
+  document.getElementById('btnImprimirCustoDepto').addEventListener('click', () => imprimir(buildCustoDeptoDoc));
   document.getElementById('repLimiteSoConfig').addEventListener('change', renderLimites);
   document.getElementById('repFiltroProduto').addEventListener('input', renderPosicao);
   document.getElementById('repFiltroClasse').addEventListener('change', renderPosicao);
   document.getElementById('repFiltroSituacao').addEventListener('change', renderPosicao);
   document.getElementById('repFiltroPedido').addEventListener('input', renderPedidos);
-  document.querySelectorAll('[data-toggle-table]').forEach((btn) =>
+  document.querySelectorAll('#view-dashboard [data-toggle-table]').forEach((btn) =>
     btn.addEventListener('click', () => toggleCardTable(btn.dataset.toggleTable)));
 }
 
@@ -136,7 +137,8 @@ export async function renderReport() {
 
 function imprimir(builder) {
   if (!repData) { toast('Abra o relatório antes de imprimir.', 'error'); return; }
-  printDocument(builder(repData));
+  const soComEstoque = document.getElementById('repImprimirSoComEstoque').checked;
+  printDocument(builder(repData, { soComEstoque }));
 }
 
 /* Avisos de limite mensal. Não têm botão de fechar: enquanto um setor estiver

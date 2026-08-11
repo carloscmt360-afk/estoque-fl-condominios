@@ -34,18 +34,21 @@
 
   #printArea {
     display: block !important;
-    color: #000;
+    color: var(--ink-primary);
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
   }
 
-  /* Cabeçalho do documento */
+  /* Cabeçalho do documento — azul institucional da marca */
   .pr-head {
-    border-bottom: 2px solid #000;
+    border-bottom: 2px solid var(--accent);
     padding-bottom: 6pt;
     margin-bottom: 10pt;
   }
   .pr-head h1 {
     font-size: 15pt;
     margin: 0;
+    color: var(--accent);
   }
   .pr-head .pr-sub {
     font-size: 9pt;
@@ -54,6 +57,7 @@
   .pr-head .pr-meta {
     font-size: 8pt;
     margin-top: 4pt;
+    color: var(--ink-secondary);
   }
 
   .pr-sec {
@@ -61,7 +65,8 @@
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.04em;
-    border-bottom: 1px solid #000;
+    color: var(--accent);
+    border-bottom: 1px solid var(--accent);
     padding-bottom: 2pt;
     margin: 12pt 0 5pt;
   }
@@ -82,22 +87,21 @@
     font-size: 8.5pt;
   }
   #printArea th {
-    background: #eee !important;
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
-    border-bottom: 1px solid #000;
+    background: var(--accent-soft);
+    color: var(--accent);
+    border-bottom: 1px solid var(--accent);
     text-align: left;
     padding: 3pt 4pt;
     font-size: 7.5pt;
     text-transform: uppercase;
   }
   #printArea td {
-    border-bottom: 0.5pt solid #bbb;
+    border-bottom: 0.5pt solid var(--border-strong);
     padding: 3pt 4pt;
     vertical-align: top;
   }
   #printArea tfoot td {
-    border-top: 1pt solid #000;
+    border-top: 1pt solid var(--accent);
     font-weight: 700;
   }
   /* Uma linha de tabela nunca é partida entre duas páginas, e o cabeçalho se
@@ -115,47 +119,117 @@
     font-variant-numeric: tabular-nums;
   }
 
-  /* Grade de indicadores: 3 por linha, sem cor de fundo (economia de tinta) */
+  /* Cabeçalho de grupo (departamento) dentro da tabela de detalhamento do
+     relatório de custo mensal — mesma linha, sem quebrar antes das primeiras
+     linhas do grupo que ela abre. */
+  #printArea .pr-group td {
+    background: var(--accent-soft);
+    color: var(--accent);
+    font-weight: 700;
+    padding-top: 5pt;
+  }
+  #printArea .pr-group {
+    break-after: avoid;
+    page-break-after: avoid;
+  }
+
+  /* Gráfico embutido no relatório de custo por departamento */
+  #printArea .pr-chart {
+    margin: 4pt 0 8pt;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  #printArea .pr-chart svg {
+    width: 100%;
+    height: auto;
+  }
+
+  /* Grade de indicadores: 3 por linha, fundo neutro (economia de tinta) com
+     um filete de acento à esquerda para reforçar a identidade visual */
   #printArea .pr-kpis {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
     gap: 4pt;
   }
   #printArea .pr-kpi {
-    border: 0.5pt solid #999;
+    background: var(--page-bg);
+    border: 0.5pt solid var(--border-strong);
+    border-left: 2pt solid var(--accent);
     padding: 4pt 6pt;
   }
   #printArea .pr-kpi .k {
     font-size: 7pt;
     text-transform: uppercase;
     letter-spacing: 0.03em;
+    color: var(--ink-secondary);
   }
   #printArea .pr-kpi .v {
     font-size: 11pt;
     font-weight: 700;
+    color: var(--accent);
   }
   #printArea .pr-kpi .f {
     font-size: 7pt;
+    color: var(--ink-secondary);
   }
 
   #printArea .pr-note {
-    border: 0.5pt solid #000;
+    border: 0.5pt solid var(--border-strong);
     padding: 4pt 6pt;
     font-size: 8.5pt;
     margin-bottom: 6pt;
   }
   #printArea .pr-alert {
-    border: 1pt solid #000;
+    border: 1pt solid var(--danger);
+    background: var(--danger-soft);
+    color: var(--danger);
     padding: 4pt 6pt;
     font-size: 8.5pt;
     font-weight: 700;
     margin-bottom: 6pt;
   }
+  #printArea .pr-alert-warn {
+    border-color: var(--warning);
+    background: var(--warning-soft);
+    color: var(--warning);
+  }
+
+  /* Situação / status: mesma semântica de cor usada na tela (pill/flag) */
+  #printArea .pr-st-critical {
+    color: var(--danger);
+    font-weight: 700;
+  }
+  #printArea .pr-st-warn {
+    color: var(--warning);
+    font-weight: 700;
+  }
+  #printArea .pr-st-good {
+    color: var(--success);
+    font-weight: 700;
+  }
+  #printArea .pr-st-serious {
+    color: var(--accent-secondary);
+    font-weight: 700;
+  }
+  #printArea .pr-abc {
+    font-weight: 800;
+  }
+  #printArea .pr-abc-A {
+    color: var(--chart-abc-a);
+  }
+  #printArea .pr-abc-B {
+    color: var(--chart-abc-b);
+  }
+  #printArea .pr-abc-C {
+    color: var(--chart-abc-c);
+  }
+
   #printArea .pr-foot {
     margin-top: 10pt;
     padding-top: 4pt;
-    border-top: 0.5pt solid #999;
+    border-top: 0.5pt solid var(--border-strong);
     font-size: 7.5pt;
+    color: var(--ink-secondary);
   }
   #printArea .pr-sign {
     margin-top: 22pt;
@@ -166,7 +240,15 @@
     text-align: center;
   }
   #printArea .pr-sign div {
-    border-top: 0.5pt solid #000;
+    border-top: 0.5pt solid var(--ink-primary);
     padding-top: 3pt;
+  }
+
+  /* Rodapé discreto, ao final de todo relatório impresso */
+  #printArea .pr-copy {
+    margin-top: 14pt;
+    font-size: 6.5pt;
+    color: var(--ink-muted);
+    text-align: center;
   }
 }

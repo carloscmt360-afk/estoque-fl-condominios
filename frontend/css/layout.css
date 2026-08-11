@@ -99,6 +99,15 @@
   padding: var(--sp-2);
 }
 
+/* Rodapé discreto, presente em toda tela do app (a barra lateral nunca é
+   substituída ao trocar de view). */
+.app-copyright {
+  font-size: 9.5px;
+  line-height: 1.4;
+  color: var(--ink-muted);
+  padding: 0 var(--sp-2) var(--sp-2);
+}
+
 .content {
   overflow-y: auto;
   padding: var(--sp-6) var(--sp-8) var(--sp-8);
