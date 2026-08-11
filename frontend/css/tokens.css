@@ -1,7 +1,8 @@
-/* Tokens de design — "moderno e sóbrio": superfícies planas, acento único,
-   bordas finas no lugar de sombra pesada. A paleta categórica dos gráficos
-   (--chart-*) é a mesma já validada para acessibilidade no app anterior —
-   não mexer nela ao ajustar o visual. */
+/* Tokens de design — paleta institucional (azul + estados semânticos),
+   aplicada de ponta a ponta: telas, gráficos SVG (--chart-*) e relatórios
+   impressos (ver css/print.css). Ao alterar uma cor aqui, conferir também
+   js/charts/palette.js (VIZ), que espelha os tons dos gráficos para uso
+   fora do CSS (SVG inline). */
 :root {
   /* Só existe tema claro por enquanto (mesmo escopo do app anterior) —
      declarar isso explicitamente impede o navegador de "auto-escurecer"
@@ -10,41 +11,42 @@
   color-scheme: light;
 
   /* Superfícies */
-  --page-bg: #f5f5f6;
+  --page-bg: #f4f6f8;
   --surface: #ffffff;
-  --surface-sunken: #fafafa;
-  --border: #e2e2e5;
-  --border-strong: #cfcfd3;
+  --surface-sunken: #eef1f4;
+  --border: #e1e4e8;
+  --border-strong: #c6ccd2;
 
   /* Tinta (texto) */
-  --ink-primary: #1a1a1e;
-  --ink-secondary: #63636a;
-  --ink-muted: #9a9aa0;
+  --ink-primary: #2b2f33;
+  --ink-secondary: #6b7280;
+  --ink-muted: #9aa1a9;
   --ink-on-accent: #ffffff;
 
-  /* Acento único — mesmo azul já usado como série primária dos gráficos
-     (consistência de marca, contraste já validado) */
-  --accent: #2a78d6;
-  --accent-hover: #1f63b8;
-  --accent-soft: #eaf2fc;
+  /* Acento — azul institucional (marca/ações principais), com a variante
+     clara para hover/destaques e a acinzentada para apoio/links/ícones */
+  --accent: #1b3a5c;
+  --accent-hover: #2e6ba6;
+  --accent-soft: #e7edf3;
+  --accent-secondary: #6c8ca8;
 
-  /* Estado (reaproveita os tons de status já validados nos gráficos) */
-  --success: #0ca30c;
-  --success-soft: #e8f7e8;
-  --warning: #8a5b00;
-  --warning-soft: #fdf3e0;
-  --danger: #d03b3b;
-  --danger-soft: #fbeaea;
+  /* Estado */
+  --success: #2e8b57;
+  --success-soft: #e6f3ec;
+  --warning: #e0a526;
+  --warning-soft: #faf0da;
+  --danger: #c0392b;
+  --danger-soft: #f8e6e3;
 
-  /* Paleta categórica dos gráficos — intocada */
-  --chart-s1: #2a78d6;
-  --chart-s2: #eb6834;
-  --chart-prior: #86b6ef;
-  --chart-abc-a: #184f95;
-  --chart-abc-b: #3987e5;
-  --chart-abc-c: #86b6ef;
-  --chart-grid: #e4e9f0;
-  --chart-axis: #c3c2b7;
+  /* Paleta categórica dos gráficos — deriva da paleta institucional acima */
+  --chart-s1: #1b3a5c;
+  --chart-s2: #6c8ca8;
+  --chart-prior: #6c8ca8;
+  --chart-abc-a: #1b3a5c;
+  --chart-abc-b: #2e6ba6;
+  --chart-abc-c: #6c8ca8;
+  --chart-grid: #e1e4e8;
+  --chart-axis: #c6ccd2;
   --chart-muted: #6b7280;
 
   /* Espaçamento (escala 4px) */

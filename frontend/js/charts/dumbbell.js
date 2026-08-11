@@ -27,7 +27,7 @@ export function drawDumbbell(host, rows, opts) {
     g += `<circle cx="${xOf(r.cur)}" cy="${y}" r="5" fill="${VIZ.cur}" stroke="${VIZ.surface}" stroke-width="2"></circle>`;
     const d = deltaInfo(r.cur, r.prev);
     const lbl = d.kind === 'novo' ? 'novo' : d.kind === 'nd' || d.kind === 'flat' ? '—' : d.text;
-    g += txt(W - 6, y + 3.5, lbl, { anchor: 'end', size: 11, weight: 700, fill: d.kind === 'up' ? '#9A2020' : d.kind === 'down' ? '#00560B' : VIZ.muted });
+    g += txt(W - 6, y + 3.5, lbl, { anchor: 'end', size: 11, weight: 700, fill: d.kind === 'up' ? '#8E2A20' : d.kind === 'down' ? '#21643E' : VIZ.muted });
     const tip = `<b>${escapeHtml(r.label)}</b><br>` +
       `<span class='tk' style='background:${VIZ.cur}'></span>${escapeHtml(opts.curLabel)}: ${fmtBRL(r.cur)}<br>` +
       `<span class='tk' style='background:${VIZ.prior}'></span>${escapeHtml(opts.prevLabel)}: ${fmtBRL(r.prev)}<br>` +

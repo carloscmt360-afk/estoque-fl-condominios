@@ -13,8 +13,23 @@ const MESES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Ag
 const MESES_ABR = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
 
 const SIT = {
-  ruptura: 'Ruptura', baixo: 'Abaixo do mínimo', parado: 'Capital parado', ok: 'Normal',
+  ruptura: { txt: 'Ruptura', cls: 'pr-st-critical' },
+  baixo: { txt: 'Abaixo do mínimo', cls: 'pr-st-warn' },
+  parado: { txt: 'Capital parado', cls: 'pr-st-serious' },
+  ok: { txt: 'Normal', cls: 'pr-st-good' },
 };
+function sitBadge(situacao) {
+  const d = SIT[situacao];
+  return d ? `<span class="${d.cls}">${escapeHtml(d.txt)}</span>` : escapeHtml(situacao);
+}
+
+const LIMITE_STATUS = {
+  estourado: 'pr-st-critical', atencao: 'pr-st-warn', ok: 'pr-st-good',
+};
+function limiteBadge(status, txt) {
+  const cls = LIMITE_STATUS[status];
+  return cls ? `<span class="${cls}">${escapeHtml(txt)}</span>` : escapeHtml(txt);
+}
 
 function head(titulo, sub, extras) {
   return `<div class="pr-head">
@@ -84,10 +99,10 @@ export function buildEstoqueDoc(R) {
     <td class="num">${fmtBRL(i.avgCost)}</td>
     <td class="num">${fmtBRL(i.valor)}</td>
     <td class="num">${R.valorTotal > 0 ? fmtPct(i.valor / R.valorTotal, 1) : '—'}</td>
-    <td>${i.classe}</td>
+    <td class="pr-abc pr-abc-${i.classe}">${escapeHtml(i.classe)}</td>
     <td class="num">${i.consumoMesQtd > 0 ? fmtNum(Math.round(i.consumoMesQtd * 100) / 100) : '—'}</td>
     <td class="num">${i.cobertura === null ? '—' : (i.cobertura > 99 ? '99+' : fmtNum(Math.round(i.cobertura * 10) / 10)) + ' m'}</td>
-    <td>${SIT[i.situacao] || i.situacao}</td></tr>`).join('');
+    <td>${sitBadge(i.situacao)}</td></tr>`).join('');
 
   return head('Relatório de Estoque', `Posição de fechamento de ${ref}`,
       R.deptFilter ? `Departamento: ${R.deptFilter}` : '') +
@@ -130,7 +145,7 @@ export function buildAnaliticoDoc(R) {
       `${escapeHtml(l.name)} (${fmtBRL(l.gasto)} de ${fmtBRL(l.limite)}, ${fmtPct(l.pct, 0)})`).join(' · ')}</div>`;
   }
   if (emAtencao.length) {
-    avisos += `<div class="pr-alert">LIMITE MENSAL EM ATENÇÃO (90% OU MAIS) — ${emAtencao.map((l) =>
+    avisos += `<div class="pr-alert pr-alert-warn">LIMITE MENSAL EM ATENÇÃO (90% OU MAIS) — ${emAtencao.map((l) =>
       `${escapeHtml(l.name)} (${fmtBRL(l.gasto)} de ${fmtBRL(l.limite)}, ${fmtPct(l.pct, 0)})`).join(' · ')}</div>`;
   }
 
@@ -212,7 +227,7 @@ export function buildAnaliticoDoc(R) {
          <tbody>${limLinhas.map((l) => `<tr><td>${escapeHtml(l.name)}</td><td>${escapeHtml(l.encarregado || '—')}</td>
            <td class="num">${fmtBRL(l.limite)}</td><td class="num">${fmtBRL(l.gasto)}</td>
            <td class="num">${fmtBRL(l.saldo)}</td><td class="num">${pctTxt(l.pct, 0)}</td>
-           <td>${l.status === 'estourado' ? 'ESTOUROU' : l.status === 'atencao' ? 'Atenção (≥90%)' : 'Dentro do limite'}</td></tr>`).join('')}</tbody>
+           <td>${limiteBadge(l.status, l.status === 'estourado' ? 'ESTOUROU' : l.status === 'atencao' ? 'Atenção (≥90%)' : 'Dentro do limite')}</td></tr>`).join('')}</tbody>
          <tfoot><tr><td colspan="2">TOTAL</td><td class="num">${fmtBRL(lim.tetoTotal)}</td>
            <td class="num">${fmtBRL(lim.gastoTotal)}</td><td class="num">${fmtBRL(lim.tetoTotal - lim.gastoTotal)}</td>
            <td class="num">${lim.tetoTotal > 0 ? fmtPct(lim.gastoTotal / lim.tetoTotal, 0) : '—'}</td><td></td></tr></tfoot>
@@ -295,7 +310,7 @@ export function buildRetrospectDoc(RE) {
          <td class="num">${fmtBRL(l.tetoMensal)}${l.noPiso ? ' *' : ''}</td><td class="num">${fmtBRL(l.tetoAnual)}</td>
          <td class="num">${fmtBRL(l.realizado)}</td><td class="num">${fmtBRL(l.tetoPeriodo)}</td>
          <td class="num">${pctTxt(l.pctPeriodo, 0)}</td>
-         <td>${l.status === 'estourado' ? 'ESTOUROU' : l.status === 'atencao' ? 'Atenção' : l.status === 'ok' ? 'Dentro' : '—'}</td></tr>`).join('')}</tbody>
+         <td>${l.status ? limiteBadge(l.status, l.status === 'estourado' ? 'ESTOUROU' : l.status === 'atencao' ? 'Atenção' : 'Dentro') : '—'}</td></tr>`).join('')}</tbody>
        <tfoot><tr><td>TOTAL</td><td class="num">${fmtBRL(teto.baseTotal)}</td><td class="num">${fmtBRL(teto.tetoMensalTotal)}</td>
          <td class="num">${fmtBRL(teto.tetoAnualTotal)}</td><td class="num">${fmtBRL(teto.realizadoTotal)}</td>
          <td class="num">${fmtBRL(teto.tetoPeriodoTotal)}</td>

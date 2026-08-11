@@ -1,14 +1,14 @@
-// Paleta e primitivas de desenho SVG — portadas do app web anterior.
-// A paleta categórica já foi validada contra critérios de acessibilidade
-// (daltonismo, contraste): não alterar estas cores ao mexer no visual.
+// Paleta e primitivas de desenho SVG.
+// Espelha a paleta institucional de css/tokens.css (--chart-*) para uso fora
+// do CSS: SVG inline não lê custom properties nos atributos fill/stroke.
 import { escapeHtml, fmtBRL } from '../format.js';
 
 export const VIZ = {
-  s1: '#2A78D6', s2: '#EB6834',
-  prior: '#86B6EF', cur: '#2A78D6',
-  abc: { A: '#184F95', B: '#3987E5', C: '#86B6EF' },
-  grid: '#E4E9F0', axis: '#C3C2B7', muted: '#6B7280', ink: '#1A1A1E',
-  surface: '#FFFFFF', deemph: '#B7D3F6',
+  s1: '#1B3A5C', s2: '#6C8CA8',
+  prior: '#6C8CA8', cur: '#1B3A5C',
+  abc: { A: '#1B3A5C', B: '#2E6BA6', C: '#6C8CA8' },
+  grid: '#E1E4E8', axis: '#C6CCD2', muted: '#6B7280', ink: '#2B2F33',
+  surface: '#FFFFFF', deemph: '#AEC2D2',
 };
 
 export function hostW(el, fallback) {
