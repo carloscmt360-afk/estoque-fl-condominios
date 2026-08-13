@@ -28,6 +28,20 @@ pub mod ffi {
         created_at: String,
     }
 
+    // Cadastro de usuário. `password` vazia num update significa "não mexer
+    // na senha" — nunca "apagar a senha". A senha em si não é guardada em
+    // lugar nenhum: o C++ deriva o PBKDF2 dela e descarta (ver crypto.hpp).
+    struct UserDto {
+        id: String,
+        name: String,
+        email: String,
+        role: String, // "superadmin" | "usuario"
+        department_id: String,
+        active: bool,
+        created_at: String,
+        password: String,
+    }
+
     // Campos editáveis de um lançamento já gravado. `type` e `product_id`
     // não estão aqui de propósito: são imutáveis (ver MovementPatch em
     // core-cpp/include/estoque/inventory_engine.hpp). Cada tipo usa só o
@@ -51,6 +65,31 @@ pub mod ffi {
         type Session;
 
         fn open_session(db_path: &str) -> Result<UniquePtr<Session>>;
+
+        // ---- sessão ----
+        // Toda função abaixo (fora as três de sessão) exige um usuário logado
+        // e confere a permissão dele do lado C++ — ver api.hpp. Os erros de
+        // autorização chegam como Err com a mensagem prefixada por "[auth]"
+        // (derruba para a tela de login) ou "[forbidden]" (mostra um aviso).
+        fn login(
+            self: Pin<&mut Session>,
+            email: &str,
+            password: &str,
+            now_iso: &str,
+        ) -> Result<String>;
+        fn logout(self: Pin<&mut Session>) -> Result<()>;
+        fn current_session_json(self: Pin<&mut Session>) -> Result<String>;
+        fn change_own_password(
+            self: Pin<&mut Session>,
+            current_password: &str,
+            new_password: &str,
+        ) -> Result<()>;
+
+        // Acesso total sem login, para uso FORA da interface (core-cli e
+        // testes). Deliberadamente não registrada como comando Tauri em
+        // src-tauri/src/main.rs: a fronteira de confiança é aquela lista, e o
+        // frontend não tem como chamar o que não está lá.
+        fn login_as_service(self: Pin<&mut Session>, label: &str) -> Result<()>;
 
         fn list_products_json(self: Pin<&mut Session>) -> Result<String>;
         fn create_product(self: Pin<&mut Session>, p: ProductDto) -> Result<String>;
@@ -127,6 +166,59 @@ pub mod ffi {
         ) -> Result<()>;
 
         fn import_dept_cost_history(self: Pin<&mut Session>, payload: &str) -> Result<i32>;
+
+        // ---- usuários (só superadmin) ----
+        fn list_users_json(self: Pin<&mut Session>) -> Result<String>;
+        fn create_user(self: Pin<&mut Session>, u: UserDto) -> Result<String>;
+        fn update_user(self: Pin<&mut Session>, u: UserDto) -> Result<String>;
+        fn delete_user(self: Pin<&mut Session>, id: &str) -> Result<()>;
+        fn reset_user_password(self: Pin<&mut Session>, id: &str, new_password: &str) -> Result<()>;
+
+        // ---- grupos de permissão (só superadmin) ----
+        // A matriz CRUD é 7 funções × 4 ações; mantê-la como struct tipada
+        // significaria mexer na ponte a cada função nova. Vai como JSON, pelo
+        // mesmo critério já usado no relatório (ver o cabeçalho deste arquivo).
+        fn list_permissions_json(self: Pin<&mut Session>) -> Result<String>;
+        fn create_permission_group(self: Pin<&mut Session>, payload: &str) -> Result<String>;
+        fn update_permission_group(self: Pin<&mut Session>, payload: &str) -> Result<String>;
+        fn delete_permission_group(self: Pin<&mut Session>, id: &str) -> Result<()>;
+        fn set_department_permission_group(
+            self: Pin<&mut Session>,
+            department_id: &str,
+            group_id: &str,
+        ) -> Result<()>;
+
+        // ---- requisições de material ----
+        fn list_requests_json(self: Pin<&mut Session>) -> Result<String>;
+        fn create_request(self: Pin<&mut Session>, payload: &str) -> Result<String>;
+        fn approve_request(
+            self: Pin<&mut Session>,
+            id: &str,
+            note: &str,
+            now_iso: &str,
+        ) -> Result<String>;
+        fn reject_request(
+            self: Pin<&mut Session>,
+            id: &str,
+            note: &str,
+            now_iso: &str,
+        ) -> Result<String>;
+        fn cancel_request(
+            self: Pin<&mut Session>,
+            id: &str,
+            note: &str,
+            now_iso: &str,
+        ) -> Result<String>;
+        // `movement_id_prefix` vira o id das saídas geradas (<prefixo>_1, _2…):
+        // como todo id do app, é o chamador que gera, nunca o núcleo.
+        fn deliver_request(
+            self: Pin<&mut Session>,
+            id: &str,
+            now_iso: &str,
+            movement_id_prefix: &str,
+        ) -> Result<String>;
+        // Posição de estoque com a reserva das requisições em aberto descontada.
+        fn stock_availability_json(self: Pin<&mut Session>) -> Result<String>;
 
         fn backup_json(self: Pin<&mut Session>) -> Result<String>;
         fn restore_from_json(self: Pin<&mut Session>, payload: &str) -> Result<()>;

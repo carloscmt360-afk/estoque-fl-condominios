@@ -22,12 +22,39 @@ namespace estoque::shim {
 struct ProductDto;
 struct DepartmentDto;
 struct MovementPatchDto;
+struct UserDto;
 
 // Nomes dos métodos em snake_case: `cxx` casa por igualdade literal de nome
 // com a declaração Rust em lib.rs (sem nenhuma conversão camelCase<->snake_case).
 class Session {
  public:
   explicit Session(const std::string& dbPath);
+
+  rust::String login(rust::Str email, rust::Str password, rust::Str now_iso);
+  void logout();
+  rust::String current_session_json();
+  void change_own_password(rust::Str current_password, rust::Str new_password);
+  void login_as_service(rust::Str label);
+
+  rust::String list_users_json();
+  rust::String create_user(UserDto u);
+  rust::String update_user(UserDto u);
+  void delete_user(rust::Str id);
+  void reset_user_password(rust::Str id, rust::Str new_password);
+
+  rust::String list_permissions_json();
+  rust::String create_permission_group(rust::Str payload);
+  rust::String update_permission_group(rust::Str payload);
+  void delete_permission_group(rust::Str id);
+  void set_department_permission_group(rust::Str department_id, rust::Str group_id);
+
+  rust::String list_requests_json();
+  rust::String create_request(rust::Str payload);
+  rust::String approve_request(rust::Str id, rust::Str note, rust::Str now_iso);
+  rust::String reject_request(rust::Str id, rust::Str note, rust::Str now_iso);
+  rust::String cancel_request(rust::Str id, rust::Str note, rust::Str now_iso);
+  rust::String deliver_request(rust::Str id, rust::Str now_iso, rust::Str movement_id_prefix);
+  rust::String stock_availability_json();
 
   rust::String list_products_json();
   rust::String create_product(ProductDto p);

@@ -8,6 +8,7 @@ import { drawDumbbell } from '../charts/dumbbell.js';
 import { drawABC } from '../charts/abcStacked.js';
 import { fmtBRL, fmtNum, fmtPct, fmtDateBR, deltaHTML, deltaCell, escapeHtml, meterHTML } from '../format.js';
 import { toast } from '../components/toast.js';
+import { can } from '../session.js';
 import { printDocument, buildEstoqueDoc, buildAnaliticoDoc, buildCustoDeptoDoc } from '../print.js';
 
 const MESES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
@@ -20,8 +21,17 @@ let controlsPopulated = false;
 export async function initDashboard() {
   installTooltip();
   wireStaticControls();
+  aplicarPermissoes();
   await ensureControlsPopulated();
   await renderReport();
+}
+
+/* Ver o relatório e LEVAR o relatório para fora (CSV, papel) são coisas
+   diferentes: a segunda é o `criar` da função Relatório Mensal. */
+function aplicarPermissoes() {
+  const podeExportar = can('relatorio_mensal', 'create');
+  ['btnExportarRelatorio', 'btnImprimirEstoque', 'btnImprimirAnalitico', 'btnImprimirCustoDepto']
+    .forEach((id) => { document.getElementById(id).style.display = podeExportar ? '' : 'none'; });
 }
 
 function wireStaticControls() {

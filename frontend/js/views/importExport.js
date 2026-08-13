@@ -1,10 +1,20 @@
 import { api } from '../api.js';
 import { toast } from '../components/toast.js';
+import { can } from '../session.js';
+
+let wired = false;
 
 export function initImportExport() {
-  document.getElementById('btnExportarBackup').addEventListener('click', exportBackup);
-  document.getElementById('btnImportarBackup').addEventListener('click', () => document.getElementById('importFile').click());
-  document.getElementById('importFile').addEventListener('change', importBackup);
+  if (!wired) {
+    wired = true;
+    document.getElementById('btnExportarBackup').addEventListener('click', exportBackup);
+    document.getElementById('btnImportarBackup').addEventListener('click', () => document.getElementById('importFile').click());
+    document.getElementById('importFile').addEventListener('change', importBackup);
+  }
+  // Exportar e importar são direitos distintos: importar SUBSTITUI tudo, então
+  // não pode vir de brinde para quem só precisa tirar uma cópia.
+  document.getElementById('btnExportarBackup').style.display = can('importar_exportar', 'create') ? '' : 'none';
+  document.getElementById('btnImportarBackup').style.display = can('importar_exportar', 'update') ? '' : 'none';
 }
 
 function downloadFile(filename, content, mime) {

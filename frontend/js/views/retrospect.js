@@ -11,6 +11,7 @@ import { drawConsumoAnual } from '../charts/groupedBars.js';
 import { drawBarrasH } from '../charts/deptHBars.js';
 import { fmtBRL, fmtNum, fmtPct, escapeHtml, deltaCell, deltaInfo, meterHTML } from '../format.js';
 import { toast } from '../components/toast.js';
+import { can } from '../session.js';
 import { printDocument, buildRetrospectDoc } from '../print.js';
 
 const MESES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
@@ -38,7 +39,18 @@ export async function initRetrospect() {
   });
   document.querySelectorAll('#view-retrospect [data-toggle-table]').forEach((btn) =>
     btn.addEventListener('click', () => toggleCardTable(btn.dataset.toggleTable)));
+  aplicarPermissoes();
   await render();
+}
+
+function aplicarPermissoes() {
+  const mostrar = (id, pode) => { document.getElementById(id).style.display = pode ? '' : 'none'; };
+  mostrar('btnExportarRetro', can('retrospecto', 'create'));
+  mostrar('btnImprimirRetro', can('retrospecto', 'create'));
+  mostrar('btnSalvarTetoParams', can('retrospecto', 'update'));
+  // "Usar como limite mensal" grava nos DEPARTAMENTOS — exige também o direito
+  // de editá-los, senão o botão só produziria um erro do backend.
+  mostrar('btnAplicarTeto', can('retrospecto', 'update') && can('departamentos', 'update'));
 }
 
 export async function reload() {

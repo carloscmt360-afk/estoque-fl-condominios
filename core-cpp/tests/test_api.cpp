@@ -23,6 +23,9 @@ std::string readFile(const std::string& path) {
 
 TEST_CASE("backupJson / restoreFromJson fazem round-trip preservando os dados") {
   Api api(":memory:");
+  // Todo método da Api exige sessão (ver api.hpp). Nos testes usa-se a sessão
+  // de serviço, o mesmo caminho do core-cli.
+  api.loginAsService("teste");
 
   Product p;
   p.id = "p1";
@@ -52,6 +55,7 @@ TEST_CASE("backupJson / restoreFromJson fazem round-trip preservando os dados") 
 
   // restaura numa base NOVA (zerada) e confere que reproduz fielmente
   Api api2(":memory:");
+  api2.loginAsService("teste");
   api2.restoreFromJson(backup);
   auto produtos = api2.listProducts();
   REQUIRE(produtos.size() == 1);
@@ -61,6 +65,7 @@ TEST_CASE("backupJson / restoreFromJson fazem round-trip preservando os dados") 
 
 TEST_CASE("restoreFromJson SUBSTITUI os dados atuais, não anexa") {
   Api api(":memory:");
+  api.loginAsService("teste");
   Product p1;
   p1.id = "velho";
   p1.name = "Produto antigo";
@@ -88,6 +93,7 @@ TEST_CASE("importa o backup REAL do usuário e reproduz os números do relatóri
   std::string backup = readFile(path);
 
   Api api(":memory:");
+  api.loginAsService("teste");
   api.restoreFromJson(backup);
 
   std::string reportStr = api.computeReportJson(2026, 5 /*junho*/, "", 6, "2026-07-30T12:00:00.000Z");

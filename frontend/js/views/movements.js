@@ -2,6 +2,7 @@ import { api } from '../api.js';
 import { fmtBRL, fmtNum, fmtDateTimeBR, escapeHtml } from '../format.js';
 import { openModal, closeModal } from '../components/modal.js';
 import { toast } from '../components/toast.js';
+import { can } from '../session.js';
 
 let movements = [];
 let products = [];
@@ -81,8 +82,18 @@ export async function reload() {
     api.listProducts(),
     api.listDepartments(),
   ]);
+  aplicarPermissoes();
   preencherFiltros();
   render();
+}
+
+/* Esconde os botões de lançamento para quem não pode lançar. O backend recusa
+   de qualquer forma (ver api.cpp) — isto só evita oferecer e depois negar. */
+function aplicarPermissoes() {
+  const pode = can('linha_do_tempo', 'create') || can('produtos', 'create');
+  ['btnMovEntrada', 'btnMovSaida', 'btnMovCorrecao'].forEach((id) => {
+    document.getElementById(id).style.display = pode ? '' : 'none';
+  });
 }
 
 function getProduct(id) { return products.find((p) => p.id === id); }
@@ -234,6 +245,9 @@ function renderTabela(list) {
     return;
   }
 
+  // "Editar" abre o modal que também exclui — basta um dos dois direitos para
+  // ele fazer sentido; o modal esconde o botão de excluir por conta própria.
+  const podeEditar = can('linha_do_tempo', 'update') || can('linha_do_tempo', 'delete');
   tbody.innerHTML = list.map((m) => {
     const p = getProduct(m.productId);
     const unit = p ? p.unit : '';
@@ -247,7 +261,9 @@ function renderTabela(list) {
       <td>${detalhesDe(m)}</td>
       <td class="num">${fmtBRL(Math.abs(valorDe(m)))}</td>
       <td class="num">${fmtNum(m.resultingQty)} ${escapeHtml(unit)}</td>
-      <td><div class="row-actions"><button class="btn-sm btn-ghost" data-editar="${m.id}">Editar</button></div></td>
+      <td><div class="row-actions">${podeEditar
+        ? `<button class="btn-sm btn-ghost" data-editar="${m.id}">Editar</button>`
+        : '<span class="muted">—</span>'}</div></td>
     </tr>`;
   }).join('');
 
@@ -333,6 +349,10 @@ function abrirModalEdicao(id) {
     `O tipo do lançamento e o produto não podem ser alterados; para isso, exclua e registre de novo.`;
 
   const mostrar = (elId, visivel) => { document.getElementById(elId).style.display = visivel ? '' : 'none'; };
+  // Editar e excluir são direitos separados: quem só pode excluir abre este
+  // modal para consultar e apagar, sem o botão de salvar, e vice-versa.
+  mostrar('btnExcluirMov', can('linha_do_tempo', 'delete'));
+  mostrar('btnSalvarEdicaoMov', can('linha_do_tempo', 'update'));
   mostrar('edtMovQtdBox', m.type !== 'ajuste');
   mostrar('edtMovEntradaBox', m.type === 'entrada');
   mostrar('edtMovSaidaBox', m.type === 'saida');

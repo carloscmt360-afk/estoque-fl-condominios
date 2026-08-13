@@ -5,9 +5,10 @@
 
 // Utilitários de data para o motor de relatório. Deliberadamente NÃO é um
 // parser ISO 8601 geral — só entende o formato fixo que este app sempre
-// gera: "YYYY-MM-DDTHH:MM:SS.mmmZ", sempre UTC. Nenhuma função aqui lê o
-// relógio do sistema — "agora" é sempre passado pelo chamador (mantém o
-// motor de relatório determinístico e testável).
+// gera: "YYYY-MM-DDTHH:MM:SS.mmmZ", sempre UTC. Nenhuma função de CÁLCULO
+// aqui lê o relógio do sistema — "agora" é sempre passado pelo chamador
+// (mantém o motor de relatório determinístico e testável). A única exceção é
+// systemNowIso(), no fim do arquivo, que existe só para o bootstrap.
 namespace estoque::time_utils {
 
 // Epoch em milissegundos (UTC), consistente com Date.parse(iso) do JS.
@@ -30,5 +31,13 @@ int dayOfMonth(int64_t epochMs);
 
 // Quantos dias tem o mês (28-31).
 int daysInMonth(int year, int month0);
+
+// "Agora" em UTC, no mesmo formato do resto do app. É a ÚNICA função deste
+// arquivo que lê o relógio, e existe por um motivo só: o bootstrap do banco
+// (semear o superadministrador de fábrica) acontece na abertura da sessão,
+// antes de qualquer chamada do frontend, então não há um chamador para passar
+// a data. NÃO use em cálculo de relatório/retrospecto — lá o "agora" continua
+// vindo de fora, senão os testes deixam de ser determinísticos.
+std::string systemNowIso();
 
 }  // namespace estoque::time_utils

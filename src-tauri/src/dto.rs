@@ -64,6 +64,44 @@ impl From<DepartmentInput> for ffi::DepartmentDto {
     }
 }
 
+/// Cadastro de usuário vindo do formulário. `password` vazia num update
+/// significa "não mexer na senha" (o formulário de edição não pede a senha).
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UserInput {
+    pub id: String,
+    pub name: String,
+    pub email: String,
+    pub role: String,
+    #[serde(default)]
+    pub department_id: String,
+    #[serde(default = "default_true")]
+    pub active: bool,
+    #[serde(default)]
+    pub created_at: String,
+    #[serde(default)]
+    pub password: String,
+}
+
+fn default_true() -> bool {
+    true
+}
+
+impl From<UserInput> for ffi::UserDto {
+    fn from(u: UserInput) -> Self {
+        ffi::UserDto {
+            id: u.id,
+            name: u.name,
+            email: u.email,
+            role: u.role,
+            department_id: u.department_id,
+            active: u.active,
+            created_at: u.created_at,
+            password: u.password,
+        }
+    }
+}
+
 /// Edição de um lançamento existente. Todo campo opcional tem `default`: o
 /// formulário só manda o subconjunto que o tipo do lançamento usa (uma
 /// entrada não tem departamento, um ajuste não tem fornecedor).

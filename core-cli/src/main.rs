@@ -58,6 +58,10 @@ fn import_history_only(db_override: Option<&str>, payload_path: &str) -> Result<
     let db_path = require_db(db_override)?;
     println!("[core-cli] banco: {}", db_path.display());
     let mut session = ffi::open_session(db_path.to_str().unwrap()).map_err(|e| e.to_string())?;
+    // Sessão de serviço: este binário opera direto no arquivo do banco, onde
+    // autenticação não protege nada (quem tem o arquivo já tem tudo) e exigir
+    // senha só criaria uma credencial embutida no código. Ver api.hpp.
+    session.as_mut().unwrap().login_as_service("core-cli").map_err(|e| e.to_string())?;
     let payload = fs::read_to_string(payload_path).map_err(|e| format!("lendo histórico: {e}"))?;
     let gravadas = session
         .as_mut()
@@ -72,6 +76,10 @@ fn retrospect_only(db_override: Option<&str>, ano: &str, dump_dir: Option<&str>)
     let db_path = require_db(db_override)?;
     let year: i32 = ano.parse().map_err(|_| format!("ano inválido: {ano}"))?;
     let mut session = ffi::open_session(db_path.to_str().unwrap()).map_err(|e| e.to_string())?;
+    // Sessão de serviço: este binário opera direto no arquivo do banco, onde
+    // autenticação não protege nada (quem tem o arquivo já tem tudo) e exigir
+    // senha só criaria uma credencial embutida no código. Ver api.hpp.
+    session.as_mut().unwrap().login_as_service("core-cli").map_err(|e| e.to_string())?;
     let raw = session
         .as_mut()
         .unwrap()
@@ -125,6 +133,10 @@ fn run(dump_dir: Option<&str>, db_override: Option<&str>) -> Result<(), String> 
 
     println!("[core-cli] banco: {}", db_path.display());
     let mut session = ffi::open_session(db_path.to_str().unwrap()).map_err(|e| e.to_string())?;
+    // Sessão de serviço: este binário opera direto no arquivo do banco, onde
+    // autenticação não protege nada (quem tem o arquivo já tem tudo) e exigir
+    // senha só criaria uma credencial embutida no código. Ver api.hpp.
+    session.as_mut().unwrap().login_as_service("core-cli").map_err(|e| e.to_string())?;
     println!("[core-cli] sessão aberta (Rust -> cxx -> C++ -> SQLite) OK");
 
     let payload = fs::read_to_string(BACKUP_PATH).map_err(|e| format!("lendo backup: {e}"))?;
