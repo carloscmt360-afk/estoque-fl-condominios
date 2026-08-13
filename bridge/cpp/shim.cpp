@@ -42,6 +42,19 @@ MovementPatch toMovementPatch(const MovementPatchDto& d) {
   return p;
 }
 
+UserInput toUserInput(const UserDto& d) {
+  UserInput u;
+  u.id = std::string(d.id);
+  u.name = std::string(d.name);
+  u.email = std::string(d.email);
+  u.role = std::string(d.role);
+  u.departmentId = std::string(d.department_id);
+  u.active = d.active;
+  u.createdAt = std::string(d.created_at);
+  u.password = std::string(d.password);
+  return u;
+}
+
 Department toDepartment(const DepartmentDto& d) {
   Department dep;
   dep.id = std::string(d.id);
@@ -99,6 +112,83 @@ json movementToJson(const Movement& m) {
 }  // namespace
 
 Session::Session(const std::string& dbPath) : api_(dbPath) {}
+
+// ------------------------------------------------------------------ sessão
+
+rust::String Session::login(rust::Str email, rust::Str password, rust::Str now_iso) {
+  return rust::String(api_.login(std::string(email), std::string(password), std::string(now_iso)));
+}
+
+void Session::logout() { api_.logout(); }
+
+rust::String Session::current_session_json() { return rust::String(api_.currentSessionJson()); }
+
+void Session::change_own_password(rust::Str current_password, rust::Str new_password) {
+  api_.changeOwnPassword(std::string(current_password), std::string(new_password));
+}
+
+void Session::login_as_service(rust::Str label) { api_.loginAsService(std::string(label)); }
+
+// ---------------------------------------------------------------- usuários
+
+rust::String Session::list_users_json() { return rust::String(api_.listUsersJson()); }
+
+rust::String Session::create_user(UserDto u) { return rust::String(api_.createUser(toUserInput(u))); }
+
+rust::String Session::update_user(UserDto u) { return rust::String(api_.updateUser(toUserInput(u))); }
+
+void Session::delete_user(rust::Str id) { api_.deleteUser(std::string(id)); }
+
+void Session::reset_user_password(rust::Str id, rust::Str new_password) {
+  api_.resetUserPassword(std::string(id), std::string(new_password));
+}
+
+// -------------------------------------------------------------- permissões
+
+rust::String Session::list_permissions_json() { return rust::String(api_.listPermissionsJson()); }
+
+rust::String Session::create_permission_group(rust::Str payload) {
+  return rust::String(api_.createPermissionGroup(std::string(payload)));
+}
+
+rust::String Session::update_permission_group(rust::Str payload) {
+  return rust::String(api_.updatePermissionGroup(std::string(payload)));
+}
+
+void Session::delete_permission_group(rust::Str id) { api_.deletePermissionGroup(std::string(id)); }
+
+void Session::set_department_permission_group(rust::Str department_id, rust::Str group_id) {
+  api_.setDepartmentPermissionGroup(std::string(department_id), std::string(group_id));
+}
+
+// ------------------------------------------------------------- requisições
+
+rust::String Session::list_requests_json() { return rust::String(api_.listRequestsJson()); }
+
+rust::String Session::create_request(rust::Str payload) {
+  return rust::String(api_.createRequest(std::string(payload)));
+}
+
+rust::String Session::approve_request(rust::Str id, rust::Str note, rust::Str now_iso) {
+  return rust::String(api_.approveRequest(std::string(id), std::string(note), std::string(now_iso)));
+}
+
+rust::String Session::reject_request(rust::Str id, rust::Str note, rust::Str now_iso) {
+  return rust::String(api_.rejectRequest(std::string(id), std::string(note), std::string(now_iso)));
+}
+
+rust::String Session::cancel_request(rust::Str id, rust::Str note, rust::Str now_iso) {
+  return rust::String(api_.cancelRequest(std::string(id), std::string(note), std::string(now_iso)));
+}
+
+rust::String Session::deliver_request(rust::Str id, rust::Str now_iso, rust::Str movement_id_prefix) {
+  return rust::String(
+      api_.deliverRequest(std::string(id), std::string(now_iso), std::string(movement_id_prefix)));
+}
+
+rust::String Session::stock_availability_json() { return rust::String(api_.stockAvailabilityJson()); }
+
+// ---------------------------------------------------------------- produtos
 
 rust::String Session::list_products_json() {
   json arr = json::array();

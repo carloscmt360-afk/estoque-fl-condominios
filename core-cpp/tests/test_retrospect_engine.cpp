@@ -206,11 +206,15 @@ TEST_CASE("limite mensal sobrevive a backup/restore, junto com o histórico") {
   payload["rows"] = json::array({json{{"year", 2025}, {"month0", 3}, {"dept", "DP"}, {"amount", 99.0}}});
 
   Api origem(":memory:");
+  // Todo método da Api exige sessão (ver api.hpp); nos testes vale a sessão
+  // de serviço, o mesmo caminho usado pelo core-cli.
+  origem.loginAsService("teste");
   origem.createDepartment(makeDept("d1", "DP", 1234.5));
   origem.importDeptCostHistory(payload.dump());
   origem.saveBudgetParams(0.2, 0.03, 500.0);
 
   Api destino(":memory:");
+  destino.loginAsService("teste");
   destino.restoreFromJson(origem.backupJson());
   CHECK(destino.listDepartments().at(0).monthlyLimit == doctest::Approx(1234.5));
   json r = json::parse(destino.computeRetrospectJson(2025, "auto", "2026-08-06T12:00:00.000Z"));
@@ -221,6 +225,7 @@ TEST_CASE("limite mensal sobrevive a backup/restore, junto com o histórico") {
 
 TEST_CASE("backup antigo (sem histórico) não apaga o que já estava no banco") {
   Api api(":memory:");
+  api.loginAsService("teste");
   json payload;
   payload["rows"] = json::array({json{{"year", 2025}, {"month0", 0}, {"dept", "DP"}, {"amount", 42.0}}});
   api.importDeptCostHistory(payload.dump());

@@ -1,5 +1,6 @@
 #include "estoque/time_utils.hpp"
 
+#include <chrono>
 #include <cstdio>
 #include <cstdlib>
 #include <stdexcept>
@@ -114,5 +115,15 @@ int dayOfMonth(int64_t epochMs) {
 }
 
 int daysInMonth(int year, int month0) { return dayOfMonth(monthEndMs(year, month0)); }
+
+std::string systemNowIso() {
+  // std::chrono::system_clock é UTC desde sempre na prática e por norma a
+  // partir do C++20 — e o epoch em ms é justamente a moeda de troca do resto
+  // deste arquivo, então reaproveita-se epochMsToIso em vez de mexer com
+  // gmtime/localtime (que dependeriam de timezone do SO).
+  auto now = std::chrono::system_clock::now().time_since_epoch();
+  auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(now).count();
+  return epochMsToIso(static_cast<int64_t>(ms));
+}
 
 }  // namespace estoque::time_utils

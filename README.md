@@ -18,6 +18,84 @@ Detalhes de design (por quê C++, por que SQLite sem WAL, como funciona o
 armazenamento portátil) estão comentados nos próprios arquivos-fonte,
 principalmente `core-cpp/include/estoque/*.hpp`.
 
+## Login, usuários e permissões
+
+O app abre numa **tela de login** e nada é carregado antes de o backend
+confirmar quem entrou. O superadministrador de fábrica é semeado na primeira
+abertura do banco:
+
+```
+carlos.matos@flcondominios.com.br / Mudar@2025
+```
+
+Troque essa senha no primeiro acesso ("Trocar senha", no rodapé da barra
+lateral). A semeadura é idempotente e **não** redefine a senha de um
+superadmin que já existe — ela só volta a agir se o banco ficar sem nenhum
+superadministrador ativo.
+
+Senha nunca é gravada: guarda-se PBKDF2-HMAC-SHA256 com salt de 128 bits por
+usuário e o número de rodadas usado (`core-cpp/include/estoque/crypto.hpp`,
+com vetores oficiais em `tests/test_crypto.cpp`).
+
+### O modelo de permissão
+
+```
+grupo de permissão --atribuído a--> DEPARTAMENTO --atrelado a--> usuário
+```
+
+A permissão **nunca** é dada a uma pessoa: é dada ao setor, e quem está no
+setor herda. Mover alguém de departamento já muda tudo que ele enxerga, sem
+existir uma segunda lista para alguém esquecer de revisar. O papel
+`superadmin` ignora a matriz inteira (acesso total, gestão de usuários e
+validação de requisições).
+
+Cada par (grupo, função) guarda os quatro bits do CRUD. As funções são
+Relatório Mensal, Retrospecto, Produtos, Linha do Tempo, Departamentos,
+Importar e exportar e Requisições. **O que cada bit libera em cada função**
+está definido uma única vez, em `kFeatureCatalog`
+(`core-cpp/src/auth_engine.cpp`), e é esse mesmo texto que a tela de
+Permissões exibe em cada linha da matriz — a UI não reescreve a regra.
+
+Autorização é conferida no **C++**, em toda operação (`Api::require*` em
+`core-cpp/src/api.cpp`). Esconder botão na tela é conveniência, não controle
+de acesso: o frontend só evita oferecer o que seria negado depois do clique.
+
+`Api::loginAsService` dá acesso total sem senha e existe para o `core-cli` e
+os testes, que operam direto no arquivo do banco (onde autenticação não
+protege nada — quem tem o arquivo já tem tudo). Ela **não** é registrada como
+comando Tauri em `src-tauri/src/main.rs`: essa lista de comandos é a fronteira
+de confiança do app, e o frontend não alcança o que não está nela.
+
+## Requisições de material
+
+```
+pendente ──aprovar──> aprovado ──confirmar entrega──> entregue
+   │                     │
+   ├──rejeitar──> rejeitado
+   └──cancelar──> cancelado <──cancelar──┘
+```
+
+Enquanto o pedido está `pendente` ou `aprovado`, os itens ficam
+**reservados**: o saldo do produto continua intacto (relatório, retrospecto e
+custo médio não enxergam nada), mas o **disponível** para novas requisições
+desconta a reserva — duas pessoas não conseguem pedir o mesmo último galão. A
+tela de Produtos ganhou as colunas *Reservado* e *Disponível* por causa disso.
+
+Só a **confirmação de entrega** debita o estoque, e o faz gerando uma saída de
+verdade por item (`applySaida`), com o solicitante e o departamento do pedido
+— não um `UPDATE` escondido em `products`. É o que mantém requisição, Linha do
+Tempo, custo médio e relatórios contando a mesma história; o id da saída fica
+gravado no item da requisição. A entrega inteira é uma transação só: se um
+item não tiver saldo, nenhum é baixado.
+
+Por padrão quem valida é o superadministrador. Conceder `Requisições →
+editar` a um grupo delega essa validação ao setor correspondente.
+
+O histórico é a própria tela: cada pedido mostra autor, data e hora da
+solicitação, de quem aprovou/rejeitou e de quem confirmou a entrega. Um
+usuário comum vê os pedidos **do seu departamento**; quem valida vê todos —
+e é o backend quem filtra, não a tela (`Api::listRequestsJson`).
+
 ## Retrospecto (custo mensal por departamento)
 
 A aba **Retrospecto** reproduz dentro do app a aba `RESTROSPECTO` da planilha
@@ -111,11 +189,16 @@ cd core-cpp
 gcc -c -O1 -w -DSQLITE_THREADSAFE=1 third_party/sqlite/sqlite3.c -o /tmp/sqlite3.o
 
 # 2) um binário por arquivo de teste (cada um define seu próprio main)
-for t in test_inventory_engine test_report_engine test_retrospect_engine test_api test_time_utils test_portable_paths; do
+for t in test_inventory_engine test_report_engine test_retrospect_engine test_api \
+         test_time_utils test_portable_paths test_crypto test_auth_engine test_request_engine; do
   g++ -std=c++17 -Iinclude -Ithird_party/sqlite -Ithird_party \
     src/*.cpp tests/$t.cpp /tmp/sqlite3.o -lpthread -ldl -o /tmp/$t && /tmp/$t
 done
 ```
+
+`test_portable_paths` tem um caso que cria um diretório somente-leitura e
+espera falha de escrita: rodando os testes **como root**, esse caso falha
+porque o root ignora a permissão do diretório. Rode como usuário comum.
 
 `test_api.cpp` importa o backup real do usuário a partir de um caminho
 absoluto e confere os números já validados contra a planilha (R$ 56.664,37 em

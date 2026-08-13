@@ -19,6 +19,32 @@
   <button class="btn-primary" id="btnRetryInit">Tentar novamente</button>
 </div>
 
+<!-- Tela de login: primeira coisa que aparece enquanto não há sessão. O app
+     inteiro (#appShell) só é revelado depois que o backend confirma quem é o
+     usuário — nenhum dado é carregado antes disso. -->
+<div class="login-screen" id="loginScreen" style="display:none;">
+  <form class="login-card" id="loginForm" autocomplete="on">
+    <div class="login-brand">
+      <div class="logo">FL</div>
+      <div>
+        <div class="name">Estoque FL Condomínios</div>
+        <div class="sub">Controle de materiais</div>
+      </div>
+    </div>
+    <div class="field">
+      <label for="loginEmail">E-mail</label>
+      <input type="email" id="loginEmail" autocomplete="username" placeholder="nome@flcondominios.com.br" />
+    </div>
+    <div class="field">
+      <label for="loginSenha">Senha</label>
+      <input type="password" id="loginSenha" autocomplete="current-password" />
+    </div>
+    <div class="login-erro" id="loginErro" style="display:none;"></div>
+    <button class="btn-primary login-submit" id="btnEntrar" type="submit">Entrar</button>
+    <div class="login-foot">© 2026 CMT360 • Soluções Inteligentes.</div>
+  </form>
+</div>
+
 <div class="app-shell" id="appShell" style="display:none;">
   <aside class="sidebar">
     <div class="sidebar-brand">
@@ -28,19 +54,40 @@
         <div class="sub">Condomínios</div>
       </div>
     </div>
-    <nav class="sidebar-nav" id="sidebarNav">
-      <button class="nav-item active" data-view="dashboard"><span class="ico">📊</span> Relatório Mensal</button>
-      <button class="nav-item" data-view="retrospect"><span class="ico">📅</span> Retrospecto</button>
-      <button class="nav-item" data-view="products"><span class="ico">📦</span> Produtos</button>
-      <button class="nav-item" data-view="movements"><span class="ico">🕒</span> Linha do Tempo</button>
-      <button class="nav-item" data-view="departments"><span class="ico">🏢</span> Departamentos</button>
-      <button class="nav-item" data-view="importExport"><span class="ico">⇄</span> Importar / Exportar</button>
-    </nav>
+    <!-- Montado pelo app.js a partir das permissões da sessão: o menu só lista
+         o que o usuário realmente pode abrir. -->
+    <nav class="sidebar-nav" id="sidebarNav"></nav>
     <div class="sidebar-foot">Dados salvos localmente em<br/><code>dados/estoque.db</code>, ao lado do programa.</div>
+    <div class="user-box" id="userBox">
+      <div class="who">
+        <div class="avatar" id="userIniciais">--</div>
+        <div class="ident">
+          <div class="nome" id="userNome"></div>
+          <div class="papel" id="userPapel"></div>
+        </div>
+      </div>
+      <div class="user-actions">
+        <button class="btn-ghost btn-sm" id="btnTrocarSenha">Trocar senha</button>
+        <button class="btn-ghost btn-sm" id="btnSair">Sair</button>
+      </div>
+    </div>
     <div class="app-copyright">© 2026 CMT360 • Soluções Inteligentes.<br/>Todos os direitos reservados.</div>
   </aside>
 
   <main class="content">
+
+    <!-- Usuário autenticado, mas cujo departamento não tem nenhuma permissão
+         concedida. Melhor dizer isso e o que fazer do que mostrar um app vazio. -->
+    <section class="view" id="view-semAcesso">
+      <div class="content-header"><div><h1>Sem permissões</h1>
+        <div class="sub">Seu acesso ainda não foi liberado</div></div></div>
+      <div class="panel" style="padding:20px;max-width:640px;">
+        <p>Seu usuário entrou no sistema, mas o departamento a que ele está atrelado ainda não tem
+          nenhuma permissão concedida — por isso nenhuma tela aparece no menu.</p>
+        <p class="muted">Peça ao superadministrador para vincular o seu departamento a um grupo de
+          permissão (tela <b>Permissões</b>) ou para conferir em qual setor o seu usuário está.</p>
+      </div>
+    </section>
 
     <!-- ============================== DASHBOARD / RELATÓRIO ============================== -->
     <section class="view active" id="view-dashboard">
@@ -327,7 +374,10 @@
       </div>
       <div class="panel"><div style="overflow-x:auto;">
         <table>
-          <thead><tr><th>Produto</th><th>Categoria</th><th>Unid.</th><th class="num">Qtd.</th><th class="num">Mín.</th>
+          <thead><tr><th>Produto</th><th>Categoria</th><th>Unid.</th><th class="num">Qtd.</th>
+            <th class="num" title="Comprometido em requisições ainda não entregues">Reservado</th>
+            <th class="num" title="Saldo menos o que já está reservado">Disponível</th>
+            <th class="num">Mín.</th>
             <th class="num">Custo médio</th><th class="num">Valor total</th><th>Status</th><th>Ações</th></tr></thead>
           <tbody id="productsTbody"></tbody>
         </table>
@@ -398,6 +448,119 @@
           <tbody id="departmentsTbody"></tbody>
         </table>
       </div></div>
+    </section>
+
+    <!-- ============================== REQUISIÇÕES ============================== -->
+    <section class="view" id="view-requests">
+      <div class="content-header">
+        <div><h1>Requisições</h1><div class="sub" id="requestsSub">Pedidos de material do seu departamento</div></div>
+        <div class="row-actions">
+          <button class="btn-primary" id="btnNovaRequisicao">＋ Nova requisição</button>
+        </div>
+      </div>
+
+      <div class="stat-grid" id="requestsStatGrid"></div>
+
+      <div class="info-box" style="margin-bottom:var(--sp-4);max-width:820px;">
+        O material pedido fica <b>reservado</b> assim que a requisição é criada: o saldo continua no
+        estoque, mas some do <b>disponível</b> para novos pedidos. A baixa só acontece na
+        <b>confirmação da entrega</b>, que gera a saída na Linha do Tempo.
+      </div>
+
+      <div class="toolbar">
+        <div class="segmented" id="filtroRequisicaoStatus" role="group" aria-label="Situação">
+          <button type="button" data-status="" class="active">Todas</button>
+          <button type="button" data-status="pendente">Pendentes</button>
+          <button type="button" data-status="aprovado">Aprovadas</button>
+          <button type="button" data-status="entregue">Entregues</button>
+          <button type="button" data-status="rejeitado">Rejeitadas</button>
+          <button type="button" data-status="cancelado">Canceladas</button>
+        </div>
+        <span class="spacer"></span>
+        <input type="text" id="filtroRequisicaoBusca" placeholder="Buscar por solicitante, setor, material..." />
+      </div>
+
+      <div class="panel"><div style="overflow-x:auto;">
+        <table>
+          <thead><tr><th>Pedido</th><th>Departamento</th><th>Solicitante</th><th>Materiais</th>
+            <th>Situação</th><th style="min-width:250px;">Andamento</th><th>Ações</th></tr></thead>
+          <tbody id="requestsTbody"></tbody>
+        </table>
+      </div></div>
+      <div class="muted" id="requestsRodape" style="margin-top:var(--sp-3);"></div>
+    </section>
+
+    <!-- ============================== USUÁRIOS ============================== -->
+    <section class="view" id="view-users">
+      <div class="content-header">
+        <div><h1>Usuários</h1><div class="sub">Quem entra no sistema e por qual departamento</div></div>
+        <div class="row-actions"><button class="btn-primary" id="btnNovoUsuario">＋ Novo usuário</button></div>
+      </div>
+
+      <div class="stat-grid" id="usersStatGrid"></div>
+
+      <div class="info-box" style="margin-bottom:var(--sp-4);max-width:820px;">
+        As permissões <b>não</b> são dadas por pessoa: elas vêm do <b>departamento</b> do usuário
+        (tela de Permissões). Mudar alguém de setor já muda tudo que ele enxerga.
+        O <b>superadministrador</b> tem acesso total e ignora essa matriz.
+      </div>
+
+      <div class="toolbar">
+        <input type="text" id="filtroUsuarioBusca" class="grow" placeholder="Buscar por nome ou e-mail..." />
+        <select id="filtroUsuarioPapel">
+          <option value="">Todos os papéis</option>
+          <option value="superadmin">Superadministradores</option>
+          <option value="usuario">Usuários</option>
+        </select>
+        <select id="filtroUsuarioSituacao">
+          <option value="">Ativos e inativos</option>
+          <option value="ativo">Só ativos</option>
+          <option value="inativo">Só inativos</option>
+        </select>
+      </div>
+
+      <div class="panel"><div style="overflow-x:auto;">
+        <table>
+          <thead><tr><th>Nome</th><th>E-mail</th><th>Papel</th><th>Departamento</th><th>Situação</th>
+            <th>Último acesso</th><th>Ações</th></tr></thead>
+          <tbody id="usersTbody"></tbody>
+        </table>
+      </div></div>
+    </section>
+
+    <!-- ============================== PERMISSÕES ============================== -->
+    <section class="view" id="view-permissions">
+      <div class="content-header">
+        <div><h1>Permissões</h1><div class="sub">Grupos de permissão e o departamento de cada um</div></div>
+        <div class="row-actions"><button class="btn-primary" id="btnNovoGrupo">＋ Novo grupo</button></div>
+      </div>
+
+      <div class="info-box" style="margin-bottom:var(--sp-4);max-width:860px;">
+        A permissão é atribuída ao <b>departamento</b>, e todo usuário atrelado a ele herda a mesma
+        matriz. Cada função tem os quatro níveis do CRUD — <b>criar</b>, <b>ver</b>, <b>editar</b> e
+        <b>excluir</b> —, e o que cada um libera está escrito na própria linha da matriz.
+      </div>
+
+      <div class="section-title">Grupos de permissão</div>
+      <div class="panel"><div style="overflow-x:auto;">
+        <table>
+          <thead><tr><th>Grupo</th><th>Descrição</th><th>Resumo das permissões</th>
+            <th>Departamentos</th><th>Ações</th></tr></thead>
+          <tbody id="groupsTbody"></tbody>
+        </table>
+      </div></div>
+
+      <div class="section-title">Departamentos e seus grupos</div>
+      <div class="panel">
+        <div class="panel-head"><h2>Cada setor usa um grupo; os usuários do setor herdam essas permissões</h2></div>
+        <div style="overflow-x:auto;">
+          <table>
+            <thead><tr><th>Departamento</th><th>Encarregado</th><th class="num">Usuários ativos</th>
+              <th style="min-width:260px;">Grupo de permissão</th></tr></thead>
+            <tbody id="deptGroupsTbody"></tbody>
+          </table>
+        </div>
+      </div>
     </section>
 
     <!-- ============================== IMPORTAR / EXPORTAR ============================== -->
@@ -558,6 +721,139 @@
       avisa a partir de 90% do teto e mantém o aviso enquanto estiver estourado.</div>
   </div>
   <div class="modal-foot"><button class="btn-outline" data-close="modalDepartamento">Cancelar</button><button class="btn-primary" id="btnSalvarDepartamento">Salvar</button></div>
+</div></div>
+
+<!-- MODAL: Nova requisição -->
+<div class="overlay" id="modalRequisicao"><div class="modal modal-wide">
+  <div class="modal-head"><h3>＋ Nova requisição</h3><button class="btn-ghost" data-close="modalRequisicao">✕</button></div>
+  <div class="modal-body">
+    <div class="field" id="reqDepartamentoBox" style="display:none;">
+      <label>Departamento *</label>
+      <select id="reqDepartamento"></select>
+      <div class="muted">Como superadministrador, você pode registrar o pedido em nome de qualquer setor.</div>
+    </div>
+    <div class="info-box" id="reqDepartamentoFixo"></div>
+
+    <div class="field-row" style="align-items:end;">
+      <div class="field"><label>Material</label><select id="reqProduto"></select></div>
+      <div class="field" style="max-width:150px;"><label>Quantidade</label>
+        <input type="number" id="reqQtd" min="0.0001" step="any" /></div>
+      <div class="field" style="max-width:130px;"><label>&nbsp;</label>
+        <button class="btn-outline" id="btnAdicionarItem" type="button">Adicionar</button></div>
+    </div>
+    <div class="muted" id="reqDisponivelHint"></div>
+
+    <div class="panel" style="margin-top:var(--sp-3);">
+      <table>
+        <thead><tr><th>Material</th><th class="num">Qtd.</th><th class="num">Disponível</th><th></th></tr></thead>
+        <tbody id="reqItensTbody"></tbody>
+      </table>
+    </div>
+
+    <div class="field" style="margin-top:var(--sp-3);"><label>Observação</label>
+      <input type="text" id="reqObs" placeholder="Para qual serviço, onde será usado..." /></div>
+  </div>
+  <div class="modal-foot"><button class="btn-outline" data-close="modalRequisicao">Cancelar</button>
+    <button class="btn-primary" id="btnSalvarRequisicao">Enviar requisição</button></div>
+</div></div>
+
+<!-- MODAL: Detalhes da requisição (itens + andamento completo) -->
+<div class="overlay" id="modalRequisicaoDetalhe"><div class="modal modal-wide">
+  <div class="modal-head"><h3 id="reqDetalheTitulo">Requisição</h3><button class="btn-ghost" data-close="modalRequisicaoDetalhe">✕</button></div>
+  <div class="modal-body" id="reqDetalheCorpo"></div>
+  <div class="modal-foot"><button class="btn-outline" data-close="modalRequisicaoDetalhe">Fechar</button></div>
+</div></div>
+
+<!-- MODAL: Decisão sobre a requisição (aprovar / rejeitar / cancelar / entregar) -->
+<div class="overlay" id="modalDecisao"><div class="modal">
+  <div class="modal-head"><h3 id="decisaoTitulo">Aprovar requisição</h3><button class="btn-ghost" data-close="modalDecisao">✕</button></div>
+  <div class="modal-body">
+    <div class="info-box" id="decisaoResumo"></div>
+    <div class="field"><label id="decisaoNotaLabel">Observação</label>
+      <input type="text" id="decisaoNota" /></div>
+    <div class="warn-box" id="decisaoAviso" style="display:none;"></div>
+  </div>
+  <div class="modal-foot"><button class="btn-outline" data-close="modalDecisao">Voltar</button>
+    <button class="btn-primary" id="btnConfirmarDecisao">Confirmar</button></div>
+</div></div>
+
+<!-- MODAL: Usuário -->
+<div class="overlay" id="modalUsuario"><div class="modal">
+  <div class="modal-head"><h3 id="modalUsuarioTitulo">Novo usuário</h3><button class="btn-ghost" data-close="modalUsuario">✕</button></div>
+  <div class="modal-body">
+    <input type="hidden" id="usrId" />
+    <div class="field"><label>Nome *</label><input type="text" id="usrNome" /></div>
+    <div class="field"><label>E-mail *</label><input type="email" id="usrEmail" autocomplete="off" /></div>
+    <div class="field-row">
+      <div class="field"><label>Papel *</label>
+        <select id="usrPapel">
+          <option value="usuario">Usuário</option>
+          <option value="superadmin">Superadministrador</option>
+        </select>
+      </div>
+      <div class="field"><label>Departamento</label><select id="usrDepartamento"></select></div>
+    </div>
+    <div class="field" id="usrSenhaBox">
+      <label>Senha *</label>
+      <input type="password" id="usrSenha" autocomplete="new-password" />
+      <div class="muted">Mínimo de 8 caracteres. O usuário pode trocá-la depois em "Trocar senha".</div>
+    </div>
+    <label class="check-inline"><input type="checkbox" id="usrAtivo" checked /> Usuário ativo (pode entrar no sistema)</label>
+    <div class="info-box" id="usrPermInfo"></div>
+  </div>
+  <div class="modal-foot"><button class="btn-outline" data-close="modalUsuario">Cancelar</button>
+    <button class="btn-primary" id="btnSalvarUsuario">Salvar</button></div>
+</div></div>
+
+<!-- MODAL: Redefinir senha de um usuário (superadmin) -->
+<div class="overlay" id="modalSenhaUsuario"><div class="modal">
+  <div class="modal-head"><h3>Redefinir senha</h3><button class="btn-ghost" data-close="modalSenhaUsuario">✕</button></div>
+  <div class="modal-body">
+    <input type="hidden" id="senhaUsrId" />
+    <div class="info-box" id="senhaUsrResumo"></div>
+    <div class="field"><label>Nova senha *</label><input type="password" id="senhaUsrNova" autocomplete="new-password" /></div>
+    <div class="field"><label>Repita a nova senha *</label><input type="password" id="senhaUsrRepetir" autocomplete="new-password" /></div>
+    <div class="muted">Mínimo de 8 caracteres. A senha atual do usuário não é necessária.</div>
+  </div>
+  <div class="modal-foot"><button class="btn-outline" data-close="modalSenhaUsuario">Cancelar</button>
+    <button class="btn-primary" id="btnSalvarSenhaUsuario">Redefinir</button></div>
+</div></div>
+
+<!-- MODAL: Trocar a própria senha -->
+<div class="overlay" id="modalTrocarSenha"><div class="modal">
+  <div class="modal-head"><h3>Trocar minha senha</h3><button class="btn-ghost" data-close="modalTrocarSenha">✕</button></div>
+  <div class="modal-body">
+    <div class="field"><label>Senha atual *</label><input type="password" id="senhaAtual" autocomplete="current-password" /></div>
+    <div class="field"><label>Nova senha *</label><input type="password" id="senhaNova" autocomplete="new-password" /></div>
+    <div class="field"><label>Repita a nova senha *</label><input type="password" id="senhaNovaRepetir" autocomplete="new-password" /></div>
+    <div class="muted">Mínimo de 8 caracteres.</div>
+  </div>
+  <div class="modal-foot"><button class="btn-outline" data-close="modalTrocarSenha">Cancelar</button>
+    <button class="btn-primary" id="btnSalvarTrocaSenha">Trocar senha</button></div>
+</div></div>
+
+<!-- MODAL: Grupo de permissão (matriz CRUD) -->
+<div class="overlay" id="modalGrupo"><div class="modal modal-wide">
+  <div class="modal-head"><h3 id="modalGrupoTitulo">Novo grupo de permissão</h3><button class="btn-ghost" data-close="modalGrupo">✕</button></div>
+  <div class="modal-body">
+    <input type="hidden" id="grpId" />
+    <div class="field-row">
+      <div class="field"><label>Nome do grupo *</label><input type="text" id="grpNome" placeholder="Ex.: Solicitante de materiais" /></div>
+      <div class="field"><label>Descrição</label><input type="text" id="grpDescricao" /></div>
+    </div>
+    <div class="section-title" style="margin-top:var(--sp-4);">Matriz de permissões</div>
+    <div class="perm-matrix-wrap">
+      <table class="perm-matrix">
+        <thead><tr><th>Função</th><th>Criar</th><th>Ver</th><th>Editar</th><th>Excluir</th></tr></thead>
+        <tbody id="grpMatrizTbody"></tbody>
+      </table>
+    </div>
+    <div class="muted" style="margin-top:var(--sp-2);font-size:11px;">
+      Uma caixa desabilitada significa que aquela ação não existe na função — não que ela esteja negada.
+    </div>
+  </div>
+  <div class="modal-foot"><button class="btn-outline" data-close="modalGrupo">Cancelar</button>
+    <button class="btn-primary" id="btnSalvarGrupo">Salvar grupo</button></div>
 </div></div>
 
 <script type="module" src="js/app.js"></script>

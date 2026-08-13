@@ -2,6 +2,7 @@ import { api } from '../api.js';
 import { escapeHtml, uid, nowIso, fmtBRL } from '../format.js';
 import { openModal, closeModal } from '../components/modal.js';
 import { toast } from '../components/toast.js';
+import { can } from '../session.js';
 
 let departments = [];
 
@@ -13,6 +14,8 @@ export async function initDepartments() {
 
 export async function reload() {
   departments = await api.listDepartments();
+  document.getElementById('btnNovoDepartamento').style.display =
+    can('departamentos', 'create') ? '' : 'none';
   render();
 }
 
@@ -23,10 +26,15 @@ function render() {
     tbody.innerHTML = '<tr class="empty-row"><td colspan="4">Nenhum departamento cadastrado ainda.</td></tr>';
     return;
   }
-  tbody.innerHTML = sorted.map((d) => `<tr><td><b>${escapeHtml(d.name)}</b></td><td>${escapeHtml(d.encarregado)}</td>
+  tbody.innerHTML = sorted.map((d) => {
+    const acoes = [
+      can('departamentos', 'update') ? `<button class="btn-sm btn-ghost" data-editar="${d.id}">Editar</button>` : '',
+      can('departamentos', 'delete') ? `<button class="btn-sm btn-danger" data-excluir="${d.id}">Excluir</button>` : '',
+    ].filter(Boolean).join('');
+    return `<tr><td><b>${escapeHtml(d.name)}</b></td><td>${escapeHtml(d.encarregado)}</td>
     <td class="num">${d.monthlyLimit > 0 ? fmtBRL(d.monthlyLimit) : '<span class="muted">sem limite</span>'}</td>
-    <td><div class="row-actions"><button class="btn-sm btn-ghost" data-editar="${d.id}">Editar</button>
-    <button class="btn-sm btn-danger" data-excluir="${d.id}">Excluir</button></div></td></tr>`).join('');
+    <td><div class="row-actions">${acoes || '<span class="muted">—</span>'}</div></td></tr>`;
+  }).join('');
   tbody.querySelectorAll('[data-editar]').forEach((b) => b.addEventListener('click', () => openDepartmentModal(b.dataset.editar)));
   tbody.querySelectorAll('[data-excluir]').forEach((b) => b.addEventListener('click', () => deleteDepartment(b.dataset.excluir)));
 }

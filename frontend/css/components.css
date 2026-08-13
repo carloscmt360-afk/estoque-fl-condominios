@@ -691,3 +691,252 @@ tfoot td {
   white-space: pre-wrap;
   margin: var(--sp-4) 0;
 }
+
+/* ====================================================================
+   Login, sessão e permissões
+   ==================================================================== */
+
+/* Tela de login — ocupa a janela inteira; o app só aparece depois que o
+   backend confirma quem entrou. */
+.login-screen {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--sp-6);
+  background: var(--page-bg);
+}
+.login-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: var(--shadow-overlay);
+  width: 100%;
+  max-width: 380px;
+  padding: var(--sp-6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+}
+.login-brand {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-2);
+}
+.login-brand .logo {
+  width: 38px;
+  height: 38px;
+  border-radius: var(--radius-sm);
+  background: var(--accent);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  flex: none;
+}
+.login-brand .name {
+  font-size: 15px;
+  font-weight: 700;
+}
+.login-brand .sub {
+  font-size: 11.5px;
+  color: var(--ink-muted);
+}
+.login-submit {
+  width: 100%;
+  justify-content: center;
+  padding: 9px 14px;
+}
+.login-erro {
+  background: var(--danger-soft);
+  border: 1px solid var(--danger);
+  color: var(--danger);
+  border-radius: var(--radius-sm);
+  padding: var(--sp-2) var(--sp-3);
+  font-size: 12px;
+}
+.login-foot {
+  text-align: center;
+  font-size: 10px;
+  color: var(--ink-muted);
+}
+
+/* Cartão de quem está logado, no pé da barra lateral */
+.user-box {
+  border-top: 1px solid var(--border);
+  padding: var(--sp-3) var(--sp-2) var(--sp-2);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+.user-box .who {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+.user-box .avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 11px;
+  flex: none;
+}
+.user-box .ident {
+  min-width: 0;
+}
+.user-box .nome {
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.user-box .papel {
+  font-size: 10px;
+  color: var(--ink-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.user-actions {
+  display: flex;
+  gap: var(--sp-1);
+}
+.user-actions button {
+  flex: 1;
+  justify-content: center;
+  font-size: 11px;
+}
+
+/* Modal mais largo — matriz de permissões e itens de requisição não cabem
+   nos 480px do modal padrão. */
+.modal.modal-wide {
+  max-width: 720px;
+}
+
+/* Matriz CRUD da tela de Permissões: a primeira coluna explica o que cada
+   caixinha libera, para a permissão não virar adivinhação. */
+
+/* A matriz rola dentro da própria caixa, e não junto com o modal, para o
+   cabeçalho poder ficar fixo: sem ele, ao chegar nas últimas funções ninguém
+   sabe mais qual coluna é "editar" e qual é "excluir". */
+.perm-matrix-wrap {
+  max-height: 44vh;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+.perm-matrix thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+.perm-matrix th:not(:first-child),
+.perm-matrix td:not(:first-child) {
+  text-align: center;
+  width: 84px;
+}
+.perm-matrix .feat-nome {
+  font-weight: 700;
+}
+.perm-matrix .feat-hint {
+  font-size: 10.5px;
+  color: var(--ink-muted);
+  line-height: 1.35;
+  margin-top: 2px;
+}
+.perm-matrix input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  accent-color: var(--accent);
+}
+.perm-matrix td.na {
+  color: var(--ink-muted);
+}
+
+/* Resumo compacto das permissões de um grupo (linha da tabela de grupos) */
+.perm-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.perm-summary .chip {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 20px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  white-space: nowrap;
+}
+.perm-summary .chip i {
+  font-style: normal;
+  opacity: 0.75;
+  margin-left: 3px;
+  letter-spacing: 0.5px;
+}
+
+/* Situação da requisição */
+.pill-pendente {
+  background: var(--warning-soft);
+  color: #8a6410;
+}
+.pill-aprovado {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.pill-entregue {
+  background: var(--success-soft);
+  color: var(--success);
+}
+.pill-rejeitado,
+.pill-cancelado {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+/* Andamento do pedido: solicitação, aprovação e entrega, cada um com autor
+   e data/hora — é a coluna que responde "quem pediu, quem liberou, quando". */
+.req-track {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 11px;
+}
+.req-track .step {
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+  color: var(--ink-secondary);
+}
+.req-track .step .marca {
+  flex: none;
+  width: 12px;
+  text-align: center;
+  font-size: 10px;
+}
+.req-track .step.pendente {
+  color: var(--ink-muted);
+  font-style: italic;
+}
+.req-track .step b {
+  color: var(--ink-primary);
+  font-weight: 700;
+}
+
+/* Lista de materiais dentro do modal de requisição */
+.req-itens-vazio td {
+  color: var(--ink-muted);
+  text-align: center;
+  padding: var(--sp-4);
+}

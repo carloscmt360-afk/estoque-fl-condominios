@@ -35,9 +35,12 @@ fn main() {
         "models.cpp",
         "db.cpp",
         "time_utils.cpp",
+        "crypto.cpp",
         "inventory_engine.cpp",
         "report_engine.cpp",
         "retrospect_engine.cpp",
+        "auth_engine.cpp",
+        "request_engine.cpp",
         "portable_paths.cpp",
         "api.cpp",
     ] {

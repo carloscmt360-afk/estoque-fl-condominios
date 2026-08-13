@@ -39,9 +39,26 @@ class Database {
 
   sqlite3* handle() const { return db_; }
 
+  // Contabilidade de transações ANINHADAS, usada só pela classe Transaction.
+  // O SQLite não aceita BEGIN dentro de BEGIN, mas o domínio precisa disso: a
+  // entrega de uma requisição é uma operação atômica que chama applySaida uma
+  // vez por item — e cada applySaida já abre a sua própria transação. Em vez
+  // de duplicar uma versão "sem transação" de cada operação, conta-se a
+  // profundidade: só a transação mais externa emite BEGIN/COMMIT.
+  //
+  // Um rollback em QUALQUER nível aborta a operação inteira (marca o conjunto
+  // como abortado e desfaz tudo ao voltar ao nível 0) — é a semântica certa
+  // aqui: se a baixa do terceiro item falhou, os dois primeiros não podem
+  // ficar de pé com a requisição ainda em aberto.
+  void txBegin();
+  void txCommit();
+  void txRollback() noexcept;
+
  private:
   void migrate();
   sqlite3* db_ = nullptr;
+  int txDepth_ = 0;
+  bool txAborted_ = false;
 };
 
 // RAII sobre um sqlite3_stmt*, com bind/step/column tipados — evita repetir
@@ -75,7 +92,8 @@ class Statement {
 // RAII para transação: começa no construtor, faz ROLLBACK automático no
 // destrutor a menos que commit() já tenha sido chamado — garante que uma
 // exceção no meio de applyEntrada/applySaida/applyCorrecao nunca deixa o
-// produto e a movimentação dessincronizados.
+// produto e a movimentação dessincronizados. Aninhável (ver txBegin/txCommit
+// em Database): só a instância mais externa emite BEGIN/COMMIT de verdade.
 class Transaction {
  public:
   explicit Transaction(Database& db);

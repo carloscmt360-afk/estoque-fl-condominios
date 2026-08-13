@@ -2,9 +2,11 @@ import { api } from '../api.js';
 import { fmtBRL, fmtNum, escapeHtml, uid, nowIso, nowLocalInputValue } from '../format.js';
 import { openModal, closeModal } from '../components/modal.js';
 import { toast } from '../components/toast.js';
+import { can } from '../session.js';
 
 let products = [];
 let departments = [];
+let availability = [];
 
 let wired = false;
 
@@ -36,7 +38,12 @@ function wireControls() {
 }
 
 export async function reload() {
-  [products, departments] = await Promise.all([api.listProducts(), api.listDepartments()]);
+  // A disponibilidade traz o que está RESERVADO por requisições em aberto —
+  // sem ela, a tela mostraria como livre um saldo que já tem dono.
+  [products, departments, availability] = await Promise.all([
+    api.listProducts(), api.listDepartments(), api.stockAvailability(),
+  ]);
+  aplicarPermissoes();
   renderStatGrid();
   renderTable();
   // Os modais desta view também são usados pela Linha do Tempo; avisar que os
@@ -45,14 +52,30 @@ export async function reload() {
   document.dispatchEvent(new CustomEvent('estoque:dados-alterados'));
 }
 
+/* Esconde o que o usuário não pode fazer. O backend recusaria de qualquer
+   forma (ver api.cpp); isto evita oferecer o botão para depois negar. */
+function aplicarPermissoes() {
+  const mostrar = (id, pode) => { document.getElementById(id).style.display = pode ? '' : 'none'; };
+  mostrar('btnNovoProduto', can('produtos', 'create'));
+  mostrar('btnRegistrarEntrada', can('produtos', 'create') || can('linha_do_tempo', 'create'));
+  mostrar('btnBaixaProdutos', can('produtos', 'create') || can('linha_do_tempo', 'create'));
+  mostrar('btnCorrigirEstoque', can('produtos', 'update') || can('linha_do_tempo', 'create'));
+}
+
+function reservadoDe(productId) {
+  const a = availability.find((x) => x.productId === productId);
+  return a ? a.reserved : 0;
+}
+
 function renderStatGrid() {
   const valorTotal = products.reduce((s, p) => s + p.qty * p.avgCost, 0);
   const abaixo = products.filter((p) => p.qty <= p.minStock).length;
+  const reservado = availability.reduce((s, a) => s + a.reserved, 0);
   document.getElementById('productsStatGrid').innerHTML = [
     { label: 'Produtos cadastrados', value: fmtNum(products.length) },
     { label: 'Valor total em estoque', value: fmtBRL(valorTotal) },
     { label: 'Abaixo do mínimo', value: fmtNum(abaixo), cls: abaixo > 0 ? 'is-critical' : 'is-good' },
-    { label: 'Departamentos', value: fmtNum(departments.length) },
+    { label: 'Reservado em requisições', value: fmtNum(reservado) },
   ].map((t) => `<div class="stat-tile ${t.cls || ''}"><div class="label">${escapeHtml(t.label)}</div><div class="value">${t.value}</div></div>`).join('');
 }
 
@@ -66,21 +89,26 @@ function renderTable() {
 
   const tbody = document.getElementById('productsTbody');
   if (!list.length) {
-    tbody.innerHTML = `<tr class="empty-row"><td colspan="9">${products.length === 0 ? 'Nenhum produto cadastrado.' : 'Nenhum produto com esses filtros.'}</td></tr>`;
+    tbody.innerHTML = `<tr class="empty-row"><td colspan="11">${products.length === 0 ? 'Nenhum produto cadastrado.' : 'Nenhum produto com esses filtros.'}</td></tr>`;
     return;
   }
+  const podeLancar = can('produtos', 'create') || can('linha_do_tempo', 'create');
   tbody.innerHTML = list.map((p) => {
     const low = p.qty <= p.minStock;
+    const reservado = reservadoDe(p.id);
+    const acoes = [
+      podeLancar ? `<button class="btn-sm btn-outline" data-entrada="${p.id}" title="Registrar entrada">↓</button>` : '',
+      podeLancar ? `<button class="btn-sm btn-outline" data-saida="${p.id}" title="Registrar baixa">↑</button>` : '',
+      can('produtos', 'update') ? `<button class="btn-sm btn-ghost" data-editar="${p.id}">Editar</button>` : '',
+      can('produtos', 'delete') ? `<button class="btn-sm btn-danger" data-excluir="${p.id}">Excluir</button>` : '',
+    ].filter(Boolean).join('');
     return `<tr><td><b>${escapeHtml(p.name)}</b></td><td>${p.category ? escapeHtml(p.category) : '<span class="muted">—</span>'}</td>
-      <td>${escapeHtml(p.unit)}</td><td class="num">${fmtNum(p.qty)}</td><td class="num">${fmtNum(p.minStock)}</td>
+      <td>${escapeHtml(p.unit)}</td><td class="num">${fmtNum(p.qty)}</td>
+      <td class="num">${reservado > 0 ? fmtNum(reservado) : '<span class="muted">—</span>'}</td>
+      <td class="num">${fmtNum(p.qty - reservado)}</td><td class="num">${fmtNum(p.minStock)}</td>
       <td class="num">${fmtBRL(p.avgCost)}</td><td class="num">${fmtBRL(p.qty * p.avgCost)}</td>
       <td><span class="pill ${low ? 'pill-low' : 'pill-ok'}">${low ? 'Abaixo do mínimo' : 'OK'}</span></td>
-      <td><div class="row-actions">
-        <button class="btn-sm btn-outline" data-entrada="${p.id}">↓</button>
-        <button class="btn-sm btn-outline" data-saida="${p.id}">↑</button>
-        <button class="btn-sm btn-ghost" data-editar="${p.id}">Editar</button>
-        <button class="btn-sm btn-danger" data-excluir="${p.id}">Excluir</button>
-      </div></td></tr>`;
+      <td><div class="row-actions">${acoes || '<span class="muted">—</span>'}</div></td></tr>`;
   }).join('');
   tbody.querySelectorAll('[data-entrada]').forEach((b) => b.addEventListener('click', () => openEntradaModal(b.dataset.entrada)));
   tbody.querySelectorAll('[data-saida]').forEach((b) => b.addEventListener('click', () => openSaidaModal(b.dataset.saida)));

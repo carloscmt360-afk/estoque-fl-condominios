@@ -1,6 +1,6 @@
 // Comandos Tauri: cada um só faz lock() no estado e delega para a ponte
 // cxx — nenhuma regra de negócio mora aqui (isso é papel do core-cpp).
-use crate::dto::{DepartmentInput, MovementPatchInput, ProductInput};
+use crate::dto::{DepartmentInput, MovementPatchInput, ProductInput, UserInput};
 use crate::AppState;
 use tauri::State;
 
@@ -37,6 +37,183 @@ pub fn retry_init(state: State<AppState>) -> Result<(), String> {
     crate::init_session(&state);
     app_status(state)
 }
+
+// ------------------------------------------------------------------ sessão
+//
+// Note o que NÃO está aqui nem em main.rs: `login_as_service`, a sessão de
+// acesso total sem senha que existe na ponte para o core-cli. Comando não
+// registrado é comando que o frontend não alcança — é essa lista que define
+// a fronteira de confiança do app.
+
+/// Os comandos com mais de um argumento recebem uma struct única, e não
+/// parâmetros soltos — mesmo padrão de EntradaInput/SaidaInput abaixo. Assim o
+/// nome de cada campo é fixado pelo `rename_all = "camelCase"` do serde, em vez
+/// de depender da conversão automática de nomes de argumento do Tauri.
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LoginInput {
+    pub email: String,
+    pub password: String,
+    pub now_iso: String,
+}
+
+#[tauri::command]
+pub fn login(state: State<AppState>, input: LoginInput) -> Result<String, String> {
+    with_session(&state, |s| s.login(&input.email, &input.password, &input.now_iso))
+}
+
+#[tauri::command]
+pub fn logout(state: State<AppState>) -> Result<(), String> {
+    with_session(&state, |s| s.logout())
+}
+
+#[tauri::command]
+pub fn current_session(state: State<AppState>) -> Result<String, String> {
+    with_session(&state, |s| s.current_session_json())
+}
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ChangePasswordInput {
+    pub current_password: String,
+    pub new_password: String,
+}
+
+#[tauri::command]
+pub fn change_own_password(state: State<AppState>, input: ChangePasswordInput) -> Result<(), String> {
+    with_session(&state, |s| s.change_own_password(&input.current_password, &input.new_password))
+}
+
+// ---------------------------------------------------------------- usuários
+
+#[tauri::command]
+pub fn list_users(state: State<AppState>) -> Result<String, String> {
+    with_session(&state, |s| s.list_users_json())
+}
+
+#[tauri::command]
+pub fn create_user(state: State<AppState>, user: UserInput) -> Result<String, String> {
+    with_session(&state, |s| s.create_user(user.into()))
+}
+
+#[tauri::command]
+pub fn update_user(state: State<AppState>, user: UserInput) -> Result<String, String> {
+    with_session(&state, |s| s.update_user(user.into()))
+}
+
+#[tauri::command]
+pub fn delete_user(state: State<AppState>, id: String) -> Result<(), String> {
+    with_session(&state, |s| s.delete_user(&id))
+}
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ResetPasswordInput {
+    pub id: String,
+    pub new_password: String,
+}
+
+#[tauri::command]
+pub fn reset_user_password(state: State<AppState>, input: ResetPasswordInput) -> Result<(), String> {
+    with_session(&state, |s| s.reset_user_password(&input.id, &input.new_password))
+}
+
+// -------------------------------------------------------------- permissões
+
+#[tauri::command]
+pub fn list_permissions(state: State<AppState>) -> Result<String, String> {
+    with_session(&state, |s| s.list_permissions_json())
+}
+
+#[tauri::command]
+pub fn create_permission_group(state: State<AppState>, payload: String) -> Result<String, String> {
+    with_session(&state, |s| s.create_permission_group(&payload))
+}
+
+#[tauri::command]
+pub fn update_permission_group(state: State<AppState>, payload: String) -> Result<String, String> {
+    with_session(&state, |s| s.update_permission_group(&payload))
+}
+
+#[tauri::command]
+pub fn delete_permission_group(state: State<AppState>, id: String) -> Result<(), String> {
+    with_session(&state, |s| s.delete_permission_group(&id))
+}
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DepartmentGroupInput {
+    pub department_id: String,
+    /// Vazio = o departamento fica sem grupo (e sem nenhuma permissão herdada).
+    #[serde(default)]
+    pub group_id: String,
+}
+
+#[tauri::command]
+pub fn set_department_permission_group(
+    state: State<AppState>,
+    input: DepartmentGroupInput,
+) -> Result<(), String> {
+    with_session(&state, |s| s.set_department_permission_group(&input.department_id, &input.group_id))
+}
+
+// ------------------------------------------------------------- requisições
+
+#[tauri::command]
+pub fn list_requests(state: State<AppState>) -> Result<String, String> {
+    with_session(&state, |s| s.list_requests_json())
+}
+
+#[tauri::command]
+pub fn create_request(state: State<AppState>, payload: String) -> Result<String, String> {
+    with_session(&state, |s| s.create_request(&payload))
+}
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RequestDecisionInput {
+    pub id: String,
+    #[serde(default)]
+    pub note: String,
+    pub now_iso: String,
+}
+
+#[tauri::command]
+pub fn approve_request(state: State<AppState>, input: RequestDecisionInput) -> Result<String, String> {
+    with_session(&state, |s| s.approve_request(&input.id, &input.note, &input.now_iso))
+}
+
+#[tauri::command]
+pub fn reject_request(state: State<AppState>, input: RequestDecisionInput) -> Result<String, String> {
+    with_session(&state, |s| s.reject_request(&input.id, &input.note, &input.now_iso))
+}
+
+#[tauri::command]
+pub fn cancel_request(state: State<AppState>, input: RequestDecisionInput) -> Result<String, String> {
+    with_session(&state, |s| s.cancel_request(&input.id, &input.note, &input.now_iso))
+}
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DeliverRequestInput {
+    pub id: String,
+    pub now_iso: String,
+    /// Prefixo dos ids das saídas geradas (<prefixo>_1, _2…) — como todo id do
+    /// app, quem gera é o chamador, nunca o núcleo.
+    pub movement_id_prefix: String,
+}
+
+#[tauri::command]
+pub fn deliver_request(state: State<AppState>, input: DeliverRequestInput) -> Result<String, String> {
+    with_session(&state, |s| s.deliver_request(&input.id, &input.now_iso, &input.movement_id_prefix))
+}
+
+#[tauri::command]
+pub fn stock_availability(state: State<AppState>) -> Result<String, String> {
+    with_session(&state, |s| s.stock_availability_json())
+}
+
+// ---------------------------------------------------------------- produtos
 
 #[tauri::command]
 pub fn list_products(state: State<AppState>) -> Result<String, String> {
