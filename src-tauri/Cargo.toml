@@ -14,8 +14,23 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 bridge = { path = "../bridge" }
 cxx = "1"
-tauri = { version = "2", features = [] }
+# tray-icon: o app vive na bandeja do sistema — fechar na janela esconde,
+# não encerra (ver o TrayIconBuilder e o WindowEvent::CloseRequested em main.rs).
+tauri = { version = "2", features = ["tray-icon"] }
 serde = { version = "1", features = ["derive"] }
+# Só pra extrair o array "emails" (e reinjetar "emailErros") do JSON que a
+# Api devolve nas ações de Orçamentos que disparam e-mail — ver
+# enviar_emails_compostos em src/commands.rs. O resto do app nunca precisa
+# olhar dentro do JSON no lado Rust (ele só repassa a String pronta do C++
+# pro frontend), esta é a única exceção.
+serde_json = "1"
+# Abre a URI mailto: com o cliente de e-mail padrão do Windows (ver
+# abrir_email_outlook em src/commands.rs). Chamar explorer.exe na mão pra
+# isso é frágil (depende de explorer.exe estar no PATH, de política de grupo
+# não bloquear, etc.) — `open` usa ShellExecuteW diretamente, o mesmo
+# mecanismo que o próprio Windows Explorer usa por baixo, e é testado nisso
+# especificamente (é o crate padrão do ecossistema Rust pra essa tarefa).
+open = "5"
 
 [[bin]]
 name = "estoque-fl-app"

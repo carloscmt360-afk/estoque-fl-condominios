@@ -3,12 +3,23 @@ import { escapeHtml, uid, nowIso, fmtBRL } from '../format.js';
 import { openModal, closeModal } from '../components/modal.js';
 import { toast } from '../components/toast.js';
 import { can } from '../session.js';
+import { enableRowSelection } from '../components/tableTools.js';
 
 let departments = [];
+let busca = '';
+let wired = false;
 
 export async function initDepartments() {
-  document.getElementById('btnNovoDepartamento').addEventListener('click', () => openDepartmentModal());
-  document.getElementById('btnSalvarDepartamento').addEventListener('click', saveDepartment);
+  if (!wired) {
+    wired = true;
+    document.getElementById('btnNovoDepartamento').addEventListener('click', () => openDepartmentModal());
+    document.getElementById('btnSalvarDepartamento').addEventListener('click', saveDepartment);
+    document.getElementById('depBusca').addEventListener('input', (e) => {
+      busca = e.target.value.toLowerCase();
+      render();
+    });
+    enableRowSelection(document.getElementById('departmentsTbody'));
+  }
   await reload();
 }
 
@@ -22,11 +33,15 @@ export async function reload() {
 function render() {
   const tbody = document.getElementById('departmentsTbody');
   const sorted = [...departments].sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
-  if (!sorted.length) {
-    tbody.innerHTML = '<tr class="empty-row"><td colspan="4">Nenhum departamento cadastrado ainda.</td></tr>';
+  const filtrados = busca
+    ? sorted.filter((d) => [d.name, d.encarregado].filter(Boolean).join(' ').toLowerCase().includes(busca))
+    : sorted;
+  if (!filtrados.length) {
+    tbody.innerHTML = `<tr class="empty-row"><td colspan="4">${
+      sorted.length ? 'Nenhum departamento encontrado com esse filtro.' : 'Nenhum departamento cadastrado ainda.'}</td></tr>`;
     return;
   }
-  tbody.innerHTML = sorted.map((d) => {
+  tbody.innerHTML = filtrados.map((d) => {
     const acoes = [
       can('departamentos', 'update') ? `<button class="btn-sm btn-ghost" data-editar="${d.id}">Editar</button>` : '',
       can('departamentos', 'delete') ? `<button class="btn-sm btn-danger" data-excluir="${d.id}">Excluir</button>` : '',

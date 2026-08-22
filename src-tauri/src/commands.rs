@@ -1,6 +1,8 @@
 // Comandos Tauri: cada um só faz lock() no estado e delega para a ponte
 // cxx — nenhuma regra de negócio mora aqui (isso é papel do core-cpp).
-use crate::dto::{DepartmentInput, MovementPatchInput, ProductInput, UserInput};
+use crate::dto::{
+    CondominioInput, DepartmentInput, MovementPatchInput, ProductInput, TipoServicoInput, UserInput,
+};
 use crate::AppState;
 use tauri::State;
 
@@ -171,6 +173,19 @@ pub fn create_request(state: State<AppState>, payload: String) -> Result<String,
 
 #[derive(serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct UpdateRequestItemsInput {
+    pub id: String,
+    pub payload: String,
+    pub now_iso: String,
+}
+
+#[tauri::command]
+pub fn update_request_items(state: State<AppState>, input: UpdateRequestItemsInput) -> Result<String, String> {
+    with_session(&state, |s| s.update_request_items(&input.id, &input.payload, &input.now_iso))
+}
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct RequestDecisionInput {
     pub id: String,
     #[serde(default)]
@@ -213,6 +228,33 @@ pub fn stock_availability(state: State<AppState>) -> Result<String, String> {
     with_session(&state, |s| s.stock_availability_json())
 }
 
+// --------------------------------------------------- janela de requisições
+
+#[tauri::command]
+pub fn request_window_status(state: State<AppState>) -> Result<String, String> {
+    with_session(&state, |s| s.request_window_status_json())
+}
+
+#[tauri::command]
+pub fn list_request_windows(state: State<AppState>) -> Result<String, String> {
+    with_session(&state, |s| s.list_request_windows_json())
+}
+
+#[tauri::command]
+pub fn create_request_window(state: State<AppState>, payload: String) -> Result<String, String> {
+    with_session(&state, |s| s.create_request_window(&payload))
+}
+
+#[tauri::command]
+pub fn close_request_window_now(state: State<AppState>, id: String) -> Result<String, String> {
+    with_session(&state, |s| s.close_request_window_now(&id))
+}
+
+#[tauri::command]
+pub fn delete_request_window(state: State<AppState>, id: String) -> Result<(), String> {
+    with_session(&state, |s| s.delete_request_window(&id))
+}
+
 // ---------------------------------------------------------------- produtos
 
 #[tauri::command]
@@ -231,8 +273,152 @@ pub fn update_product(state: State<AppState>, product: ProductInput) -> Result<S
 }
 
 #[tauri::command]
-pub fn delete_product(state: State<AppState>, id: String) -> Result<(), String> {
+pub fn delete_product(state: State<AppState>, id: String, sku: String) -> Result<(), String> {
+    // Exclusão de produto é sempre definitiva neste app (não existe
+    // soft-delete/lixeira) — então a pasta de imagens some junto, sem
+    // deixar arquivo órfão (item 12 do pedido de fotos). Apaga o arquivo
+    // ANTES do registro: se a exclusão do arquivo falhar, o produto (e a
+    // foto) continuam existindo dos dois lados, nunca um banco "sem foto"
+    // apontando pro nada nem um arquivo solto sem dono.
+    if !sku.is_empty() {
+        let data_dir = resolve_data_dir()?;
+        bridge::images::delete_product_images(&data_dir, &sku)?;
+    }
     with_session(&state, |s| s.delete_product(&id))
+}
+
+/// Pasta "dados/" resolvida de novo a cada chamada — é idempotente e barata
+/// (só cria a pasta se ainda não existir); evita guardar mais um caminho em
+/// AppState só pra isto. bridge::images:: deriva "imagens/produtos/" a
+/// partir dela (ver images_root em bridge/src/images.rs).
+fn resolve_data_dir() -> Result<std::path::PathBuf, String> {
+    bridge::ffi::resolve_data_dir_default()
+        .map(std::path::PathBuf::from)
+        .map_err(|e| e.what().to_string())
+}
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UploadImageInput {
+    pub product_id: String,
+    pub sku: String,
+    /// Bytes do arquivo original (JPG/PNG/WebP) codificados em base64 —
+    /// invoke() do Tauri trafega JSON, não binário bruto.
+    pub file_base64: String,
+}
+
+#[tauri::command]
+pub fn upload_product_image(state: State<AppState>, input: UploadImageInput) -> Result<String, String> {
+    let bytes = bridge::images::decode_base64(&input.file_base64)?;
+    let data_dir = resolve_data_dir()?;
+    let saved = bridge::images::save_product_image(&data_dir, &input.sku, &bytes)?;
+    with_session(&state, |s| {
+        s.set_product_image(&input.product_id, &saved.image_path, &saved.thumbnail_path)
+    })
+}
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DeleteImageInput {
+    pub product_id: String,
+    pub sku: String,
+}
+
+#[tauri::command]
+pub fn delete_product_image(state: State<AppState>, input: DeleteImageInput) -> Result<String, String> {
+    let data_dir = resolve_data_dir()?;
+    bridge::images::delete_product_images(&data_dir, &input.sku)?;
+    with_session(&state, |s| s.clear_product_image(&input.product_id))
+}
+
+/// Lê uma imagem já salva (foto ou miniatura) e devolve como `data:` URL —
+/// mais simples que configurar o protocolo de asset do Tauri para uma
+/// pasta portátil cujo caminho só existe em tempo de execução (ver o
+/// comentário de encode_base64 em bridge/src/images.rs).
+#[tauri::command]
+pub fn read_product_image(relative_path: String) -> Result<String, String> {
+    let data_dir = resolve_data_dir()?;
+    let bytes = bridge::images::read_image_bytes(&data_dir, &relative_path)?;
+    Ok(format!("data:image/webp;base64,{}", bridge::images::encode_base64(&bytes)))
+}
+
+// --------------------------------------------------- anexo de NF (Aquisições)
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UploadAquisicaoAttachmentInput {
+    pub aquisicao_id: String,
+    /// Bytes do arquivo original (JPG/PNG/WebP ou PDF) codificados em base64
+    /// — invoke() do Tauri trafega JSON, não binário bruto.
+    pub file_base64: String,
+}
+
+#[tauri::command]
+pub fn upload_aquisicao_attachment(
+    state: State<AppState>,
+    input: UploadAquisicaoAttachmentInput,
+) -> Result<String, String> {
+    let bytes = bridge::images::decode_base64(&input.file_base64)?;
+    let data_dir = resolve_data_dir()?;
+    // Troca de anexo: apaga o que já existia ANTES de gravar o novo (mesma
+    // ordem de upload_product_image em relação a delete_product_images) —
+    // save_aquisicao_attachment já faz essa limpeza internamente, então não
+    // duplica aqui.
+    let saved = bridge::attachments::save_aquisicao_attachment(&data_dir, &input.aquisicao_id, &bytes)?;
+    with_session(&state, |s| {
+        s.set_aquisicao_anexo(&input.aquisicao_id, &saved.path, &saved.kind)
+    })
+}
+
+#[tauri::command]
+pub fn delete_aquisicao_attachment(state: State<AppState>, aquisicao_id: String) -> Result<String, String> {
+    let data_dir = resolve_data_dir()?;
+    bridge::attachments::delete_aquisicao_attachment(&data_dir, &aquisicao_id)?;
+    with_session(&state, |s| s.clear_aquisicao_anexo(&aquisicao_id))
+}
+
+/// Lê o anexo já salvo e devolve como `data:` URL — imagem vira
+/// `data:image/webp`, PDF vira `data:application/pdf` (o navegador abre um
+/// PDF em data: URL normalmente numa nova aba/visualizador embutido).
+#[tauri::command]
+pub fn read_aquisicao_attachment(relative_path: String) -> Result<String, String> {
+    let data_dir = resolve_data_dir()?;
+    let bytes = bridge::attachments::read_attachment_bytes(&data_dir, &relative_path)?;
+    let mime = if relative_path.ends_with(".pdf") { "application/pdf" } else { "image/webp" };
+    Ok(format!("data:{};base64,{}", mime, bridge::images::encode_base64(&bytes)))
+}
+
+// -------------------------------------------------------- logo da FL
+
+/// Grava a logo da FL (mostrada sempre na barra superior dos relatórios
+/// impressos) e devolve como `data:` URL já pronta pra prévia — não precisa
+/// de uma segunda chamada pra reler do disco.
+// Trocar/apagar é restrito (ver assert_pode_editar_logo_fl — só
+// superadministrador); ver não é: qualquer usuário logado enxerga a logo já
+// definida, só não pode mexer nela (get_app_logo abaixo não chama isto).
+#[tauri::command]
+pub fn upload_app_logo(state: State<AppState>, file_base64: String) -> Result<String, String> {
+    with_session(&state, |s| s.assert_pode_editar_logo_fl())?;
+    let bytes = bridge::images::decode_base64(&file_base64)?;
+    let data_dir = resolve_data_dir()?;
+    let saved = bridge::images::save_app_logo(&data_dir, &bytes)?;
+    Ok(format!("data:image/webp;base64,{}", bridge::images::encode_base64(&saved)))
+}
+
+#[tauri::command]
+pub fn delete_app_logo(state: State<AppState>) -> Result<(), String> {
+    with_session(&state, |s| s.assert_pode_editar_logo_fl())?;
+    let data_dir = resolve_data_dir()?;
+    bridge::images::delete_app_logo(&data_dir)
+}
+
+/// `None` (null pro frontend) é o estado normal antes do usuário escolher
+/// uma logo — não é erro.
+#[tauri::command]
+pub fn get_app_logo() -> Result<Option<String>, String> {
+    let data_dir = resolve_data_dir()?;
+    let bytes = bridge::images::read_app_logo_bytes(&data_dir)?;
+    Ok(bytes.map(|b| format!("data:image/webp;base64,{}", bridge::images::encode_base64(&b))))
 }
 
 #[tauri::command]
@@ -329,12 +515,24 @@ pub struct CorrecaoInput {
     pub motivo: String,
     pub date: String,
     pub created_at: String,
+    /// Correção manual do custo médio, opcional. 0 (padrão) = ajuste não mexe
+    /// no custo — ver o comentário de Movement::newAvgCost no core-cpp.
+    #[serde(default)]
+    pub new_avg_cost: f64,
 }
 
 #[tauri::command]
 pub fn apply_correcao(state: State<AppState>, input: CorrecaoInput) -> Result<String, String> {
     with_session(&state, |s| {
-        s.apply_correcao(&input.movement_id, &input.product_id, input.qty_real, &input.motivo, &input.date, &input.created_at)
+        s.apply_correcao(
+            &input.movement_id,
+            &input.product_id,
+            input.qty_real,
+            &input.motivo,
+            &input.date,
+            &input.created_at,
+            input.new_avg_cost,
+        )
     })
 }
 
@@ -412,4 +610,619 @@ pub fn backup(state: State<AppState>) -> Result<String, String> {
 #[tauri::command]
 pub fn restore_backup(state: State<AppState>, payload: String) -> Result<(), String> {
     with_session(&state, |s| s.restore_from_json(&payload))
+}
+
+// ------------------------------------------------------ gestão de prazos
+
+#[tauri::command]
+pub fn list_condominios(state: State<AppState>) -> Result<String, String> {
+    with_session(&state, |s| s.list_condominios_json())
+}
+
+#[tauri::command]
+pub fn create_condominio(state: State<AppState>, condominio: CondominioInput) -> Result<String, String> {
+    with_session(&state, |s| s.create_condominio(condominio.into()))
+}
+
+#[tauri::command]
+pub fn update_condominio(state: State<AppState>, condominio: CondominioInput) -> Result<String, String> {
+    with_session(&state, |s| s.update_condominio(condominio.into()))
+}
+
+#[tauri::command]
+pub fn delete_condominio(state: State<AppState>, id: String) -> Result<(), String> {
+    with_session(&state, |s| s.delete_condominio(&id))
+}
+
+#[tauri::command]
+pub fn list_tipos_servico(state: State<AppState>) -> Result<String, String> {
+    with_session(&state, |s| s.list_tipos_servico_json())
+}
+
+#[tauri::command]
+pub fn create_tipo_servico(state: State<AppState>, tipo: TipoServicoInput) -> Result<String, String> {
+    with_session(&state, |s| s.create_tipo_servico(tipo.into()))
+}
+
+#[tauri::command]
+pub fn update_tipo_servico(state: State<AppState>, tipo: TipoServicoInput) -> Result<String, String> {
+    with_session(&state, |s| s.update_tipo_servico(tipo.into()))
+}
+
+#[tauri::command]
+pub fn delete_tipo_servico(state: State<AppState>, id: String) -> Result<(), String> {
+    with_session(&state, |s| s.delete_tipo_servico(&id))
+}
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ListServicosCondominioInput {
+    pub now_iso: String,
+}
+
+#[tauri::command]
+pub fn list_servicos_condominio(
+    state: State<AppState>,
+    input: ListServicosCondominioInput,
+) -> Result<String, String> {
+    with_session(&state, |s| s.list_servicos_condominio_json(&input.now_iso))
+}
+
+#[tauri::command]
+pub fn create_servico_condominio(state: State<AppState>, payload: String) -> Result<String, String> {
+    with_session(&state, |s| s.create_servico_condominio(&payload))
+}
+
+#[tauri::command]
+pub fn update_servico_condominio(state: State<AppState>, payload: String) -> Result<String, String> {
+    with_session(&state, |s| s.update_servico_condominio(&payload))
+}
+
+#[tauri::command]
+pub fn delete_servico_condominio(state: State<AppState>, id: String) -> Result<(), String> {
+    with_session(&state, |s| s.delete_servico_condominio(&id))
+}
+
+#[tauri::command]
+pub fn renovar_servico(state: State<AppState>, payload: String) -> Result<String, String> {
+    with_session(&state, |s| s.renovar_servico(&payload))
+}
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ListRenovacoesInput {
+    #[serde(default)]
+    pub servico_condominio_filter: String,
+}
+
+#[tauri::command]
+pub fn list_renovacoes(state: State<AppState>, input: ListRenovacoesInput) -> Result<String, String> {
+    with_session(&state, |s| s.list_renovacoes_json(&input.servico_condominio_filter))
+}
+
+// ----------------------------- fornecedores e prestadores de serviços
+
+#[tauri::command]
+pub fn list_setorizacao(state: State<AppState>) -> Result<String, String> {
+    with_session(&state, |s| s.list_setorizacao_json())
+}
+
+#[tauri::command]
+pub fn create_especialidade(state: State<AppState>, payload: String) -> Result<String, String> {
+    with_session(&state, |s| s.create_especialidade(&payload))
+}
+
+#[tauri::command]
+pub fn update_especialidade(state: State<AppState>, payload: String) -> Result<String, String> {
+    with_session(&state, |s| s.update_especialidade(&payload))
+}
+
+#[tauri::command]
+pub fn delete_especialidade(state: State<AppState>, id: String) -> Result<(), String> {
+    with_session(&state, |s| s.delete_especialidade(&id))
+}
+
+#[tauri::command]
+pub fn list_empresas(state: State<AppState>) -> Result<String, String> {
+    with_session(&state, |s| s.list_empresas_json())
+}
+
+/// Só as empresas marcadas como parceiras — a tela de Gestão SOS > Parceiros.
+#[tauri::command]
+pub fn list_parceiros(state: State<AppState>) -> Result<String, String> {
+    with_session(&state, |s| s.list_parceiros_json())
+}
+
+#[tauri::command]
+pub fn create_empresa(state: State<AppState>, payload: String) -> Result<String, String> {
+    with_session(&state, |s| s.create_empresa(&payload))
+}
+
+#[tauri::command]
+pub fn update_empresa(state: State<AppState>, payload: String) -> Result<String, String> {
+    with_session(&state, |s| s.update_empresa(&payload))
+}
+
+#[tauri::command]
+pub fn delete_empresa(state: State<AppState>, id: String) -> Result<(), String> {
+    with_session(&state, |s| s.delete_empresa(&id))
+}
+
+#[tauri::command]
+pub fn list_gerentes(state: State<AppState>) -> Result<String, String> {
+    with_session(&state, |s| s.list_gerentes_json())
+}
+
+#[tauri::command]
+pub fn create_gerente(state: State<AppState>, payload: String) -> Result<String, String> {
+    with_session(&state, |s| s.create_gerente(&payload))
+}
+
+#[tauri::command]
+pub fn update_gerente(state: State<AppState>, payload: String) -> Result<String, String> {
+    with_session(&state, |s| s.update_gerente(&payload))
+}
+
+#[tauri::command]
+pub fn delete_gerente(state: State<AppState>, id: String) -> Result<(), String> {
+    with_session(&state, |s| s.delete_gerente(&id))
+}
+
+#[tauri::command]
+pub fn list_servicos(state: State<AppState>) -> Result<String, String> {
+    with_session(&state, |s| s.list_servicos_json())
+}
+
+#[tauri::command]
+pub fn create_servico(state: State<AppState>, payload: String) -> Result<String, String> {
+    with_session(&state, |s| s.create_servico(&payload))
+}
+
+#[tauri::command]
+pub fn update_servico(state: State<AppState>, payload: String) -> Result<String, String> {
+    with_session(&state, |s| s.update_servico(&payload))
+}
+
+#[tauri::command]
+pub fn delete_servico(state: State<AppState>, id: String) -> Result<(), String> {
+    with_session(&state, |s| s.delete_servico(&id))
+}
+
+#[tauri::command]
+pub fn list_fechamentos(state: State<AppState>) -> Result<String, String> {
+    with_session(&state, |s| s.list_fechamentos_json())
+}
+
+#[tauri::command]
+pub fn fechar_mes(state: State<AppState>, payload: String) -> Result<String, String> {
+    with_session(&state, |s| s.fechar_mes(&payload))
+}
+
+#[tauri::command]
+pub fn reabrir_fechamento(state: State<AppState>, id: String) -> Result<(), String> {
+    with_session(&state, |s| s.reabrir_fechamento(&id))
+}
+
+#[tauri::command]
+pub fn get_sos_config(state: State<AppState>) -> Result<String, String> {
+    with_session(&state, |s| s.get_sos_config_json())
+}
+
+#[tauri::command]
+pub fn set_sos_config(state: State<AppState>, payload: String) -> Result<(), String> {
+    with_session(&state, |s| s.set_sos_config(&payload))
+}
+
+#[tauri::command]
+pub fn list_delta_sindicos(state: State<AppState>) -> Result<String, String> {
+    with_session(&state, |s| s.list_delta_sindicos_json())
+}
+
+#[tauri::command]
+pub fn montar_dashboard(state: State<AppState>, payload: String) -> Result<String, String> {
+    with_session(&state, |s| s.montar_dashboard(&payload))
+}
+
+#[tauri::command]
+pub fn salvar_dashboard(state: State<AppState>, payload: String) -> Result<String, String> {
+    with_session(&state, |s| s.salvar_dashboard(&payload))
+}
+
+#[tauri::command]
+pub fn list_dashboards(state: State<AppState>) -> Result<String, String> {
+    with_session(&state, |s| s.list_dashboards_json())
+}
+
+#[tauri::command]
+pub fn list_suprimentos(state: State<AppState>) -> Result<String, String> {
+    with_session(&state, |s| s.list_suprimentos_json())
+}
+
+#[tauri::command]
+pub fn create_suprimento(state: State<AppState>, payload: String) -> Result<String, String> {
+    with_session(&state, |s| s.create_suprimento(&payload))
+}
+
+#[tauri::command]
+pub fn update_suprimento(state: State<AppState>, payload: String) -> Result<String, String> {
+    with_session(&state, |s| s.update_suprimento(&payload))
+}
+
+#[tauri::command]
+pub fn delete_suprimento(state: State<AppState>, id: String) -> Result<(), String> {
+    with_session(&state, |s| s.delete_suprimento(&id))
+}
+
+#[tauri::command]
+pub fn list_aquisicoes(state: State<AppState>) -> Result<String, String> {
+    with_session(&state, |s| s.list_aquisicoes_json())
+}
+
+#[tauri::command]
+pub fn create_aquisicao(state: State<AppState>, payload: String) -> Result<String, String> {
+    with_session(&state, |s| s.create_aquisicao(&payload))
+}
+
+#[tauri::command]
+pub fn update_aquisicao(state: State<AppState>, payload: String) -> Result<String, String> {
+    with_session(&state, |s| s.update_aquisicao(&payload))
+}
+
+#[tauri::command]
+pub fn delete_aquisicao(state: State<AppState>, id: String) -> Result<(), String> {
+    // Mesma ordem de delete_product em relação às imagens: apaga o arquivo
+    // do anexo ANTES do registro, pra nunca sobrar um arquivo órfão sem
+    // dono nem um banco "sem anexo" apontando pra um arquivo que já não
+    // existe dos dois lados ao mesmo tempo.
+    let data_dir = resolve_data_dir()?;
+    bridge::attachments::delete_aquisicao_attachment(&data_dir, &id)?;
+    with_session(&state, |s| s.delete_aquisicao(&id))
+}
+
+// ------------------------------------------- orçamentos (fluxo de cotação)
+//
+// "solicitar"/"enviarParaCliente"/"aprovar" são as três ações que disparam
+// e-mail (ver o comentário de Api::solicitarOrcamentoParaEmpresas em
+// core-cpp/include/estoque/api.hpp): a Api já fez a mudança de estado e
+// devolve o JSON da ordem com um array "emails" a mais — é
+// enviar_emails_compostos, abaixo, quem de fato manda cada um pelo
+// bridge::mailer e devolve o mesmo JSON sem essa chave (trocada por
+// "emailErros" só se algo falhar). A ação em si nunca é desfeita por uma
+// falha de e-mail — o que já foi salvo no banco continua salvo.
+
+#[derive(serde::Deserialize)]
+struct EmailToSendDto {
+    to: String,
+    subject: String,
+    #[serde(rename = "bodyHtml")]
+    body_html: String,
+    #[serde(rename = "attachmentPaths", default)]
+    attachment_paths: Vec<String>,
+}
+
+/// Config SMTP salva, COM a senha de verdade — só para uso interno deste
+/// arquivo (ver get_email_config_internal_json, que não tem wrapper em
+/// frontend/js/api.js).
+fn smtp_config(state: &State<AppState>) -> Result<bridge::mailer::SmtpConfig, String> {
+    let json_str = with_session(state, |s| s.get_email_config_internal_json())?;
+    let v: serde_json::Value = serde_json::from_str(&json_str).map_err(|e| e.to_string())?;
+    Ok(bridge::mailer::SmtpConfig {
+        host: v["host"].as_str().unwrap_or("").to_string(),
+        port: v["port"].as_str().and_then(|p| p.parse().ok()).unwrap_or(587),
+        username: v["username"].as_str().unwrap_or("").to_string(),
+        password: v["password"].as_str().unwrap_or("").to_string(),
+        from_email: v["fromEmail"].as_str().unwrap_or("").to_string(),
+        from_name: v["fromName"].as_str().unwrap_or("FL Condomínios").to_string(),
+        use_tls: v["useTls"].as_bool().unwrap_or(true),
+    })
+}
+
+fn enviar_emails_compostos(state: &State<AppState>, ordem_json: String) -> Result<String, String> {
+    let mut value: serde_json::Value = serde_json::from_str(&ordem_json).map_err(|e| e.to_string())?;
+    let emails_val = value.get("emails").cloned().unwrap_or(serde_json::Value::Array(vec![]));
+    let emails: Vec<EmailToSendDto> = serde_json::from_value(emails_val).unwrap_or_default();
+    if let Some(obj) = value.as_object_mut() {
+        obj.remove("emails");
+    }
+
+    if !emails.is_empty() {
+        let config = smtp_config(state)?;
+        let data_dir = resolve_data_dir()?;
+        let mut falhas = Vec::new();
+        for e in &emails {
+            let email = bridge::mailer::EmailToSend {
+                to: e.to.clone(),
+                subject: e.subject.clone(),
+                body_html: e.body_html.clone(),
+                attachment_paths: e.attachment_paths.clone(),
+            };
+            if let Err(err) = bridge::mailer::send_email(&config, &data_dir, &email) {
+                falhas.push(format!("{}: {}", e.to, err));
+            }
+        }
+        if !falhas.is_empty() {
+            if let Some(obj) = value.as_object_mut() {
+                obj.insert(
+                    "emailErros".to_string(),
+                    serde_json::Value::Array(falhas.into_iter().map(serde_json::Value::String).collect()),
+                );
+            }
+        }
+    }
+
+    serde_json::to_string(&value).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn list_ordens_orcamento(state: State<AppState>, now_iso: String) -> Result<String, String> {
+    with_session(&state, |s| s.list_ordens_orcamento_json(&now_iso))
+}
+
+#[tauri::command]
+pub fn create_ordem_orcamento(state: State<AppState>, payload: String) -> Result<String, String> {
+    with_session(&state, |s| s.create_ordem_orcamento(&payload))
+}
+
+#[tauri::command]
+pub fn update_ordem_orcamento_info(state: State<AppState>, payload: String) -> Result<String, String> {
+    with_session(&state, |s| s.update_ordem_orcamento_info(&payload))
+}
+
+#[tauri::command]
+pub fn delete_ordem_orcamento(state: State<AppState>, id: String) -> Result<(), String> {
+    with_session(&state, |s| s.delete_ordem_orcamento(&id))
+}
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SolicitarOrcamentoInput {
+    pub payload: String,
+    pub now_iso: String,
+}
+
+#[tauri::command]
+pub fn solicitar_orcamento_para_empresas(
+    state: State<AppState>,
+    input: SolicitarOrcamentoInput,
+) -> Result<String, String> {
+    let ordem_json =
+        with_session(&state, |s| s.solicitar_orcamento_para_empresas(&input.payload, &input.now_iso))?;
+    enviar_emails_compostos(&state, ordem_json)
+}
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReenviarSolicitacaoInput {
+    pub proposta_id: String,
+    pub now_iso: String,
+}
+
+#[tauri::command]
+pub fn reenviar_solicitacao_proposta(
+    state: State<AppState>,
+    input: ReenviarSolicitacaoInput,
+) -> Result<String, String> {
+    let ordem_json =
+        with_session(&state, |s| s.reenviar_solicitacao_proposta(&input.proposta_id, &input.now_iso))?;
+    enviar_emails_compostos(&state, ordem_json)
+}
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SetPropostaValorInput {
+    pub proposta_id: String,
+    pub valor: f64,
+}
+
+#[tauri::command]
+pub fn set_proposta_valor(state: State<AppState>, input: SetPropostaValorInput) -> Result<String, String> {
+    with_session(&state, |s| s.set_proposta_valor(&input.proposta_id, input.valor))
+}
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UploadPropostaAttachmentInput {
+    pub ordem_id: String,
+    pub proposta_id: String,
+    /// Bytes do arquivo original (JPG/PNG/WebP ou PDF) em base64 — mesmo
+    /// critério de UploadAquisicaoAttachmentInput.
+    pub file_base64: String,
+}
+
+#[tauri::command]
+pub fn upload_proposta_attachment(
+    state: State<AppState>,
+    input: UploadPropostaAttachmentInput,
+) -> Result<String, String> {
+    let bytes = bridge::images::decode_base64(&input.file_base64)?;
+    let data_dir = resolve_data_dir()?;
+    let saved =
+        bridge::attachments::save_proposta_attachment(&data_dir, &input.ordem_id, &input.proposta_id, &bytes)?;
+    with_session(&state, |s| s.set_proposta_anexo(&input.proposta_id, &saved.path, &saved.kind))
+}
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DeletePropostaAttachmentInput {
+    pub ordem_id: String,
+    pub proposta_id: String,
+}
+
+#[tauri::command]
+pub fn delete_proposta_attachment(
+    state: State<AppState>,
+    input: DeletePropostaAttachmentInput,
+) -> Result<String, String> {
+    let data_dir = resolve_data_dir()?;
+    bridge::attachments::delete_proposta_attachment(&data_dir, &input.ordem_id, &input.proposta_id)?;
+    with_session(&state, |s| s.clear_proposta_anexo(&input.proposta_id))
+}
+
+#[tauri::command]
+pub fn read_proposta_attachment(relative_path: String) -> Result<String, String> {
+    let data_dir = resolve_data_dir()?;
+    let bytes = bridge::attachments::read_proposta_attachment_bytes(&data_dir, &relative_path)?;
+    let mime = if relative_path.ends_with(".pdf") { "application/pdf" } else { "image/webp" };
+    Ok(format!("data:{};base64,{}", mime, bridge::images::encode_base64(&bytes)))
+}
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MarcarPropostaRecomendadaInput {
+    pub ordem_id: String,
+    pub proposta_id: String,
+}
+
+#[tauri::command]
+pub fn marcar_proposta_recomendada(
+    state: State<AppState>,
+    input: MarcarPropostaRecomendadaInput,
+) -> Result<String, String> {
+    with_session(&state, |s| s.marcar_proposta_recomendada(&input.ordem_id, &input.proposta_id))
+}
+
+#[tauri::command]
+pub fn desmarcar_proposta_recomendada(state: State<AppState>, ordem_id: String) -> Result<String, String> {
+    with_session(&state, |s| s.desmarcar_proposta_recomendada(&ordem_id))
+}
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EnviarOrcamentoClienteInput {
+    pub payload: String,
+    pub now_iso: String,
+}
+
+#[tauri::command]
+pub fn enviar_orcamento_para_cliente(
+    state: State<AppState>,
+    input: EnviarOrcamentoClienteInput,
+) -> Result<String, String> {
+    let ordem_json = with_session(&state, |s| s.enviar_orcamento_para_cliente(&input.payload, &input.now_iso))?;
+    enviar_emails_compostos(&state, ordem_json)
+}
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AprovarPropostaInput {
+    pub ordem_id: String,
+    pub proposta_id: String,
+    pub now_iso: String,
+}
+
+#[tauri::command]
+pub fn aprovar_proposta_orcamento(state: State<AppState>, input: AprovarPropostaInput) -> Result<String, String> {
+    let ordem_json = with_session(&state, |s| {
+        s.aprovar_proposta_orcamento(&input.ordem_id, &input.proposta_id, &input.now_iso)
+    })?;
+    enviar_emails_compostos(&state, ordem_json)
+}
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReativarOrdemInput {
+    pub ordem_id: String,
+    pub now_iso: String,
+}
+
+#[tauri::command]
+pub fn reativar_ordem_orcamento(state: State<AppState>, input: ReativarOrdemInput) -> Result<String, String> {
+    with_session(&state, |s| s.reativar_ordem_orcamento(&input.ordem_id, &input.now_iso))
+}
+
+// -------------------------------------------------------- configuração de e-mail
+
+#[tauri::command]
+pub fn get_email_config(state: State<AppState>) -> Result<String, String> {
+    with_session(&state, |s| s.get_email_config_json())
+}
+
+#[tauri::command]
+pub fn set_email_config(state: State<AppState>, payload: String) -> Result<(), String> {
+    with_session(&state, |s| s.set_email_config(&payload))
+}
+
+/// Manda um e-mail de teste com a config SALVA (chama Salvar antes de
+/// Testar) — existe pra não precisar ir até Orçamentos e montar uma ordem
+/// inteira só pra descobrir se host/porta/TLS estão certos.
+#[tauri::command]
+pub fn send_test_email(state: State<AppState>, to: String) -> Result<(), String> {
+    let config = smtp_config(&state)?;
+    let data_dir = resolve_data_dir()?;
+    let email = bridge::mailer::EmailToSend {
+        to,
+        subject: "Teste de configuração de e-mail — Estoque FL".to_string(),
+        body_html: "<p>Se esta mensagem chegou, a configuração de SMTP em \
+            <b>Compras &gt; Orçamentos &gt; ⚙ E-mail</b> está funcionando.</p>".to_string(),
+        attachment_paths: vec![],
+    };
+    bridge::mailer::send_email(&config, &data_dir, &email)
+}
+
+#[tauri::command]
+pub fn list_pagamentos(state: State<AppState>) -> Result<String, String> {
+    with_session(&state, |s| s.list_pagamentos_json())
+}
+
+#[tauri::command]
+pub fn create_pagamento(state: State<AppState>, payload: String) -> Result<String, String> {
+    with_session(&state, |s| s.create_pagamento(&payload))
+}
+
+#[tauri::command]
+pub fn update_pagamento(state: State<AppState>, payload: String) -> Result<String, String> {
+    with_session(&state, |s| s.update_pagamento(&payload))
+}
+
+#[tauri::command]
+pub fn delete_pagamento(state: State<AppState>, id: String) -> Result<(), String> {
+    with_session(&state, |s| s.delete_pagamento(&id))
+}
+
+#[tauri::command]
+pub fn marcar_parcela(state: State<AppState>, payload: String) -> Result<String, String> {
+    with_session(&state, |s| s.marcar_parcela(&payload))
+}
+
+/// Encerra o programa de verdade (o botão "Encerrar programa" da barra
+/// lateral). Precisa existir como comando porque fechar a janela pelo X
+/// apenas a esconde na bandeja — ver o on_window_event em main.rs.
+#[tauri::command]
+pub fn encerrar_app(app: tauri::AppHandle) {
+    app.exit(0);
+}
+
+/// Só os caracteres "não reservados" da RFC 3986 passam direto — todo o
+/// resto (espaço, acento, quebra de linha, `&`, `=`...) vira %XX. Itera por
+/// BYTE (não char) de propósito: um caractere acentuado em UTF-8 é mais de
+/// um byte, e cada byte dele tem que virar seu próprio %XX — é assim que um
+/// mailto: com acento chega íntegro no cliente de e-mail.
+fn percent_encode(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for b in s.as_bytes() {
+        match b {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => out.push(*b as char),
+            _ => out.push_str(&format!("%{:02X}", b)),
+        }
+    }
+    out
+}
+
+/// Abre o cliente de e-mail padrão do Windows (Outlook, na máquina do
+/// usuário) com destinatário/assunto/corpo já preenchidos, pronto pra
+/// revisar e clicar Enviar — alternativa ao envio automático por SMTP
+/// (ver enviar_emails_compostos), pra quem prefere não configurar
+/// servidor/senha, ou quando precisa anexar o PDF à mão (mailto: não
+/// suporta anexo — limitação do protocolo, não deste app).
+#[tauri::command]
+pub fn abrir_email_outlook(to: String, subject: String, body: String) -> Result<(), String> {
+    let uri = format!("mailto:{}?subject={}&body={}", to, percent_encode(&subject), percent_encode(&body));
+    // `open::that` chama ShellExecuteW no Windows — o mesmo mecanismo que o
+    // próprio Explorer usa por baixo pra despachar uma URI pro handler
+    // registrado (mailto: -> cliente de e-mail padrão). Trocou de
+    // `Command::new("explorer").arg(uri)` porque essa abordagem dependia de
+    // explorer.exe estar alcançável no PATH do processo — falhou em teste
+    // real (nada abria, sem erro nenhum) — enquanto ShellExecuteW é a API
+    // correta e documentada da Microsoft pra isso, sem essa dependência.
+    open::that(&uri).map_err(|e| format!("não foi possível abrir o cliente de e-mail: {e}"))
 }

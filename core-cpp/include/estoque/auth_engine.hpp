@@ -37,6 +37,16 @@ constexpr const char* kLinhaDoTempo = "linha_do_tempo";
 constexpr const char* kDepartamentos = "departamentos";
 constexpr const char* kImportarExportar = "importar_exportar";
 constexpr const char* kRequisicoes = "requisicoes";
+constexpr const char* kCondominios = "condominios";
+constexpr const char* kGestaoDatas = "gestao_datas";
+constexpr const char* kEmpresas = "empresas";
+constexpr const char* kGerentes = "gerentes";
+constexpr const char* kGestaoSosServicos = "gestao_sos_servicos";
+constexpr const char* kSuprimentos = "suprimentos";
+constexpr const char* kDeltaSindicos = "delta_sindicos";
+constexpr const char* kAquisicoes = "aquisicoes";
+constexpr const char* kOrcamentos = "orcamentos";
+constexpr const char* kPagamentos = "pagamentos";
 }  // namespace features
 
 enum class PermAction { Create, Read, Update, Delete };

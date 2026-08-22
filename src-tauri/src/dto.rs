@@ -64,6 +64,98 @@ impl From<DepartmentInput> for ffi::DepartmentDto {
     }
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CondominioInput {
+    pub id: String,
+    pub nome: String,
+    #[serde(default)]
+    pub nome_fantasia: String,
+    #[serde(default)]
+    pub cnpj: String,
+    #[serde(default)]
+    pub codigo: String,
+    #[serde(default)]
+    pub endereco: String,
+    #[serde(default)]
+    pub numero: String,
+    #[serde(default)]
+    pub complemento: String,
+    #[serde(default)]
+    pub bairro: String,
+    #[serde(default)]
+    pub cidade: String,
+    #[serde(default)]
+    pub estado: String,
+    #[serde(default)]
+    pub cep: String,
+    #[serde(default)]
+    pub localizacao: String,
+    #[serde(default)]
+    pub sindico: String,
+    #[serde(default)]
+    pub telefone: String,
+    #[serde(default)]
+    pub email: String,
+    #[serde(default)]
+    pub observacoes: String,
+    #[serde(default = "default_true")]
+    pub ativo: bool,
+    #[serde(default)]
+    pub delta_sindica: bool,
+    pub created_at: String,
+}
+
+impl From<CondominioInput> for ffi::CondominioDto {
+    fn from(c: CondominioInput) -> Self {
+        ffi::CondominioDto {
+            id: c.id,
+            nome: c.nome,
+            nome_fantasia: c.nome_fantasia,
+            cnpj: c.cnpj,
+            codigo: c.codigo,
+            endereco: c.endereco,
+            numero: c.numero,
+            complemento: c.complemento,
+            bairro: c.bairro,
+            cidade: c.cidade,
+            estado: c.estado,
+            cep: c.cep,
+            localizacao: c.localizacao,
+            sindico: c.sindico,
+            telefone: c.telefone,
+            email: c.email,
+            observacoes: c.observacoes,
+            ativo: c.ativo,
+            delta_sindica: c.delta_sindica,
+            created_at: c.created_at,
+        }
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TipoServicoInput {
+    pub id: String,
+    pub nome: String,
+    pub prazo_dias: i32,
+    #[serde(default)]
+    pub cor: String,
+    pub created_at: String,
+}
+
+impl From<TipoServicoInput> for ffi::TipoServicoDto {
+    fn from(t: TipoServicoInput) -> Self {
+        ffi::TipoServicoDto {
+            id: t.id,
+            nome: t.nome,
+            prazo_dias: t.prazo_dias,
+            cor: t.cor,
+            created_at: t.created_at,
+        }
+    }
+}
+
 /// Cadastro de usuário vindo do formulário. `password` vazia num update
 /// significa "não mexer na senha" (o formulário de edição não pede a senha).
 #[derive(Deserialize)]

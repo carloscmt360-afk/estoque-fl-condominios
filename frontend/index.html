@@ -23,55 +23,64 @@
      inteiro (#appShell) só é revelado depois que o backend confirma quem é o
      usuário — nenhum dado é carregado antes disso. -->
 <div class="login-screen" id="loginScreen" style="display:none;">
-  <form class="login-card" id="loginForm" autocomplete="on">
-    <div class="login-brand">
-      <div class="logo">FL</div>
-      <div>
-        <div class="name">Estoque FL Condomínios</div>
-        <div class="sub">Controle de materiais</div>
+  <div class="login-card">
+    <div class="login-side">
+      <div class="login-side-blob login-side-blob-1"></div>
+      <div class="login-side-blob login-side-blob-2"></div>
+      <div class="login-side-blob login-side-blob-3"></div>
+      <div class="login-side-content">
+        <div class="login-side-logo">FL</div>
+        <h1>Bem-vindo(a)</h1>
+        <div class="login-side-headline">Estoque FL Condomínios</div>
+        <p>Estoque, compras, orçamentos e gestão de condomínios — tudo em um só lugar.</p>
       </div>
     </div>
-    <div class="field">
-      <label for="loginEmail">E-mail</label>
-      <input type="email" id="loginEmail" autocomplete="username" placeholder="nome@flcondominios.com.br" />
-    </div>
-    <div class="field">
-      <label for="loginSenha">Senha</label>
-      <input type="password" id="loginSenha" autocomplete="current-password" />
-    </div>
-    <div class="login-erro" id="loginErro" style="display:none;"></div>
-    <button class="btn-primary login-submit" id="btnEntrar" type="submit">Entrar</button>
-    <div class="login-foot">© 2026 CMT360 • Soluções Inteligentes.</div>
-  </form>
+    <form class="login-form" id="loginForm" autocomplete="on">
+      <h2>Entrar</h2>
+      <div class="login-form-sub">Acesse com seu e-mail e senha cadastrados.</div>
+      <div class="field">
+        <label for="loginEmail">E-mail</label>
+        <div class="login-input-icon">
+          <span class="ico" aria-hidden="true">✉</span>
+          <input type="email" id="loginEmail" autocomplete="username" placeholder="nome@flcondominios.com.br" />
+        </div>
+      </div>
+      <div class="field">
+        <label for="loginSenha">Senha</label>
+        <div class="login-input-icon">
+          <span class="ico" aria-hidden="true">🔒</span>
+          <input type="password" id="loginSenha" autocomplete="current-password" />
+        </div>
+      </div>
+      <div class="login-erro" id="loginErro" style="display:none;"></div>
+      <button class="btn-primary login-submit" id="btnEntrar" type="submit">Entrar</button>
+      <div class="login-foot">© 2026 CMT360 • Soluções Inteligentes.<br/><span class="app-version">v2026.08</span></div>
+    </form>
+  </div>
 </div>
 
 <div class="app-shell" id="appShell" style="display:none;">
   <aside class="sidebar">
     <div class="sidebar-brand">
-      <div class="logo">FL</div>
+      <!-- Logo da FL: uma foto só, no lugar do ícone fixo do app — aparece
+           sempre na barra superior de todo relatório impresso (ver
+           components/logoFl.js e print.js:head()). -->
+      <div class="sidebar-logo-fl">
+        <div class="sidebar-logo-fl-preview" id="logoFlPreview" title="Clique para definir a logo da FL — aparece nos relatórios impressos">
+          <span class="logo-fl-placeholder">+ Logo FL</span>
+        </div>
+        <input type="file" id="logoFlInput" accept="image/jpeg,image/jpg,image/png,image/webp" style="display:none" />
+        <button type="button" class="btn-ghost btn-sm" id="btnRemoverLogoFl" style="display:none" title="Remover logo">✕</button>
+      </div>
       <div>
         <div class="name">Estoque FL</div>
-        <div class="sub">Condomínios</div>
+        <div class="sub">Gestão de suprimentos</div>
       </div>
     </div>
     <!-- Montado pelo app.js a partir das permissões da sessão: o menu só lista
          o que o usuário realmente pode abrir. -->
     <nav class="sidebar-nav" id="sidebarNav"></nav>
     <div class="sidebar-foot">Dados salvos localmente em<br/><code>dados/estoque.db</code>, ao lado do programa.</div>
-    <div class="user-box" id="userBox">
-      <div class="who">
-        <div class="avatar" id="userIniciais">--</div>
-        <div class="ident">
-          <div class="nome" id="userNome"></div>
-          <div class="papel" id="userPapel"></div>
-        </div>
-      </div>
-      <div class="user-actions">
-        <button class="btn-ghost btn-sm" id="btnTrocarSenha">Trocar senha</button>
-        <button class="btn-ghost btn-sm" id="btnSair">Sair</button>
-      </div>
-    </div>
-    <div class="app-copyright">© 2026 CMT360 • Soluções Inteligentes.<br/>Todos os direitos reservados.</div>
   </aside>
 
   <main class="content">
@@ -87,6 +96,624 @@
         <p class="muted">Peça ao superadministrador para vincular o seu departamento a um grupo de
           permissão (tela <b>Permissões</b>) ou para conferir em qual setor o seu usuário está.</p>
       </div>
+    </section>
+
+    <!-- ============== FORNECEDORES E PRESTADORES: CATÁLOGO ==============
+         Primeira tela do módulo e a única de leitura: acha a empresa pelo
+         SEGMENTO, para quando já existe uma demanda na mão. -->
+    <section class="view" id="view-catalogoEmpresas">
+      <div class="content-header">
+        <div><h1>Catálogo de empresas</h1>
+          <div class="sub">Ache a empresa pelo segmento que você precisa atender</div></div>
+      </div>
+
+      <div class="stat-grid" id="catStatGrid"></div>
+
+      <div class="toolbar">
+        <input type="text" id="catBusca" class="grow"
+               placeholder="Buscar por especialidade, empresa, cidade ou CNPJ..." />
+        <button class="btn-outline" id="btnImprimirCatalogo">🖨 Imprimir</button>
+        <button class="btn-outline" id="btnImprimirParceirosCatalogo" title="Imprime só as empresas marcadas como parceira">🖨 Imprimir só parceiros</button>
+        <button class="btn-outline" id="btnCompartilharCatalogo">📋 Copiar contatos</button>
+        <span class="muted" id="catResumoBusca"></span>
+      </div>
+      <div class="segmented" id="catAbas"></div>
+
+      <div id="catResultado"></div>
+    </section>
+
+    <!-- ============== FORNECEDORES E PRESTADORES: SETORIZAÇÃO ============== -->
+    <section class="view" id="view-setorizacao">
+      <div class="content-header">
+        <div><h1>Setorização</h1>
+          <div class="sub">Os quatro setores e as especialidades de cada um</div></div>
+      </div>
+
+      <div class="info-box" style="margin-bottom:var(--sp-4);max-width:820px;">
+        As <b>especialidades</b> cadastradas aqui são exatamente as que aparecem para marcar no
+        <b>Cadastro</b> de cada empresa, e são elas que agrupam o <b>Catálogo</b>. Uma especialidade
+        marcada em alguma empresa não pode ser excluída.
+      </div>
+
+      <div class="segmented" id="setAbas"></div>
+
+      <div class="panel">
+        <div class="panel-head">
+          <h2>Especialidades em <span id="setSetorAtual">—</span></h2>
+          <button class="btn-primary" id="btnNovaEspecialidade">＋ Nova especialidade</button>
+        </div>
+        <div style="overflow-x:auto;">
+          <table>
+            <thead><tr><th>Especialidade</th><th>Em uso por</th><th>Ações</th></tr></thead>
+            <tbody id="setEspecialidadesTbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============== FORNECEDORES E PRESTADORES: CADASTRO ============== -->
+    <section class="view" id="view-empresas">
+      <div class="content-header">
+        <div><h1>Cadastro</h1>
+          <div class="sub">Fornecedores e prestadores de serviços</div></div>
+      </div>
+
+      <div class="toolbar">
+        <button class="btn-primary" id="btnNovaEmpresa">＋ Nova Empresa</button>
+        <span class="spacer"></span>
+        <input type="text" id="empFiltro" placeholder="Buscar empresa ou especialidade..." />
+      </div>
+
+      <div class="panel">
+        <div class="panel-head">
+          <h2>Empresas cadastradas (<span id="empresasTotal">0</span><span id="empresasFiltradas"></span>)</h2>
+        </div>
+        <div class="table-scroll">
+          <table>
+            <thead><tr><th>Empresa</th><th>Especialidades</th><th>Contato</th><th>Cidade / UF</th>
+              <th>Ações</th></tr></thead>
+            <tbody id="empresasTbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section class="view" id="view-condominios">
+      <div class="content-header">
+        <div><h1>Cadastro de Condomínios</h1>
+          <div class="sub">Condomínios administrados</div></div>
+      </div>
+      <div class="toolbar">
+        <button class="btn-primary" id="btnNovoCondominio">＋ Novo Condomínio</button>
+        <button class="btn-outline" id="btnImportarCondominios">⇧ Importar em lote</button>
+        <span class="spacer"></span>
+        <input type="text" id="condBusca" placeholder="Buscar por nome, código, síndico ou endereço..." style="min-width:280px;" />
+      </div>
+      <div class="panel">
+        <div class="panel-head">
+          <h2>Condomínios cadastrados (<span id="condominiosTotal">0</span><span id="condominiosFiltrados"></span>)</h2>
+        </div>
+        <div class="table-scroll">
+          <table>
+            <thead><tr><th>Condomínio</th><th>Código</th><th>Cidade/UF</th><th>Síndico</th><th>Telefone</th><th>Ativo</th><th>Ações</th></tr></thead>
+            <tbody id="condominiosTbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================== GESTÃO SOS: PAINEL ==================
+         Visão de apresentação: números e gráficos de vendas/comissões, para
+         levar aos diretores sem precisar montar uma planilha à parte. Tudo
+         calculado em cima de Serviços — nenhum dado novo é gravado aqui. -->
+    <section class="view" id="view-sosPainel">
+      <div class="content-header">
+        <div><h1>Painel</h1>
+          <div class="sub">Vendas e comissões de Gestão SOS — resumo para apresentação</div></div>
+      </div>
+
+      <div class="toolbar">
+        <div class="field" style="max-width:160px;"><label>Ano</label><select id="painelSosAno" style="width:100%;"></select></div>
+        <div class="field" style="max-width:200px;"><label>Mês</label><select id="painelSosMes" style="width:100%;"></select></div>
+        <button class="btn-outline" id="btnImprimirPainelSos">🖨 Imprimir</button>
+      </div>
+
+      <div class="stat-grid" id="painelSosStatGrid"></div>
+
+      <div class="section-title">Evolução e rankings</div>
+      <div class="charts-grid">
+        <div class="card chart-card" id="cardPainelSosEvolucao">
+          <div class="card-head"><div><h3>Evolução mensal de comissão</h3>
+            <div class="sub" id="painelSosEvolucaoSub"></div></div></div>
+          <div class="card-body"><div class="chart-host" id="chartPainelSosEvolucao"></div></div>
+        </div>
+        <div class="card chart-card" id="cardPainelSosGerente">
+          <div class="card-head"><div><h3>Ranking por Gerente</h3>
+            <div class="sub">Comissão no período selecionado — top 8.</div></div></div>
+          <div class="card-body"><div class="chart-host" id="chartPainelSosGerente"></div></div>
+        </div>
+        <div class="card chart-card" id="cardPainelSosParceiro">
+          <div class="card-head"><div><h3>Ranking por Parceiro</h3>
+            <div class="sub">Comissão no período selecionado — top 8.</div></div></div>
+          <div class="card-body"><div class="chart-host" id="chartPainelSosParceiro"></div></div>
+        </div>
+        <div class="card chart-card" id="cardPainelSosCondominio">
+          <div class="card-head"><div><h3>Ranking por Condomínio</h3>
+            <div class="sub">Venda no período selecionado — top 8.</div></div></div>
+          <div class="card-body"><div class="chart-host" id="chartPainelSosCondominio"></div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================== GESTÃO SOS: GERENTES ================== -->
+    <section class="view" id="view-gerentes">
+      <div class="content-header">
+        <div><h1>Gerentes</h1>
+          <div class="sub">Gerentes responsáveis pelos condomínios</div></div>
+      </div>
+      <div class="segmented" style="margin-bottom:var(--sp-3);">
+        <button type="button" class="config-hub-btn" data-view="configuracoesSos">Percentuais</button>
+        <button type="button" class="config-hub-btn active" data-view="gerentes">Gerentes</button>
+        <button type="button" class="config-hub-btn" data-view="carteiras">Carteiras</button>
+        <button type="button" class="config-hub-btn" data-view="suprimentos">Suprimentos</button>
+      </div>
+      <div class="toolbar">
+        <button class="btn-primary" id="btnNovoGerente">＋ Novo Gerente</button>
+        <span class="spacer"></span>
+        <input type="text" id="gerBusca" placeholder="Buscar por nome, telefone ou e-mail..." style="min-width:280px;" />
+      </div>
+      <div class="panel">
+        <div class="panel-head">
+          <h2>Gerentes cadastrados (<span id="gerentesTotal">0</span><span id="gerentesFiltrados"></span>)</h2>
+        </div>
+        <div class="table-scroll">
+          <table>
+            <thead><tr><th class="num">ID</th><th>Gerente</th><th>Telefone</th><th>E-mail</th>
+              <th class="num">Carteira</th><th>Chave PIX</th><th>Ações</th></tr></thead>
+            <tbody id="gerentesTbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================== GESTÃO SOS: CARTEIRAS ==================
+         Clicar num gerente abre a lista de TODOS os condomínios cadastrados,
+         marcados por clique — os marcados formam a carteira dele. -->
+    <section class="view" id="view-carteiras">
+      <div class="content-header">
+        <div><h1>Carteiras</h1>
+          <div class="sub">Condomínios atendidos por cada gerente — clique num gerente para marcar</div></div>
+      </div>
+      <div class="segmented" style="margin-bottom:var(--sp-3);">
+        <button type="button" class="config-hub-btn" data-view="configuracoesSos">Percentuais</button>
+        <button type="button" class="config-hub-btn" data-view="gerentes">Gerentes</button>
+        <button type="button" class="config-hub-btn active" data-view="carteiras">Carteiras</button>
+        <button type="button" class="config-hub-btn" data-view="suprimentos">Suprimentos</button>
+      </div>
+      <div id="carteirasLista"></div>
+    </section>
+
+    <!-- ================== GESTÃO SOS: SUPRIMENTOS ==================
+         Equipe de campo (não os gerentes de carteira): quem vai a campo em
+         cada categoria de função. -->
+    <section class="view" id="view-suprimentos">
+      <div class="content-header">
+        <div><h1>Suprimentos</h1>
+          <div class="sub">Equipe de campo por categoria</div></div>
+      </div>
+      <div class="segmented" style="margin-bottom:var(--sp-3);">
+        <button type="button" class="config-hub-btn" data-view="configuracoesSos">Percentuais</button>
+        <button type="button" class="config-hub-btn" data-view="gerentes">Gerentes</button>
+        <button type="button" class="config-hub-btn" data-view="carteiras">Carteiras</button>
+        <button type="button" class="config-hub-btn active" data-view="suprimentos">Suprimentos</button>
+      </div>
+      <div class="toolbar">
+        <button class="btn-primary" id="btnNovoSuprimento">＋ Novo</button>
+        <span class="spacer"></span>
+        <input type="text" id="supBusca" placeholder="Buscar por nome, categoria, telefone ou e-mail..." style="min-width:280px;" />
+      </div>
+      <div class="panel">
+        <div class="panel-head">
+          <h2>Cadastrados (<span id="suprimentosTotal">0</span><span id="suprimentosFiltrados"></span>)</h2>
+        </div>
+        <div class="table-scroll">
+          <table>
+            <thead><tr><th class="num">ID</th><th>Nome</th><th>Categoria</th><th>Telefone</th>
+              <th>E-mail</th><th>Chave PIX</th><th>Ações</th></tr></thead>
+            <tbody id="suprimentosTbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================== GESTÃO SOS: DELTA SÍNDICOS ==================
+         Segunda planilha de comissões do módulo, irmã de Serviços: aqui a
+         comissão é do SÍNDICO do condomínio. Sem fechamento — não trava
+         por mês. -->
+    <section class="view" id="view-deltaSindicos">
+      <div class="content-header">
+        <div><h1>Delta Síndicos</h1>
+          <div class="sub">Planilha de vendas e comissões dos síndicos — puxada automaticamente de Serviços</div></div>
+      </div>
+      <div class="panel" style="margin-bottom:var(--sp-4);">
+        <h3 style="margin-top:0;">Condomínios atendidos pela Delta</h3>
+        <p class="muted" style="margin-top:-8px;">Marque abaixo quais condomínios têm a Delta como síndica — todo
+          serviço pago lançado neles entra sozinho na planilha abaixo, sem precisar lançar nada aqui.</p>
+        <div class="toolbar">
+          <input type="text" id="dsBuscaCondominios" placeholder="Buscar condomínio..." style="min-width:260px;" />
+          <span class="muted" id="deltaContagem">nenhum condomínio marcado</span>
+        </div>
+        <div class="carteira-lista" id="deltaCondominios"></div>
+      </div>
+      <div class="toolbar">
+        <input type="text" id="dsBusca" placeholder="Buscar por condomínio, síndico ou gerente..." style="min-width:260px;" />
+        <input type="month" id="dsFiltroMes" title="Filtrar por mês de referência" />
+        <button class="btn-outline" id="btnImprimirDeltaSindicos">🖨 Imprimir</button>
+        <span class="muted"><b id="deltaSindicosTotal">0</b> lançamento(s)<span id="deltaSindicosFiltrados"></span></span>
+      </div>
+      <div class="panel">
+        <div class="table-scroll">
+          <table>
+            <thead><tr>
+              <th class="num">ID</th><th>Condomínio</th><th>Síndico</th><th>Gerente</th>
+              <th class="num">Venda</th><th class="num">%</th><th class="num">Comissão</th>
+              <th>Mês/Ano</th>
+            </tr></thead>
+            <tbody id="deltaSindicosTbody"></tbody>
+            <tfoot id="deltaSindicosTfoot"></tfoot>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================== GESTÃO SOS: SERVIÇOS ================== -->
+    <section class="view" id="view-servicos">
+      <div class="content-header">
+        <div><h1>Serviços</h1>
+          <div class="sub">Planilha de vendas e comissões</div></div>
+      </div>
+      <div class="toolbar">
+        <button class="btn-primary" id="btnNovoServico">＋ Novo Serviço</button>
+        <button class="btn-outline" id="btnImportarServicos">⇧ Importar em lote</button>
+        <button class="btn-outline" id="btnImprimirServicos">🖨 Imprimir relatório</button>
+        <button class="btn-outline" id="btnPctLote" disabled>✎ Alterar % em massa</button>
+        <button class="btn-outline" id="btnPagoLote" disabled>💰 Marcar pagamento em massa</button>
+        <span class="muted"><b id="servicosTotal">0</b> serviço(s)<span id="servicosFiltrados"></span></span>
+      </div>
+      <div class="toolbar" style="margin-top:-6px;">
+        <span class="muted" style="font-size:11px;">Filtros:</span>
+        <input type="month" id="srvFiltroMesDe" title="Filtrar por período: de" style="max-width:130px;" />
+        <span class="muted">até</span>
+        <input type="month" id="srvFiltroMesAte" title="Filtrar por período: até" style="max-width:130px;" />
+        <input type="text" id="srvFiltroCondominio" placeholder="Filtrar por condomínio..." style="max-width:200px;" />
+        <select id="srvFiltroGerente" style="max-width:180px;"><option value="">Todos os gerentes</option></select>
+        <select id="srvFiltroParceiro" style="max-width:180px;"><option value="">Todos os parceiros</option></select>
+        <button class="btn-outline btn-sm" id="btnLimparFiltrosServicos">Limpar filtros</button>
+      </div>
+      <div class="info-box" style="margin-bottom:var(--sp-3);max-width:820px;">
+        Só entra na distribuição de comissão (Dashboard de Fechamento) e no fechamento do mês quem estiver
+        marcado como <b>Pago</b>. Venda lançada sem pagamento confirmado não gera comissão pra ninguém.
+      </div>
+      <div class="panel">
+        <div class="table-scroll">
+          <table>
+            <thead><tr>
+              <th><input type="checkbox" id="srvSelecionarTodos" title="Selecionar todos os visíveis" /></th>
+              <th class="num">ID</th><th>Código</th><th>Condomínio</th><th>Gerente</th><th>Parceiro</th>
+              <th class="num">Venda</th><th class="num">Porcentagem</th><th class="num">Comissão</th>
+              <th>Data de referência</th><th>Status</th><th>Data de pagamento</th><th>Ações</th>
+            </tr></thead>
+            <tbody id="servicosTbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- Marcar pagamento em massa: mesmo mecanismo de "Alterar % em massa" —
+         seleciona várias linhas e marca todas como pagas de uma vez, com a
+         mesma data de pagamento (o caso comum: o cliente pagou um lote de
+         boletos no mesmo dia). -->
+    <div class="overlay" id="modalPagoLote"><div class="modal">
+      <div class="modal-head"><h3>Marcar pagamento em massa</h3>
+        <button class="btn-ghost" data-close="modalPagoLote">✕</button></div>
+      <div class="modal-body">
+        <p class="field-hint" id="pagoLoteResumo"></p>
+        <div class="field"><label>Data de pagamento *</label>
+          <input type="date" id="pagoLoteData" /></div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn-outline" data-close="modalPagoLote">Cancelar</button>
+        <button class="btn-primary" id="btnConfirmarPagoLote">Marcar como pago</button>
+      </div>
+    </div></div>
+
+    <!-- Alterar % em massa: seleciona várias linhas na tabela (como marcar
+         várias células no Excel) e aplica uma porcentagem só a elas — útil
+         para estudar cenários/probabilidades sem editar uma a uma. Só entram
+         na seleção serviços já editáveis (não fechados). -->
+    <div class="overlay" id="modalPctLote"><div class="modal">
+      <div class="modal-head"><h3>Alterar % em massa</h3>
+        <button class="btn-ghost" data-close="modalPctLote">✕</button></div>
+      <div class="modal-body">
+        <p class="field-hint" id="pctLoteResumo"></p>
+        <div class="field"><label>Nova porcentagem (%)</label>
+          <input type="number" id="pctLoteValor" min="0" max="100" step="0.01" /></div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn-outline" data-close="modalPctLote">Cancelar</button>
+        <button class="btn-primary" id="btnConfirmarPctLote">Aplicar</button>
+      </div>
+    </div></div>
+
+    <!-- ================== GESTÃO SOS: FECHAMENTO ================== -->
+    <section class="view" id="view-fechamento">
+      <div class="content-header">
+        <div><h1>Fechamento</h1>
+          <div class="sub">Fecha um mês de referência e trava os serviços lançados nele</div></div>
+      </div>
+      <div class="toolbar">
+        <label class="muted" for="fecMesSelect">Mês de referência</label>
+        <select id="fecMesSelect"></select>
+        <button class="btn-primary" id="btnFecharMes">Fechar mês</button>
+      </div>
+      <div id="fecPreview"></div>
+    </section>
+
+    <!-- ================== GESTÃO SOS: HISTÓRICO DE FECHAMENTOS ================== -->
+    <section class="view" id="view-historicoFechamentos">
+      <div class="content-header">
+        <div><h1>Histórico de fechamentos</h1>
+          <div class="sub">Meses já fechados, com os totais gravados no momento do fechamento</div></div>
+      </div>
+      <div class="toolbar">
+        <input type="text" id="fecBusca" placeholder="Buscar por mês/ano ou observações..." style="min-width:260px;" />
+      </div>
+      <div class="panel">
+        <div class="panel-head">
+          <h2>Fechamentos (<span id="fechamentosTotal">0</span><span id="fechamentosFiltrados"></span>)</h2>
+        </div>
+        <div class="table-scroll">
+          <table>
+            <thead><tr>
+              <th>Mês</th><th class="num">Serviços</th><th class="num">Total de vendas</th>
+              <th class="num">Total de comissão</th><th>Fechado em</th><th>Observações</th><th>Ações</th>
+            </tr></thead>
+            <tbody id="historicoFechamentosTbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================== GESTÃO SOS: DASHBOARD DE FECHAMENTO ==================
+         Monta mês após mês o fechamento financeiro (replica as fórmulas
+         SOMASES da planilha real) e salva um retrato imutável no histórico.
+         Todas as porcentagens usadas aqui vêm de Configurações — só a
+         Eficácia, a Carteira e a (%) são digitadas aqui, mês a mês. -->
+    <section class="view" id="view-dashboardFechamento">
+      <div class="content-header">
+        <div><h1>Dashboard de Fechamento</h1>
+          <div class="sub">Fechamento financeiro do mês — sempre salvo no histórico, nunca substituído</div></div>
+      </div>
+
+      <div class="toolbar">
+        <div class="field" style="max-width:170px;"><label>Mês de referência</label>
+          <input type="month" id="dfMes" /></div>
+        <button class="btn-outline" id="btnDfPuxar">↻ Puxar dados do mês</button>
+        <button class="btn-outline" id="btnDfRepetirAnterior">Repetir do mês anterior</button>
+        <button class="btn-primary" id="btnDfSalvar" disabled>💾 Salvar no histórico</button>
+        <button class="btn-outline" id="btnDfImprimir" disabled>🖨 Imprimir</button>
+      </div>
+
+      <div class="panel modulo-vazio" id="dfVazio">
+        <div class="modulo-vazio-ico">📊</div>
+        <h2>Escolha um mês e clique em "Puxar dados do mês"</h2>
+        <p>O dashboard é montado a partir dos <b>Serviços</b> e <b>Delta Síndicos</b> lançados naquele mês, com
+          as porcentagens de <b>Configurações</b>.</p>
+      </div>
+
+      <div id="dfConteudo" style="display:none;">
+        <div class="stat-grid" id="dfStatGrid"></div>
+
+        <div class="section-title">Gerentes <span class="muted" style="font-weight:400;">Carteira, Eficácia e (%)
+          são editáveis — mudar um recalcula a linha na hora</span></div>
+        <div class="panel">
+          <div style="overflow-x:auto;">
+            <table>
+              <thead><tr>
+                <th>Gerente</th><th class="num">Produzido</th><th class="num">Recebido</th>
+                <th class="num">Carteira</th><th class="num">Meta</th><th class="num">Eficácia</th>
+                <th class="num">(%)</th><th class="num">Descontos</th><th class="num">Comissão</th>
+                <th class="num">Retido p/ FL</th>
+              </tr></thead>
+              <tbody id="dfGerentesTbody"></tbody>
+              <tfoot id="dfGerentesTfoot"></tfoot>
+            </table>
+          </div>
+        </div>
+
+        <div class="section-title">Rateio do arrecadado — divisão de Suprimentos</div>
+        <div class="panel">
+          <table>
+            <thead><tr><th>Destino</th><th class="num">Valor</th></tr></thead>
+            <tbody id="dfSuprimentosTbody"></tbody>
+          </table>
+        </div>
+
+        <div class="section-title">Empresas parceiras</div>
+        <div class="panel">
+          <div style="overflow-x:auto;">
+            <table>
+              <thead><tr><th>Empresa</th><th class="num">Recebidos</th></tr></thead>
+              <tbody id="dfEmpresasTbody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="section-title">Delta Síndicos do mês</div>
+        <div class="panel">
+          <div style="overflow-x:auto;">
+            <table>
+              <thead><tr><th>Condomínio</th><th>Síndico</th><th>Gerente</th>
+                <th class="num">Venda</th><th class="num">%</th><th class="num">Comissão</th></tr></thead>
+              <tbody id="dfDeltaTbody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="panel" style="margin-top:var(--sp-4);">
+          <div class="field"><label>Observações deste fechamento</label>
+            <textarea id="dfObservacoes" rows="2"></textarea></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================== GESTÃO SOS: CONFIGURAÇÕES ================== -->
+    <section class="view" id="view-configuracoesSos">
+      <div class="content-header">
+        <div><h1>Configurações</h1>
+          <div class="sub">Parâmetros de Gestão SOS › Serviços</div></div>
+      </div>
+      <div class="segmented" style="margin-bottom:var(--sp-3);">
+        <button type="button" class="config-hub-btn active" data-view="configuracoesSos">Percentuais</button>
+        <button type="button" class="config-hub-btn" data-view="gerentes">Gerentes</button>
+        <button type="button" class="config-hub-btn" data-view="carteiras">Carteiras</button>
+        <button type="button" class="config-hub-btn" data-view="suprimentos">Suprimentos</button>
+      </div>
+      <div class="panel" style="max-width:420px;">
+        <div class="field"><label>Porcentagem padrão de comissão (%)</label>
+          <input type="number" id="cfgPorcentagemPadrao" min="0" max="100" step="0.1" /></div>
+        <div class="field-hint">Pré-preenche o campo "Porcentagem" ao lançar um novo serviço — o valor
+          pode ser mudado linha a linha em <b>Serviços</b>.</div>
+        <button class="btn-primary" id="btnSalvarSosConfig" style="margin-top:var(--sp-3);">Salvar</button>
+      </div>
+
+      <!-- Percentuais do Dashboard de Fechamento — tudo editável aqui, nunca
+           fixo no código nem na tela de Fechamento (só a eficácia é
+           sobrescrita mês a mês, e isso fica na própria tela de Fechamento). -->
+      <div class="panel" style="margin-top:var(--sp-4);max-width:720px;">
+        <div class="panel-head"><h2>Dashboard de Fechamento — percentuais</h2></div>
+
+        <div class="section-title">Rateio de 100% do que entra de vendas no mês</div>
+        <div class="field-row-eq3">
+          <div class="field"><label>FL (%)</label><input type="number" id="cfgRateioFl" min="0" max="100" step="0.1" /></div>
+          <div class="field"><label>Gerentes (%)</label><input type="number" id="cfgRateioGerentes" min="0" max="100" step="0.1" /></div>
+          <div class="field"><label>Suprimentos (%)</label><input type="number" id="cfgRateioSuprimentos" min="0" max="100" step="0.1" /></div>
+        </div>
+        <div id="cfgSomaRateio" class="pill" style="margin-top:var(--sp-2);"></div>
+
+        <div class="section-title" style="margin-top:var(--sp-4);">Divisão da fatia de Suprimentos</div>
+        <div class="field-row-eq3">
+          <div class="field"><label>Encarregado (%)</label><input type="number" id="cfgSuprimentosEncarregado" min="0" max="100" step="0.1" /></div>
+          <div class="field"><label>Assistente (%)</label><input type="number" id="cfgSuprimentosAssistente" min="0" max="100" step="0.1" /></div>
+        </div>
+        <div id="cfgSomaSuprimentos" class="pill" style="margin-top:var(--sp-2);"></div>
+
+        <div class="section-title" style="margin-top:var(--sp-4);">Condomínios em que a Delta é síndica</div>
+        <div class="field-hint">Dos <span id="cfgDeltaBaseTexto">30</span>% que o gerente receberia desse
+          condomínio, esta divisão decide quanto fica para a Delta e quanto continua para o gerente.</div>
+        <div class="field-row-eq3">
+          <div class="field"><label>Delta (%)</label><input type="number" id="cfgDeltaSindica" min="0" max="100" step="0.1" /></div>
+          <div class="field"><label>Gerente (%)</label><input type="number" id="cfgDeltaGerente" min="0" max="100" step="0.1" /></div>
+        </div>
+        <div id="cfgSomaDelta" class="pill" style="margin-top:var(--sp-2);"></div>
+
+        <div class="section-title" style="margin-top:var(--sp-4);">Meta de produção</div>
+        <div class="field" style="max-width:280px;">
+          <label>Meta por condomínio na carteira (R$)</label>
+          <input type="number" id="cfgMetaPorCondominio" min="0" step="0.1" />
+        </div>
+        <div class="field-hint"><b>Eficácia</b> = produção do gerente ÷ condomínios na carteira, medida contra
+          esta meta. Só recebe 100% do produzido quem atinge 100% da meta; abaixo disso recebe o proporcional,
+          e a diferença fica retida para a FL. A eficácia calculada pode ser sobrescrita à mão na tela de
+          Fechamento (ex.: diretor que não bate meta).</div>
+
+        <button class="btn-primary" id="btnSalvarDashboardConfig" style="margin-top:var(--sp-4);">Salvar percentuais</button>
+      </div>
+    </section>
+
+    <!-- ================== GESTÃO SOS: PARCEIROS ==================
+         Só as empresas marcadas como parceiras no Cadastro. Num chamado
+         emergencial o que se precisa é do telefone — por isso o contato vem
+         em destaque, e não escondido atrás de um clique. -->
+    <section class="view" id="view-parceiros">
+      <div class="content-header">
+        <div><h1>Parceiros</h1>
+          <div class="sub">Empresas parceiras, para acionar num chamado</div></div>
+      </div>
+
+      <div class="stat-grid" id="parStatGrid"></div>
+
+      <div class="segmented" id="parAbas"></div>
+
+      <div class="toolbar">
+        <input type="text" id="parBusca" class="grow"
+               placeholder="Buscar parceiro por nome, especialidade ou cidade..." />
+        <button class="btn-outline" id="btnImprimirParceiros">🖨 Imprimir</button>
+        <button class="btn-outline" id="btnCompartilharParceiros">📋 Copiar contatos</button>
+        <span class="muted">
+          <b id="parTotal">0</b> parceiro(s)<span id="parResumo"></span>
+        </span>
+      </div>
+
+      <div id="parLista"></div>
+    </section>
+
+    <section class="view" id="view-prazos">
+      <div class="content-header"><div><h1>Gestão de Prazos</h1>
+        <div class="sub">Vencimentos e obrigações a acompanhar</div></div></div>
+
+      <div class="stat-grid" id="gpStatGrid"></div>
+
+      <div class="section-title">Serviços contratados</div>
+      <div class="panel">
+        <div class="panel-head">
+          <h2>Vencimento por condomínio</h2>
+          <div class="toolbar" style="margin:0;">
+            <select id="gpFiltroStatus">
+              <option value="">Todas as situações</option>
+              <option value="vencido">Vencidos</option>
+              <option value="atencao">Vencem em até 30 dias</option>
+              <option value="ok">Em dia</option>
+            </select>
+            <input type="text" id="gpVinculosBusca" placeholder="Buscar por condomínio, serviço ou empresa..." style="min-width:240px;" />
+            <button class="btn-primary" id="btnNovoVinculo">＋ Novo vínculo</button>
+          </div>
+        </div>
+        <div class="table-scroll">
+          <table>
+            <thead><tr><th>Condomínio</th><th>Serviço</th><th>Empresa contratada</th><th>Última renovação</th>
+              <th>Vencimento</th><th>Situação</th><th>Ações</th></tr></thead>
+            <tbody id="gpVinculosTbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="section-title">Tipos de serviço</div>
+      <div class="panel">
+        <div class="panel-head">
+          <h2>Catálogo e prazo de vencimento</h2>
+          <button class="btn-primary" id="btnNovoTipoServico">＋ Novo tipo de serviço</button>
+        </div>
+        <div class="info-box" style="margin:0 var(--sp-5) var(--sp-4);max-width:760px;">
+          O <b>prazo</b> é o que define o vencimento: cada serviço vence em
+          <b>data da última renovação + prazo</b>. Um serviço em uso por algum condomínio não pode ser excluído.
+        </div>
+        <div class="table-scroll">
+          <table>
+            <thead><tr><th>Serviço</th><th class="num">Prazo (meses)</th><th class="num">Em uso</th><th>Ações</th></tr></thead>
+            <tbody id="gpTiposTbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="section-title">Histórico de renovações</div>
+      <div class="panel"><div class="table-scroll">
+        <table>
+          <thead><tr><th>Condomínio</th><th>Serviço</th><th>Data da renovação</th><th>Empresa</th>
+            <th class="num">Prazo aplicado</th></tr></thead>
+          <tbody id="gpHistoricoTbody"></tbody>
+        </table>
+      </div></div>
     </section>
 
     <!-- ============================== DASHBOARD / RELATÓRIO ============================== -->
@@ -163,10 +790,8 @@
           <div class="card-body"><div class="chart-host" id="chartDeptoMes"></div><div class="tbl-view" id="tblDeptoMes" style="display:none"></div></div>
         </div>
         <div class="card chart-card" id="cardDeptoYTD">
-          <div class="card-head"><div><h3>Acumulado por departamento</h3><div class="sub">Mesmo nº de meses nos dois anos.</div></div>
-            <button class="btn-ghost btn-sm" data-toggle-table="cardDeptoYTD">Ver tabela</button></div>
-          <div class="legend" id="legDeptoYTD"></div>
-          <div class="card-body"><div class="chart-host" id="chartDeptoYTD"></div><div class="tbl-view" id="tblDeptoYTD" style="display:none"></div></div>
+          <div class="card-head"><div><h3>Acumulado por departamento</h3><div class="sub">Mesmo nº de meses nos dois anos.</div></div></div>
+          <div class="card-body"><div class="chart-host" id="chartDeptoYTD"></div></div>
         </div>
         <div class="card chart-card" id="cardABC">
           <div class="card-head"><div><h3>Curva ABC</h3><div class="sub">A = até 80% do valor · B = 80–95% · C = 5% finais.</div></div>
@@ -209,7 +834,7 @@
         <div class="panel-head">
           <h2>Saldo, custo médio e criticidade por item</h2>
           <div class="toolbar" style="margin:0;">
-            <input type="text" id="repFiltroProduto" placeholder="Buscar material..." />
+            <input type="text" id="repFiltroProduto" placeholder="Buscar material ou SKU..." />
             <select id="repFiltroClasse"><option value="">Todas as classes</option><option value="A">A</option><option value="B">B</option><option value="C">C</option></select>
             <select id="repFiltroSituacao">
               <option value="">Todas as situações</option>
@@ -218,17 +843,23 @@
               <option value="parado">Capital parado</option>
               <option value="ok">Normal</option>
             </select>
+            <select id="repPosicaoPorPagina" aria-label="Itens por página">
+              <option value="20">20 por página</option>
+              <option value="30">30 por página</option>
+              <option value="50" selected>50 por página</option>
+            </select>
           </div>
         </div>
         <div style="overflow-x:auto;">
           <table>
-            <thead><tr><th>Material</th><th>Categoria</th><th>Unid.</th><th class="num">Saldo</th><th class="num">Custo médio</th>
+            <thead><tr><th>SKU</th><th>Material</th><th>Categoria</th><th>Unid.</th><th class="num">Saldo</th><th class="num">Custo médio</th>
               <th class="num">Valor</th><th class="num">% valor</th><th>ABC</th><th class="num">Consumo/mês</th>
               <th class="num">Cobertura</th><th>Situação</th></tr></thead>
             <tbody id="repPosicaoTbody"></tbody>
             <tfoot id="repPosicaoTfoot"></tfoot>
           </table>
         </div>
+        <div class="paginacao" id="repPosicaoPaginacao"></div>
       </div>
 
       <div class="section-title">Custo por departamento</div>
@@ -244,10 +875,10 @@
       <div class="section-title">Pedidos do período</div>
       <div class="panel">
         <div class="panel-head"><h2>Detalhamento das saídas</h2>
-          <input type="text" id="repFiltroPedido" placeholder="Buscar..." /></div>
+          <input type="text" id="repFiltroPedido" placeholder="Buscar ou SKU..." /></div>
         <div style="overflow-x:auto;">
           <table>
-            <thead><tr><th>Data</th><th>Departamento</th><th>Material</th><th class="num">Qtd.</th>
+            <thead><tr><th>Data</th><th>Departamento</th><th>SKU</th><th>Material</th><th class="num">Qtd.</th>
               <th class="num">Valor unit.</th><th class="num">Valor total</th><th>Solicitante</th><th>Encarregado</th></tr></thead>
             <tbody id="repPedidosTbody"></tbody>
             <tfoot id="repPedidosTfoot"></tfoot>
@@ -363,18 +994,37 @@
     <section class="view" id="view-products">
       <div class="content-header"><div><h1>Produtos</h1><div class="sub">Catálogo e posição de estoque</div></div></div>
       <div class="stat-grid" id="productsStatGrid"></div>
+      <div class="panel" id="categoriaBreakdownPanel" style="margin-bottom:var(--sp-4);"><div style="overflow-x:auto;">
+        <table>
+          <thead><tr><th>Categoria</th><th class="num">Itens</th><th class="num">Qtd. em estoque</th>
+            <th class="num">Valor em estoque</th><th class="num">Abaixo do mínimo</th></tr></thead>
+          <tbody id="categoriaBreakdownTbody"></tbody>
+        </table>
+      </div></div>
       <div class="toolbar">
         <button class="btn-primary" id="btnNovoProduto">＋ Novo Produto</button>
         <button class="btn-outline" id="btnRegistrarEntrada">↓ Entrada</button>
+        <button class="btn-outline" id="btnEntradaMassa">↓ Entrada em Massa</button>
         <button class="btn-outline" id="btnBaixaProdutos">↑ Baixa</button>
+        <button class="btn-outline" id="btnBaixaMassa">↑ Baixa em Massa</button>
         <button class="btn-outline" id="btnCorrigirEstoque">🛠 Corrigir</button>
         <span class="spacer"></span>
-        <input type="text" id="filtroProdutoNome" placeholder="Buscar produto..." />
+        <input type="text" id="filtroProdutoNome" placeholder="Buscar produto ou SKU..." />
+        <select id="filtroProdutoCategoria">
+          <option value="">Todas as categorias</option>
+          <option value="Papelaria">Papelaria</option>
+          <option value="Informática">Informática</option>
+          <option value="Assembleia">Assembleia</option>
+          <option value="Gráfica">Gráfica</option>
+          <option value="Brinde">Brinde</option>
+          <option value="Valor">Valor</option>
+          <option value="Não Classificado">Não Classificado</option>
+        </select>
         <select id="filtroProdutoStatus"><option value="">Todos os status</option><option value="ok">Estoque OK</option><option value="low">Abaixo do mínimo</option></select>
       </div>
-      <div class="panel"><div style="overflow-x:auto;">
+      <div class="panel"><div class="table-scroll">
         <table>
-          <thead><tr><th>Produto</th><th>Categoria</th><th>Unid.</th><th class="num">Qtd.</th>
+          <thead><tr><th>Foto</th><th>SKU</th><th>Produto</th><th>Categoria</th><th>Unid.</th><th class="num">Qtd.</th>
             <th class="num" title="Comprometido em requisições ainda não entregues">Reservado</th>
             <th class="num" title="Saldo menos o que já está reservado">Disponível</th>
             <th class="num">Mín.</th>
@@ -399,7 +1049,7 @@
 
       <div class="toolbar">
         <input type="text" id="filtroTimelineBusca" class="grow"
-               placeholder="Buscar em produto, fornecedor, NF, departamento, solicitante, observação..." />
+               placeholder="Buscar em SKU, produto, fornecedor, NF, departamento, solicitante, observação..." />
         <select id="filtroTimelineProduto"><option value="">Todos os produtos</option></select>
         <select id="filtroTimelineTipo"><option value="">Todos os tipos</option><option value="entrada">Entradas</option><option value="saida">Saídas</option><option value="ajuste">Correções</option></select>
         <select id="filtroTimelineDepto"><option value="">Todos os departamentos</option></select>
@@ -423,9 +1073,9 @@
         <button class="btn-ghost btn-sm" id="btnExportarTimelineCSV">⬇ Exportar CSV do que está filtrado</button>
       </div>
 
-      <div class="panel"><div style="overflow-x:auto;">
+      <div class="panel"><div class="table-scroll">
         <table>
-          <thead><tr><th>Data</th><th>Tipo</th><th>Produto</th><th class="num">Qtd.</th><th>Detalhes</th>
+          <thead><tr><th>Data</th><th>Tipo</th><th>SKU</th><th>Produto</th><th class="num">Qtd.</th><th>Detalhes</th>
             <th class="num">Valor</th><th class="num">Saldo após</th><th>Ações</th></tr></thead>
           <tbody id="timelineTbody"></tbody>
         </table>
@@ -436,13 +1086,15 @@
     <!-- ============================== DEPARTAMENTOS ============================== -->
     <section class="view" id="view-departments">
       <div class="content-header"><div><h1>Departamentos</h1><div class="sub">Clientes internos que retiram material</div></div></div>
-      <div class="toolbar"><button class="btn-primary" id="btnNovoDepartamento">＋ Novo Departamento</button></div>
+      <div class="toolbar"><button class="btn-primary" id="btnNovoDepartamento">＋ Novo Departamento</button>
+        <span class="spacer"></span>
+        <input type="text" id="depBusca" placeholder="Buscar por nome ou encarregado..." style="min-width:260px;" /></div>
       <div class="info-box" style="margin-bottom:var(--sp-4);max-width:760px;">
         O <b>limite mensal</b> é o teto de gasto combinado com o setor. O Relatório Mensal avisa quando o
         consumo passa de 90% do limite e mantém o aviso enquanto o teto estiver estourado.
         Deixe em <b>0</b> para não controlar limite naquele departamento.
       </div>
-      <div class="panel"><div style="overflow-x:auto;">
+      <div class="panel"><div class="table-scroll">
         <table>
           <thead><tr><th>Departamento</th><th>Encarregado</th><th class="num">Limite mensal</th><th>Ações</th></tr></thead>
           <tbody id="departmentsTbody"></tbody>
@@ -455,11 +1107,41 @@
       <div class="content-header">
         <div><h1>Requisições</h1><div class="sub" id="requestsSub">Pedidos de material do seu departamento</div></div>
         <div class="row-actions">
+          <button class="btn-outline" id="btnImprimirSeparacao">🖨 Imprimir separação</button>
           <button class="btn-primary" id="btnNovaRequisicao">＋ Nova requisição</button>
+          <!-- Só aparece com a janela fechada, para quem valida requisições: o
+               atalho para lançar o pedido de quem esqueceu de pedir no prazo. -->
+          <button class="btn-outline" id="btnNovaRequisicaoManual" style="display:none;">＋ Lançar pedido (janela fechada)</button>
         </div>
       </div>
 
+      <!-- Situação da janela de pedidos: primeira coisa da tela porque é ela
+           que decide se o botão "Nova requisição" funciona. Preenchido por
+           requests.js a partir de api.requestWindowStatus(). -->
+      <div class="janela-banner" id="janelaBanner" style="display:none;"></div>
+
       <div class="stat-grid" id="requestsStatGrid"></div>
+
+      <!-- Gestão das janelas: só aparece para quem valida requisições. -->
+      <div class="panel" id="janelaPainel" style="display:none;margin-bottom:var(--sp-4);">
+        <div class="panel-head">
+          <div>
+            <b>Janela de requisições</b>
+            <div class="muted" style="font-size:11.5px;">
+              Fora do período aberto o sistema recusa qualquer pedido novo, sozinho, até você abrir
+              a próxima janela.
+            </div>
+          </div>
+          <button class="btn-primary btn-sm" id="btnNovaJanela">＋ Abrir janela</button>
+        </div>
+        <div class="table-scroll">
+          <table>
+            <thead><tr><th>Abertura</th><th>Fechamento</th><th>Situação</th><th>Observação</th>
+              <th>Aberta por</th><th>Ações</th></tr></thead>
+            <tbody id="janelasTbody"></tbody>
+          </table>
+        </div>
+      </div>
 
       <div class="info-box" style="margin-bottom:var(--sp-4);max-width:820px;">
         O material pedido fica <b>reservado</b> assim que a requisição é criada: o saldo continua no
@@ -480,7 +1162,7 @@
         <input type="text" id="filtroRequisicaoBusca" placeholder="Buscar por solicitante, setor, material..." />
       </div>
 
-      <div class="panel"><div style="overflow-x:auto;">
+      <div class="panel"><div class="table-scroll">
         <table>
           <thead><tr><th>Pedido</th><th>Departamento</th><th>Solicitante</th><th>Materiais</th>
             <th>Situação</th><th style="min-width:250px;">Andamento</th><th>Ações</th></tr></thead>
@@ -488,6 +1170,114 @@
         </table>
       </div></div>
       <div class="muted" id="requestsRodape" style="margin-top:var(--sp-3);"></div>
+    </section>
+
+    <!-- ================== COMPRAS: AQUISIÇÕES FL ==================
+         Compra geral ligada a um fornecedor já cadastrado em Fornecedores e
+         Prestadores de Serviços — sem item a item, só o essencial da NF. -->
+    <section class="view" id="view-aquisicoes">
+      <div class="content-header">
+        <div><h1>Aquisições FL</h1>
+          <div class="sub">Compras ligadas aos fornecedores cadastrados</div></div>
+      </div>
+      <div class="toolbar">
+        <button class="btn-primary" id="btnNovaAquisicao">＋ Nova Aquisição</button>
+        <div class="field" style="max-width:160px;"><label>Ano do dashboard</label><select id="aqDashAno" style="width:100%;"></select></div>
+      </div>
+
+      <div class="stat-grid" id="aqStatGrid"></div>
+
+      <div class="section-title">Compras mensais</div>
+      <div class="charts-grid">
+        <div class="card chart-card" id="cardAqEvolucao">
+          <div class="card-head"><div><h3>Compras por mês</h3>
+            <div class="sub" id="aqEvolucaoSub"></div></div></div>
+          <div class="card-body"><div class="chart-host" id="chartAqEvolucao"></div></div>
+        </div>
+        <div class="card chart-card" id="cardAqFornecedor">
+          <div class="card-head"><div><h3>Ranking por Fornecedor</h3>
+            <div class="sub">Total comprado no ano — top 8.</div></div></div>
+          <div class="card-body"><div class="chart-host" id="chartAqFornecedor"></div></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head">
+          <h2>Aquisições lançadas (<span id="aquisicoesTotal">0</span><span id="aquisicoesFiltradas"></span>)</h2>
+          <input type="text" id="aqBusca" placeholder="Buscar por fornecedor, descrição ou NF..." style="min-width:260px;" />
+        </div>
+        <div class="table-scroll">
+          <table>
+            <thead><tr><th>Data</th><th>Fornecedor</th><th>Descrição</th><th>NF</th>
+              <th class="num">Valor</th><th>Ações</th></tr></thead>
+            <tbody id="aquisicoesTbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================== COMPRAS: ORÇAMENTOS ==================
+         Fluxo de cotação: uma ORDEM (presa a um condomínio) tem N PROPOSTAS,
+         uma por empresa solicitada. Ver frontend/js/views/orcamentos.js e
+         core-cpp/include/estoque/purchases_engine.hpp para o modelo
+         completo (status/e-mail/declínio automático em 25 dias). -->
+    <section class="view" id="view-orcamentos">
+      <div class="content-header">
+        <div><h1>Orçamentos</h1>
+          <div class="sub">Ordens de cotação — solicite, compare e aprove propostas</div></div>
+      </div>
+      <div class="toolbar">
+        <button class="btn-primary" id="btnNovaOrdemOrcamento">＋ Nova Ordem</button>
+        <div class="segmented" id="ordStatusFiltro">
+          <button type="button" data-status="" class="active">Todos</button>
+          <button type="button" data-status="pendente">Pendente</button>
+          <button type="button" data-status="solicitado">Solicitado</button>
+          <button type="button" data-status="enviado_cliente">Enviado ao cliente</button>
+          <button type="button" data-status="aprovado">Aprovado</button>
+          <button type="button" data-status="declinado">Declinado</button>
+        </div>
+        <button class="btn-outline" id="btnConfigEmail" style="display:none;" title="Só superadministrador">⚙ E-mail</button>
+      </div>
+      <div class="panel">
+        <div class="panel-head">
+          <h2>Ordens de orçamento (<span id="ordensOrcamentoTotal">0</span>)</h2>
+        </div>
+        <div class="table-scroll">
+          <table>
+            <thead><tr><th class="num">ID</th><th>Condomínio</th><th>Descrição</th>
+              <th class="num">Propostas</th><th>Status</th><th>Ações</th></tr></thead>
+            <tbody id="ordensOrcamentoTbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================== COMPRAS: ACOMPANHAMENTO DE PAGAMENTOS ==================
+         Uma NF ligada a uma Aquisição já lançada, com as parcelas dela — cada
+         parcela é marcada paga individualmente, com a data da baixa. -->
+    <section class="view" id="view-pagamentos">
+      <div class="content-header">
+        <div><h1>Acompanhamento de Pagamentos</h1>
+          <div class="sub">NF e parcelas de cada aquisição</div></div>
+      </div>
+      <div class="toolbar">
+        <button class="btn-primary" id="btnNovoPagamento">＋ Nova NF</button>
+        <span class="spacer"></span>
+        <input type="text" id="pagBusca" placeholder="Buscar por NF, fornecedor ou aquisição..." style="min-width:280px;" />
+      </div>
+      <div class="panel">
+        <div class="panel-head">
+          <h2>Pagamentos lançados (<span id="pagamentosTotal">0</span><span id="pagamentosFiltrados"></span>)</h2>
+        </div>
+        <div class="table-scroll">
+          <table>
+            <thead><tr><th>NF</th><th>Aquisição</th><th>Fornecedor</th><th>Emissão</th>
+              <th class="num">Valor total</th><th class="num">Pago</th><th class="num">Em aberto</th>
+              <th>Situação</th><th>Ações</th></tr></thead>
+            <tbody id="pagamentosTbody"></tbody>
+          </table>
+        </div>
+      </div>
     </section>
 
     <!-- ============================== USUÁRIOS ============================== -->
@@ -519,7 +1309,7 @@
         </select>
       </div>
 
-      <div class="panel"><div style="overflow-x:auto;">
+      <div class="panel"><div class="table-scroll">
         <table>
           <thead><tr><th>Nome</th><th>E-mail</th><th>Papel</th><th>Departamento</th><th>Situação</th>
             <th>Último acesso</th><th>Ações</th></tr></thead>
@@ -542,7 +1332,7 @@
       </div>
 
       <div class="section-title">Grupos de permissão</div>
-      <div class="panel"><div style="overflow-x:auto;">
+      <div class="panel"><div class="table-scroll">
         <table>
           <thead><tr><th>Grupo</th><th>Descrição</th><th>Resumo das permissões</th>
             <th>Departamentos</th><th>Ações</th></tr></thead>
@@ -553,7 +1343,7 @@
       <div class="section-title">Departamentos e seus grupos</div>
       <div class="panel">
         <div class="panel-head"><h2>Cada setor usa um grupo; os usuários do setor herdam essas permissões</h2></div>
-        <div style="overflow-x:auto;">
+        <div class="table-scroll">
           <table>
             <thead><tr><th>Departamento</th><th>Encarregado</th><th class="num">Usuários ativos</th>
               <th style="min-width:260px;">Grupo de permissão</th></tr></thead>
@@ -580,6 +1370,44 @@
     </section>
 
   </main>
+
+  <!-- Barra FIXA do rodapé: atravessa a tela inteira (barra lateral +
+       conteúdo), sempre visível no pé da janela. Só INFORMAÇÃO aqui (quem
+       está logado + créditos) — as ações (Trocar senha/Sair/Encerrar) ficam
+       num menu que abre ao clicar no usuário, para não disputar espaço com a
+       faixa. Fica fora do <aside> e do <main> de propósito: é uma linha
+       própria do grid .app-shell, atravessando as duas colunas. -->
+  <footer class="app-bottom-bar">
+    <button type="button" class="user-box" id="userBoxTrigger" aria-haspopup="true" aria-expanded="false">
+      <div class="who">
+        <div class="avatar" id="userIniciais">--</div>
+        <div class="ident">
+          <div class="nome" id="userNome"></div>
+          <div class="papel" id="userPapel"></div>
+        </div>
+      </div>
+      <svg class="user-box-chevron" aria-hidden="true" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l5-5 5 5"/></svg>
+    </button>
+    <div class="user-menu" id="userMenu">
+      <button class="user-menu-item" id="btnTrocarSenha">Trocar senha</button>
+      <button class="user-menu-item" id="btnSair" title="Encerra a sessão e volta ao login">Sair</button>
+      <!-- Diferente de "Sair": aquele troca de usuário, este fecha o programa
+           de vez. Só aparece no app instalado — no navegador não há o que
+           encerrar (ver app.js). -->
+      <button class="user-menu-item" id="btnEncerrarApp" title="Fecha o programa (o X apenas envia para a bandeja)" style="display:none;">Encerrar programa</button>
+    </div>
+
+    <div class="app-bottom-bar-creditos">
+      <div class="app-copyright">© 2026 CMT360 • Soluções Inteligentes. Todos os direitos reservados. <span class="app-version">v2026.08</span></div>
+      <div class="app-blessing">Deus seja louvado
+        <svg aria-hidden="true" class="flag-br" viewBox="0 0 20 14" width="16" height="12">
+          <rect width="20" height="14" fill="#009c3b"/>
+          <polygon points="10,1.5 18.5,7 10,12.5 1.5,7" fill="#ffdf00"/>
+          <circle cx="10" cy="7" r="3.2" fill="#002776"/>
+        </svg>
+      </div>
+    </div>
+  </footer>
 </div>
 
 <div id="toast"></div>
@@ -593,6 +1421,21 @@
   <div class="modal-head"><h3 id="modalProdutoTitulo">Novo Produto</h3><button class="btn-ghost" data-close="modalProduto">✕</button></div>
   <div class="modal-body">
     <input type="hidden" id="prodId" />
+    <div class="field" id="prodSkuBox" style="display:none">
+      <label>SKU</label><input type="text" id="prodSku" readonly />
+    </div>
+    <div class="field">
+      <label>Foto do produto</label>
+      <div class="foto-row">
+        <div class="foto-preview" id="prodFotoPreview" title="Clique para ampliar"><span class="foto-placeholder">Sem foto</span></div>
+        <div class="foto-actions">
+          <input type="file" id="prodFotoInput" accept="image/jpeg,image/jpg,image/png,image/webp" style="display:none" />
+          <button type="button" class="btn-outline btn-sm" id="btnEscolherFoto">Selecionar imagem</button>
+          <button type="button" class="btn-ghost btn-sm" id="btnRemoverFoto" style="display:none">Remover foto</button>
+          <div class="muted" style="font-size:11px;">JPG, PNG ou WebP — convertida e redimensionada automaticamente.</div>
+        </div>
+      </div>
+    </div>
     <div class="field"><label>Nome do produto *</label><input type="text" id="prodNome" /></div>
     <div class="field-row">
       <div class="field"><label>Unidade *</label>
@@ -600,18 +1443,615 @@
           <option>Unidade</option><option>Pacote</option><option>Caixa</option><option>Kit</option>
           <option>Rolo</option><option>Resma</option><option>Frasco</option><option>Galão</option>
           <option>Litro</option><option>Quilo</option><option>Metro</option><option>Par</option>
+          <option>Saco</option>
         </select>
       </div>
       <div class="field"><label>Estoque mínimo *</label><input type="number" id="prodMinimo" min="0" step="any" value="0" /></div>
     </div>
-    <div class="field"><label>Categoria</label><input type="text" id="prodCategoria" list="listaCategorias" /><datalist id="listaCategorias"></datalist></div>
+    <div class="field"><label>Categoria *</label>
+      <select id="prodCategoria">
+        <option value="">Selecione uma categoria...</option>
+        <option value="Papelaria">Papelaria</option>
+        <option value="Informática">Informática</option>
+        <option value="Assembleia">Assembleia</option>
+        <option value="Gráfica">Gráfica</option>
+        <option value="Brinde">Brinde</option>
+        <option value="Valor">Valor</option>
+      </select>
+      <div class="warn-box" id="prodCategoriaAviso" style="display:none;margin-top:6px;">
+        Este item está com classificação pendente ("Não Classificado") — escolha a categoria correta para salvar.
+      </div>
+    </div>
     <div class="field-row" id="prodInicialBox">
       <div class="field"><label>Qtd. inicial</label><input type="number" id="prodQtdInicial" min="0" step="any" value="0" /></div>
       <div class="field"><label>Custo unitário inicial (R$)</label><input type="number" id="prodCustoInicial" min="0" step="any" value="0" /></div>
     </div>
-    <div class="info-box">A quantidade e custo iniciais geram automaticamente o primeiro registro de entrada.</div>
+    <div class="info-box" id="prodInicialInfo">A quantidade e custo iniciais geram automaticamente o primeiro registro de entrada.</div>
+    <div class="field" id="prodCorrecaoBox" style="display:none">
+      <label>Custo médio (R$)</label><input type="number" id="prodCustoMedio" min="0" step="any" value="0" />
+      <div class="info-box">Corrige o custo médio ponderado do produto. Gera um ajuste no histórico, auditável na Linha do Tempo — a quantidade em estoque não muda.</div>
+    </div>
   </div>
   <div class="modal-foot"><button class="btn-outline" data-close="modalProduto">Cancelar</button><button class="btn-primary" id="btnSalvarProduto">Salvar</button></div>
+</div></div>
+
+<!-- MODAL: Importar condomínios em lote.
+     Só o NOME — os demais campos (CNPJ, endereço, localização...) se
+     preenchem depois, editando cada condomínio. Uma linha colada por
+     condomínio; já cadastrado (nome igual, sem acento/caixa) é sinalizado e
+     pulado, para colar a lista inteira de novo sem duplicar quem já existe. -->
+<div class="overlay" id="modalImportarCondominios"><div class="modal modal-largo">
+  <div class="modal-head"><h3>Importar Condomínios em Lote</h3>
+    <button class="btn-ghost" data-close="modalImportarCondominios">✕</button></div>
+  <div class="modal-body">
+    <div class="field">
+      <label>Nomes dos condomínios (um por linha)</label>
+      <textarea id="impCondominiosTexto" rows="8" style="font-family:monospace;font-size:12px;"
+        placeholder="Cole aqui um nome de condomínio por linha."></textarea>
+      <div class="field-hint">Só o nome é importado — CNPJ, endereço, localização e os demais campos se
+        preenchem depois, editando cada condomínio criado.</div>
+    </div>
+    <div id="impCondominiosResumo" class="muted" style="margin:var(--sp-2) 0;"></div>
+    <div style="overflow-x:auto;max-height:320px;overflow-y:auto;">
+      <table>
+        <thead><tr><th class="num">#</th><th>Nome</th><th>Situação</th></tr></thead>
+        <tbody id="impCondominiosTbody"></tbody>
+      </table>
+    </div>
+  </div>
+  <div class="modal-foot"><button class="btn-outline" data-close="modalImportarCondominios">Cancelar</button>
+    <button class="btn-primary" id="btnImportarCondominiosConfirmar" disabled>Importar</button></div>
+</div></div>
+
+<!-- MODAL: Especialidade (Setorização) -->
+<div class="overlay" id="modalEspecialidade"><div class="modal">
+  <div class="modal-head"><h3 id="modalEspecialidadeTitulo">Nova Especialidade</h3>
+    <button class="btn-ghost" data-close="modalEspecialidade">✕</button></div>
+  <div class="modal-body">
+    <input type="hidden" id="espId" />
+    <div class="field"><label>Setor *</label><select id="espSetor"></select></div>
+    <div class="field"><label>Especialidade *</label>
+      <input type="text" id="espNome" placeholder="Ex.: Produtos de limpeza, AVCB, Impermeabilização" /></div>
+    <div class="info-box">O mesmo nome pode existir em setores diferentes, mas não duas vezes no
+      mesmo setor — acento e caixa não contam como diferença.</div>
+  </div>
+  <div class="modal-foot"><button class="btn-outline" data-close="modalEspecialidade">Cancelar</button>
+    <button class="btn-primary" id="btnSalvarEspecialidade">Salvar</button></div>
+</div></div>
+
+<!-- MODAL: Empresa (Cadastro) -->
+<div class="overlay" id="modalEmpresa"><div class="modal modal-largo">
+  <div class="modal-head"><h3 id="modalEmpresaTitulo">Nova Empresa</h3>
+    <button class="btn-ghost" data-close="modalEmpresa">✕</button></div>
+  <div class="modal-body">
+    <input type="hidden" id="empId" />
+    <div class="field-row">
+      <div class="field"><label>Nome *</label><input type="text" id="empNome" /></div>
+      <div class="field"><label>Nome fantasia</label><input type="text" id="empNomeFantasia" /></div>
+    </div>
+    <div class="field"><label>CNPJ</label><input type="text" id="empCnpj" placeholder="00.000.000/0000-00" /></div>
+    <div class="field-row-3" style="grid-template-columns:2.2fr 0.7fr 1fr;">
+      <div class="field"><label>Endereço</label><input type="text" id="empEndereco" /></div>
+      <div class="field"><label>Número</label><input type="text" id="empNumero" /></div>
+      <div class="field"><label>Complemento</label><input type="text" id="empComplemento" /></div>
+    </div>
+    <div class="field-row-3" style="grid-template-columns:1fr 0.7fr 1.3fr;">
+      <div class="field"><label>Bairro</label><input type="text" id="empBairro" /></div>
+      <div class="field"><label>CEP</label><input type="text" id="empCep" placeholder="00000-000" /></div>
+      <div class="field"><label>Cidade</label><input type="text" id="empCidade" /></div>
+    </div>
+    <div class="field-row">
+      <div class="field" style="max-width:100px;"><label>Estado (UF)</label><input type="text" id="empEstado" maxlength="2" placeholder="SP" /></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Telefone</label><input type="text" id="empTelefone" /></div>
+      <div class="field"><label>E-mails</label>
+        <input type="text" id="empEmails" placeholder="um ou mais, separados por vírgula" /></div>
+    </div>
+
+    <!-- Sim/Não: responder Sim faz a empresa aparecer em Gestão SOS > Parceiros -->
+    <div class="field">
+      <label>É empresa parceira?</label>
+      <div class="radio-row">
+        <label class="radio-opt"><input type="radio" name="empParceira" id="empParceiraSim" value="sim" /> Sim</label>
+        <label class="radio-opt"><input type="radio" name="empParceira" id="empParceiraNao" value="nao" checked /> Não</label>
+      </div>
+      <div class="field-hint">Respondendo <b>Sim</b>, ela passa a aparecer em <b>Gestão SOS › Parceiros</b>.</div>
+    </div>
+
+    <div class="section-title" style="margin-top:var(--sp-4);">
+      Especialidades <span class="muted" id="empEspContagem" style="font-weight:600;"></span>
+    </div>
+    <div class="field-hint">Clique para marcar. Sem limite — uma empresa pode atender vários setores.</div>
+    <div id="empEspecialidades"></div>
+
+    <div class="field" style="margin-top:var(--sp-4);"><label>Observações</label>
+      <textarea id="empObservacoes" rows="3"></textarea></div>
+  </div>
+  <div class="modal-foot"><button class="btn-outline" data-close="modalEmpresa">Cancelar</button>
+    <button class="btn-primary" id="btnSalvarEmpresa">Salvar</button></div>
+</div></div>
+
+<!-- MODAL: Condomínio -->
+<div class="overlay" id="modalCondominio"><div class="modal modal-largo">
+  <div class="modal-head"><h3 id="modalCondominioTitulo">Novo Condomínio</h3>
+    <button class="btn-ghost" data-close="modalCondominio">✕</button></div>
+  <div class="modal-body">
+    <input type="hidden" id="condId" />
+    <div class="field-row">
+      <div class="field"><label>Nome *</label><input type="text" id="condNome" /></div>
+      <div class="field"><label>Nome fantasia</label><input type="text" id="condNomeFantasia" /></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>CNPJ</label><input type="text" id="condCnpj" /></div>
+      <div class="field"><label>Código</label><input type="text" id="condCodigo" /></div>
+    </div>
+    <div class="field">
+      <label>Condomínio ativo?</label>
+      <div class="radio-row">
+        <label class="radio-opt"><input type="radio" name="condAtivo" id="condAtivoSim" value="sim" checked /> Sim</label>
+        <label class="radio-opt"><input type="radio" name="condAtivo" id="condAtivoNao" value="nao" /> Não</label>
+      </div>
+    </div>
+    <div class="section-title" style="margin-top:var(--sp-3);">Endereço</div>
+    <div class="field-row-3">
+      <div class="field"><label>CEP</label><input type="text" id="condCep" /></div>
+      <div class="field"><label>Endereço</label><input type="text" id="condEndereco" /></div>
+      <div class="field"><label>Número</label><input type="text" id="condNumero" /></div>
+    </div>
+    <div class="field-row-3">
+      <div class="field"><label>Complemento</label><input type="text" id="condComplemento" /></div>
+      <div class="field"><label>Bairro</label><input type="text" id="condBairro" /></div>
+      <div class="field"><label>Cidade</label><input type="text" id="condCidade" /></div>
+    </div>
+    <div class="field-row">
+      <div class="field" style="max-width:100px;"><label>UF</label><input type="text" id="condEstado" maxlength="2" style="text-transform:uppercase;" /></div>
+    </div>
+    <div class="field"><label>Localização</label>
+      <select id="condLocalizacao">
+        <option value="">— não informado —</option>
+        <option value="centro">Centro</option>
+        <option value="leste">Leste</option>
+        <option value="oeste">Oeste</option>
+        <option value="norte">Norte</option>
+        <option value="sul">Sul</option>
+        <option value="outra_cidade">Outra cidade</option>
+      </select>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Síndico</label><input type="text" id="condSindico" /></div>
+      <div class="field"><label>Telefone</label><input type="text" id="condTelefone" /></div>
+    </div>
+    <div class="field"><label>E-mail</label><input type="email" id="condEmail"
+      placeholder="destinatário padrão ao enviar orçamentos" /></div>
+    <div class="field"><label>Observações</label><textarea id="condObservacoes" rows="3"></textarea></div>
+  </div>
+  <div class="modal-foot"><button class="btn-outline" data-close="modalCondominio">Cancelar</button>
+    <button class="btn-primary" id="btnSalvarCondominio">Salvar</button></div>
+</div></div>
+
+<!-- MODAL: Gerente (Gestão SOS) -->
+<div class="overlay" id="modalGerente"><div class="modal">
+  <div class="modal-head"><h3 id="modalGerenteTitulo">Novo Gerente</h3>
+    <button class="btn-ghost" data-close="modalGerente">✕</button></div>
+  <div class="modal-body">
+    <input type="hidden" id="gerId" />
+    <div class="field"><label>Nome *</label><input type="text" id="gerNome" /></div>
+    <div class="field-row">
+      <div class="field"><label>Telefone</label><input type="text" id="gerTelefone" /></div>
+      <div class="field"><label>E-mail</label><input type="email" id="gerEmail" /></div>
+    </div>
+    <div class="field"><label>Chave PIX</label><input type="text" id="gerChavePix" /></div>
+    <div class="field"><label>Observações</label><textarea id="gerObservacoes" rows="3"></textarea></div>
+    <div class="info-box">A carteira (condomínios atendidos) é montada em <b>Gestão SOS › Carteiras</b>.</div>
+  </div>
+  <div class="modal-foot"><button class="btn-outline" data-close="modalGerente">Cancelar</button>
+    <button class="btn-primary" id="btnSalvarGerente">Salvar</button></div>
+</div></div>
+
+<!-- MODAL: Suprimento (Gestão SOS > Suprimentos) -->
+<div class="overlay" id="modalSuprimento"><div class="modal">
+  <div class="modal-head"><h3 id="modalSuprimentoTitulo">Novo Suprimento</h3>
+    <button class="btn-ghost" data-close="modalSuprimento">✕</button></div>
+  <div class="modal-body">
+    <input type="hidden" id="supId" />
+    <div class="field-row">
+      <div class="field"><label>Nome *</label><input type="text" id="supNome" /></div>
+      <div class="field"><label>Categoria *</label>
+        <select id="supCategoria">
+          <option value="gestor">Gestor</option>
+          <option value="assistente">Assistente</option>
+          <option value="auxiliar">Auxiliar</option>
+          <option value="vistoriador_predial">Vistoriador predial</option>
+        </select></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Telefone</label><input type="text" id="supTelefone" /></div>
+      <div class="field"><label>E-mail</label><input type="email" id="supEmail" /></div>
+    </div>
+    <div class="field"><label>Chave PIX</label><input type="text" id="supChavePix" /></div>
+    <div class="field"><label>Observações</label><textarea id="supObservacoes" rows="3"></textarea></div>
+  </div>
+  <div class="modal-foot"><button class="btn-outline" data-close="modalSuprimento">Cancelar</button>
+    <button class="btn-primary" id="btnSalvarSuprimento">Salvar</button></div>
+</div></div>
+
+<!-- MODAL: Aquisição (Compras > Aquisições FL) -->
+<div class="overlay" id="modalAquisicao"><div class="modal">
+  <div class="modal-head"><h3 id="modalAquisicaoTitulo">Nova Aquisição</h3>
+    <button class="btn-ghost" data-close="modalAquisicao">✕</button></div>
+  <div class="modal-body">
+    <input type="hidden" id="aqId" />
+    <div class="field">
+      <label>Anexo da Nota Fiscal</label>
+      <div class="foto-row">
+        <div class="foto-preview" id="aqAnexoPreview" title="Clique para ampliar"><span class="foto-placeholder">Sem anexo</span></div>
+        <div class="foto-actions">
+          <input type="file" id="aqAnexoInput" accept="image/jpeg,image/jpg,image/png,image/webp,application/pdf" style="display:none" />
+          <button type="button" class="btn-outline btn-sm" id="btnEscolherAnexo">Selecionar arquivo</button>
+          <button type="button" class="btn-ghost btn-sm" id="btnRemoverAnexo" style="display:none">Remover anexo</button>
+          <div class="muted" style="font-size:11px;">Foto (JPG/PNG/WebP) ou PDF da NF — a foto é salva em tamanho A4.</div>
+        </div>
+      </div>
+    </div>
+    <div class="field"><label>Fornecedor *</label><select id="aqFornecedorId"></select></div>
+    <div class="field"><label>Descrição *</label><input type="text" id="aqDescricao" /></div>
+    <div class="field-row">
+      <div class="field"><label>Nota fiscal</label><input type="text" id="aqNotaFiscal" /></div>
+      <div class="field"><label>Valor (R$) *</label><input type="number" id="aqValor" min="0" step="0.01" /></div>
+      <div class="field"><label>Data da compra *</label><input type="date" id="aqDataCompra" /></div>
+    </div>
+    <div class="field"><label>Observações</label><textarea id="aqObservacoes" rows="3"></textarea></div>
+  </div>
+  <div class="modal-foot"><button class="btn-outline" data-close="modalAquisicao">Cancelar</button>
+    <button class="btn-primary" id="btnSalvarAquisicao">Salvar</button></div>
+</div></div>
+
+<!-- MODAL: Nova Ordem de Orçamento (Compras > Orçamentos) — o resto do fluxo
+     (solicitar empresas, propostas, enviar cliente, aprovar) acontece dentro
+     de #modalDetalheOrdem, aberto ao clicar numa ordem já criada. -->
+<div class="overlay" id="modalOrdemOrcamento"><div class="modal">
+  <div class="modal-head"><h3>Nova Ordem de Orçamento</h3>
+    <button class="btn-ghost" data-close="modalOrdemOrcamento">✕</button></div>
+  <div class="modal-body">
+    <div class="field"><label>Condomínio *</label><select id="ordCondominioId"></select></div>
+    <div class="field"><label>Descrição *</label><input type="text" id="ordDescricao" /></div>
+    <div class="field"><label>Observações</label><textarea id="ordObservacoes" rows="3"></textarea></div>
+  </div>
+  <div class="modal-foot"><button class="btn-outline" data-close="modalOrdemOrcamento">Cancelar</button>
+    <button class="btn-primary" id="btnSalvarOrdemOrcamento">Criar ordem</button></div>
+</div></div>
+
+<!-- MODAL: Detalhe da Ordem — a "ordem de serviço" descrita pelo usuário:
+     info editável, status, e a tabela de propostas com todas as ações
+     (solicitar mais empresas, valor/anexo de cada proposta, recomendar,
+     enviar ao cliente, aprovar). -->
+<div class="overlay" id="modalDetalheOrdem"><div class="modal modal-largo">
+  <div class="modal-head"><h3 id="detOrdemTitulo">Ordem</h3>
+    <button class="btn-ghost" data-close="modalDetalheOrdem">✕</button></div>
+  <div class="modal-body">
+    <input type="hidden" id="detOrdemId" />
+    <div class="field-row">
+      <div class="field"><label>Condomínio</label><div id="detOrdemCondominio" class="field-static"></div></div>
+      <div class="field"><label>Status</label><div id="detOrdemStatusPill"></div></div>
+    </div>
+    <div class="field"><label>Descrição</label><input type="text" id="detOrdemDescricao" /></div>
+    <div class="field"><label>Informações adicionais</label><textarea id="detOrdemObservacoes" rows="3"></textarea></div>
+    <button class="btn-outline btn-sm" id="btnSalvarInfoOrdem">Salvar informações</button>
+
+    <div id="detOrdemDeclinadoAviso" class="info-box" style="display:none;margin-top:var(--sp-3);">
+      Sem resposta há mais de 25 dias — classificada automaticamente como <b>Declinado</b>.
+      <button class="btn-outline btn-sm" id="btnReativarOrdem" style="margin-left:8px;">Reativar</button>
+    </div>
+
+    <div class="section-title" style="margin-top:var(--sp-4);">Propostas</div>
+    <div class="field-hint">Ordenadas do mais caro pro mais barato. Marque uma como recomendada mesmo que
+      não seja a mais barata — é ela que aparece destacada no e-mail para o cliente.</div>
+    <div class="toolbar" style="padding:0;margin:var(--sp-2) 0;">
+      <button class="btn-outline btn-sm" id="btnSolicitarEmpresas">📨 Solicitar para empresas</button>
+      <button class="btn-primary btn-sm" id="btnEnviarCliente">✉ Enviar para o cliente</button>
+    </div>
+    <div style="overflow-x:auto;">
+      <table>
+        <thead><tr><th>Empresa</th><th class="num">Valor</th><th>Anexo</th><th>Recomendada</th><th>Ações</th></tr></thead>
+        <tbody id="detPropostasTbody"></tbody>
+      </table>
+    </div>
+
+    <div class="section-title">Andamento</div>
+    <div id="detOrdemAndamento"></div>
+  </div>
+</div></div>
+
+<!-- MODAL: seleção de empresas para solicitar orçamento — agrupadas por
+     categoria (especialidade), destacando quem é parceiro. -->
+<div class="overlay" id="modalSolicitarEmpresas"><div class="modal">
+  <div class="modal-head"><h3>Solicitar orçamento para empresas</h3>
+    <button class="btn-ghost" data-close="modalSolicitarEmpresas">✕</button></div>
+  <div class="modal-body">
+    <input type="text" id="solicEmpresaBusca" placeholder="Buscar empresa ou categoria..."
+      style="width:100%;margin-bottom:var(--sp-3);" />
+    <div id="solicEmpresasLista" style="max-height:52vh;overflow-y:auto;"></div>
+  </div>
+  <div class="modal-foot">
+    <span class="muted" id="solicResumo" style="margin-right:auto;">0 selecionada(s)</span>
+    <button class="btn-outline" data-close="modalSolicitarEmpresas">Cancelar</button>
+    <button class="btn-outline" id="btnAbrirOutlookSolicitar" title="Abre o Outlook com o e-mail pronto — não marca a ordem como solicitada, é só uma cópia pra mandar à mão">✉ Abrir no Outlook</button>
+    <button class="btn-primary" id="btnConfirmarSolicitar">Enviar solicitação</button>
+  </div>
+</div></div>
+
+<!-- MODAL: enviar propostas para o cliente (reenviável — acumula) -->
+<div class="overlay" id="modalEnviarCliente"><div class="modal">
+  <div class="modal-head"><h3>Enviar propostas para o cliente</h3>
+    <button class="btn-ghost" data-close="modalEnviarCliente">✕</button></div>
+  <div class="modal-body">
+    <p class="field-hint">Envia todas as propostas já respondidas (com PDF anexado), ordenadas do mais
+      caro pro mais barato, com a recomendada pela FL destacada. Pode enviar de novo depois — as
+      propostas novas entram no mesmo e-mail, sem perder as anteriores.</p>
+    <div class="field"><label>E-mail do cliente</label><input type="email" id="envClienteEmail" /></div>
+    <div class="field"><label>Mensagem adicional (opcional)</label><textarea id="envClienteMensagem" rows="3"></textarea></div>
+  </div>
+  <div class="modal-foot"><button class="btn-outline" data-close="modalEnviarCliente">Cancelar</button>
+    <button class="btn-outline" id="btnAbrirOutlookEnviarCliente" title="Abre o Outlook com o e-mail pronto — o(s) PDF(s) precisam ser anexados à mão, mailto: não suporta anexo">✉ Abrir no Outlook</button>
+    <button class="btn-primary" id="btnConfirmarEnviarCliente">Enviar</button></div>
+</div></div>
+
+<!-- MODAL: configuração de SMTP — só superadministrador (ver
+     Api::assertPodeEditarLogoFl, reaproveitado pra esta config também). -->
+<div class="overlay" id="modalConfigEmail"><div class="modal">
+  <div class="modal-head"><h3>Configurar envio de e-mail</h3>
+    <button class="btn-ghost" data-close="modalConfigEmail">✕</button></div>
+  <div class="modal-body">
+    <p class="field-hint">Usado para solicitar orçamentos, enviar propostas ao cliente e avisar a
+      empresa aprovada. Gmail/Outlook pedem uma "senha de app", não a senha normal da conta.</p>
+    <div class="field-row">
+      <div class="field"><label>Servidor SMTP (host)</label><input type="text" id="cfgEmailHost" placeholder="smtp.gmail.com" /></div>
+      <div class="field"><label>Porta</label><input type="number" id="cfgEmailPort" placeholder="587" /></div>
+    </div>
+    <div class="field"><label>Usuário</label><input type="text" id="cfgEmailUsername" /></div>
+    <div class="field"><label>Senha <span class="muted" id="cfgEmailSenhaAtual"></span></label>
+      <input type="password" id="cfgEmailPassword" placeholder="deixe em branco para manter a atual" /></div>
+    <div class="field-row">
+      <div class="field"><label>E-mail do remetente</label><input type="email" id="cfgEmailFromEmail" /></div>
+      <div class="field"><label>Nome do remetente</label><input type="text" id="cfgEmailFromName" /></div>
+    </div>
+    <div class="field" style="display:flex;align-items:center;gap:8px;">
+      <input type="checkbox" id="cfgEmailUseTls" style="width:auto;" checked />
+      <label for="cfgEmailUseTls" style="margin:0;">Usar TLS (recomendado — funciona nas portas 587 e 465)</label>
+    </div>
+
+    <div class="section-title" style="margin-top:var(--sp-4);">Testar envio</div>
+    <div class="field-hint">Salve a configuração acima antes de testar — o teste usa o que já está gravado,
+      não o que ainda não foi salvo neste formulário.</div>
+    <div class="field-row">
+      <div class="field" style="flex:1;"><label>Enviar teste para</label><input type="email" id="cfgEmailTesteDestino" /></div>
+      <div class="field" style="flex:0 0 auto;align-self:flex-end;">
+        <button class="btn-outline" id="btnTestarConfigEmail">✉ Enviar e-mail de teste</button>
+      </div>
+    </div>
+  </div>
+  <div class="modal-foot"><button class="btn-outline" data-close="modalConfigEmail">Cancelar</button>
+    <button class="btn-primary" id="btnSalvarConfigEmail">Salvar</button></div>
+</div></div>
+
+<!-- MODAL: Pagamento — NF + parcelas (Compras > Acompanhamento de pagamentos) -->
+<div class="overlay" id="modalPagamento"><div class="modal modal-largo">
+  <div class="modal-head"><h3 id="modalPagamentoTitulo">Nova NF</h3>
+    <button class="btn-ghost" data-close="modalPagamento">✕</button></div>
+  <div class="modal-body">
+    <input type="hidden" id="pagId" />
+    <div class="field"><label>Aquisição *</label><select id="pagAquisicaoId"></select></div>
+    <div class="field-row">
+      <div class="field"><label>Nota fiscal *</label><input type="text" id="pagNotaFiscal" /></div>
+      <div class="field"><label>Valor total (R$) *</label><input type="number" id="pagValorTotal" min="0" step="0.01" /></div>
+      <div class="field"><label>Data de emissão *</label><input type="date" id="pagDataEmissao" /></div>
+    </div>
+    <div class="field"><label>Observações</label><textarea id="pagObservacoes" rows="2"></textarea></div>
+
+    <div class="section-title">Parcelas <span class="muted" id="pagParcelasContagem" style="font-weight:600;"></span></div>
+    <div class="field-hint">Parcelas já pagas (marcadas em Acompanhamento de pagamentos) não podem ser
+      removidas nem ter o valor/vencimento alterado aqui.</div>
+    <div style="overflow-x:auto;">
+      <table>
+        <thead><tr><th class="num">#</th><th class="num">Valor</th><th>Vencimento</th><th>Situação</th><th></th></tr></thead>
+        <tbody id="pagParcelasTbody"></tbody>
+      </table>
+    </div>
+    <button class="btn-outline btn-sm" id="btnAdicionarParcela" style="margin-top:var(--sp-2);">＋ Adicionar parcela</button>
+  </div>
+  <div class="modal-foot"><button class="btn-outline" data-close="modalPagamento">Cancelar</button>
+    <button class="btn-primary" id="btnSalvarPagamento">Salvar</button></div>
+</div></div>
+
+<!-- MODAL: Parcelas de um pagamento — marcar pago/reabrir (Compras > Acompanhamento de pagamentos) -->
+<div class="overlay" id="modalParcelas"><div class="modal">
+  <div class="modal-head"><h3 id="modalParcelasTitulo">Parcelas</h3>
+    <button class="btn-ghost" data-close="modalParcelas">✕</button></div>
+  <div class="modal-body">
+    <div id="parcelasLista"></div>
+  </div>
+  <div class="modal-foot"><button class="btn-primary" data-close="modalParcelas">Fechar</button></div>
+</div></div>
+
+<!-- MODAL: Carteira de um gerente (Gestão SOS) -->
+<div class="overlay" id="modalCarteira"><div class="modal modal-largo">
+  <div class="modal-head"><h3 id="modalCarteiraTitulo">Carteira</h3>
+    <button class="btn-ghost" data-close="modalCarteira">✕</button></div>
+  <div class="modal-body">
+    <div class="section-title">Condomínios <span class="muted" id="carteiraContagem" style="font-weight:600;"></span></div>
+    <div class="field-hint">Marque os condomínios que fazem parte desta carteira. Digite para filtrar pela lista.</div>
+    <input type="search" id="carteiraBusca" class="filtro-select" placeholder="Buscar condomínio...">
+    <div id="carteiraCondominios" class="carteira-lista"></div>
+  </div>
+  <div class="modal-foot"><button class="btn-outline" data-close="modalCarteira">Cancelar</button>
+    <button class="btn-primary" id="btnSalvarCarteira">Salvar</button></div>
+</div></div>
+
+<!-- MODAL: Serviço (Gestão SOS > Serviços) -->
+<div class="overlay" id="modalServico"><div class="modal modal-largo">
+  <div class="modal-head"><h3 id="modalServicoTitulo">Novo Serviço</h3>
+    <button class="btn-ghost" data-close="modalServico">✕</button></div>
+  <div class="modal-body">
+    <input type="hidden" id="srvId" />
+    <div class="field-row">
+      <div class="field"><label>Código</label><input type="text" id="srvCodigo" /></div>
+      <div class="field"><label>Data de referência (mês/ano) *</label>
+        <input type="month" id="srvDataReferencia" /></div>
+    </div>
+    <div class="field"><label>Condomínio *</label><select id="srvCondominioId"></select></div>
+    <div class="field-row">
+      <div class="field"><label>Gerente</label><select id="srvGerenteId"></select></div>
+      <div class="field"><label>Parceiro</label><select id="srvParceiroId"></select></div>
+    </div>
+    <div class="field-row-3">
+      <div class="field"><label>Venda (R$) *</label><input type="number" id="srvVenda" min="0" step="0.01" /></div>
+      <div class="field"><label>Porcentagem (%) *</label><input type="number" id="srvPorcentagem" min="0" max="100" step="0.01" /></div>
+      <div class="field"><label>Comissão prevista</label>
+        <div class="field-hint" id="srvComissaoPrevista" style="font-weight:700;font-size:14px;">R$ 0,00</div></div>
+    </div>
+    <div class="field-row">
+      <div class="field">
+        <label>Pago?</label>
+        <div class="radio-row">
+          <label class="radio-opt"><input type="radio" name="srvPago" id="srvPagoSim" value="sim" /> Sim</label>
+          <label class="radio-opt"><input type="radio" name="srvPago" id="srvPagoNao" value="nao" checked /> Não</label>
+        </div>
+      </div>
+      <div class="field"><label>Data de pagamento <span id="srvDataPagamentoObrig" style="display:none;">*</span></label>
+        <input type="date" id="srvDataPagamento" /></div>
+    </div>
+    <div class="field-hint">Só entra na distribuição de comissão e no fechamento do mês depois de marcado como pago.</div>
+    <div class="field"><label>Observações</label><textarea id="srvObservacoes" rows="3"></textarea></div>
+  </div>
+  <div class="modal-foot"><button class="btn-outline" data-close="modalServico">Cancelar</button>
+    <button class="btn-primary" id="btnSalvarServico">Salvar</button></div>
+</div></div>
+
+<!-- MODAL: filtro do relatório impresso de Serviços — parceiro específico e
+     intervalo de meses (o filtro da tela é só um mês por vez; o relatório
+     impresso precisa somar vários meses de um parceiro, ex.: fechar o
+     trimestre de um único parceiro). -->
+<div class="overlay" id="modalImprimirServicos"><div class="modal">
+  <div class="modal-head"><h3>Imprimir relatório de Serviços</h3>
+    <button class="btn-ghost" data-close="modalImprimirServicos">✕</button></div>
+  <div class="modal-body">
+    <div class="field"><label>Parceiro</label><select id="impSrvRelParceiro"></select>
+      <div class="field-hint">Deixe em "Todos" para incluir qualquer parceiro (ou nenhum).</div></div>
+    <div class="field-row">
+      <div class="field"><label>Mês de referência — de</label><input type="month" id="impSrvRelDe" /></div>
+      <div class="field"><label>até</label><input type="month" id="impSrvRelAte" /></div>
+    </div>
+    <div class="field-hint">Deixe os dois em branco para incluir todos os meses.</div>
+  </div>
+  <div class="modal-foot"><button class="btn-outline" data-close="modalImprimirServicos">Cancelar</button>
+    <button class="btn-primary" id="btnGerarRelatorioServicos">🖨 Gerar e imprimir</button></div>
+</div></div>
+
+<!-- MODAL: Importar Serviços em lote (colar do Excel) -->
+<div class="overlay" id="modalImportarServicos"><div class="modal modal-largo modal-import-lote">
+  <div class="modal-head"><h3>Importar Serviços em Lote</h3>
+    <button class="btn-ghost" data-close="modalImportarServicos">✕</button></div>
+  <div class="modal-body">
+    <div class="field">
+      <label>Quais colunas você vai colar? <span class="muted" style="font-weight:400;">clique na ordem em que elas aparecem na sua colagem</span></label>
+      <div class="chip-row" id="impServicosColunasConfig"></div>
+      <div class="field-hint" id="impServicosColunasHint"></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label id="impServicosParceiroLabel">Parceiro</label>
+        <select id="impServicosParceiro"></select></div>
+      <div class="field"><label>Data de referência (aplicado a todas as linhas) *</label>
+        <input type="month" id="impServicosDataReferencia" /></div>
+    </div>
+    <div class="field">
+      <label>Colar do Excel</label>
+      <textarea id="impServicosTexto" rows="6" style="font-family:monospace;font-size:12px;"
+        placeholder="Cole aqui as colunas copiadas do Excel, uma linha por serviço."></textarea>
+      <div class="field-hint">Selecione o intervalo no Excel, copie (Ctrl+C) e cole aqui (Ctrl+V) — as colunas vêm
+        separadas automaticamente. Porcentagem em branco usa a porcentagem padrão de <b>Gestão SOS › Configurações</b>.</div>
+    </div>
+
+    <div id="impServicosPendenciasLote"></div>
+
+    <div class="imp-resumo-bar">
+      <div id="impServicosResumo" class="muted"></div>
+      <label class="check-inline"><input type="checkbox" id="impServicosSoPendencias" /> Mostrar só as linhas com pendência</label>
+    </div>
+    <div class="modal-table-wrap" id="impServicosTableWrap">
+      <table>
+        <thead id="impServicosThead"></thead>
+        <tbody id="impServicosTbody"></tbody>
+      </table>
+    </div>
+  </div>
+  <div class="modal-foot"><button class="btn-outline" data-close="modalImportarServicos">Cancelar</button>
+    <button class="btn-primary" id="btnImportarServicosConfirmar" disabled>Importar</button></div>
+</div></div>
+
+<!-- MODAL: Tipo de serviço (Gestão de Prazos) -->
+<div class="overlay" id="modalTipoServico"><div class="modal">
+  <div class="modal-head"><h3 id="modalTipoServicoTitulo">Novo Tipo de Serviço</h3>
+    <button class="btn-ghost" data-close="modalTipoServico">✕</button></div>
+  <div class="modal-body">
+    <input type="hidden" id="tsId" />
+    <div class="field"><label>Nome *</label>
+      <input type="text" id="tsNome" placeholder="Ex.: Manutenção de elevador, AVCB, Dedetização" /></div>
+    <div class="field-row">
+      <div class="field"><label>Prazo de vencimento (meses) *</label>
+        <input type="number" id="tsPrazoMeses" min="1" step="1" value="12" /></div>
+      <div class="field"><label>Cor de identificação</label>
+        <input type="color" id="tsCor" value="#2e6ba6" /></div>
+    </div>
+    <div class="info-box">O vencimento de cada vínculo é calculado como
+      <b>data da última renovação + este prazo</b> (1 mês = 30 dias).</div>
+  </div>
+  <div class="modal-foot"><button class="btn-outline" data-close="modalTipoServico">Cancelar</button>
+    <button class="btn-primary" id="btnSalvarTipoServico">Salvar</button></div>
+</div></div>
+
+<!-- MODAL: Vínculo de serviço (condomínio × tipo de serviço) -->
+<div class="overlay" id="modalVinculo"><div class="modal">
+  <div class="modal-head"><h3 id="modalVinculoTitulo">Novo Vínculo</h3>
+    <button class="btn-ghost" data-close="modalVinculo">✕</button></div>
+  <div class="modal-body">
+    <input type="hidden" id="vinId" />
+    <div class="field-row">
+      <div class="field"><label>Condomínio *</label><select id="vinCondominioId"></select></div>
+      <div class="field"><label>Tipo de serviço *</label><select id="vinTipoServicoId"></select></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Última renovação *</label><input type="date" id="vinDataUltimaRenovacao" /></div>
+      <div class="field"><label>Empresa contratada</label><input type="text" id="vinEmpresaContratada" /></div>
+    </div>
+    <div class="field"><label>Observações</label><textarea id="vinObservacoes" rows="3"></textarea></div>
+  </div>
+  <div class="modal-foot"><button class="btn-outline" data-close="modalVinculo">Cancelar</button>
+    <button class="btn-primary" id="btnSalvarVinculo">Salvar</button></div>
+</div></div>
+
+<!-- MODAL: Renovar serviço -->
+<div class="overlay" id="modalRenovar"><div class="modal">
+  <div class="modal-head"><h3>Renovar serviço</h3><button class="btn-ghost" data-close="modalRenovar">✕</button></div>
+  <div class="modal-body">
+    <input type="hidden" id="renServicoCondominioId" />
+    <div class="info-box" id="renResumo"></div>
+    <div class="field-row">
+      <div class="field"><label>Data da renovação *</label><input type="date" id="renDataRenovacao" /></div>
+      <div class="field"><label>Empresa contratada</label><input type="text" id="renEmpresaContratada" /></div>
+    </div>
+    <div class="field"><label>Observações</label><textarea id="renObservacoes" rows="3"></textarea></div>
+  </div>
+  <div class="modal-foot"><button class="btn-outline" data-close="modalRenovar">Cancelar</button>
+    <button class="btn-primary" id="btnSalvarRenovacao">Registrar renovação</button></div>
+</div></div>
+
+<!-- MODAL: Foto ampliada — clicar numa miniatura (tabela de Produtos ou o
+     preview do cadastro) busca a imagem PRINCIPAL (maior que a miniatura,
+     que é só 200px) e mostra grande, pra dar pra ver o produto de verdade. -->
+<div class="overlay" id="modalFotoAmpliada"><div class="modal modal-foto">
+  <div class="modal-head"><h3 id="fotoAmpliadaTitulo">Foto do produto</h3><button class="btn-ghost" data-close="modalFotoAmpliada">✕</button></div>
+  <div class="modal-body foto-ampliada-body" id="fotoAmpliadaCorpo"></div>
 </div></div>
 
 <!-- MODAL: Entrada -->
@@ -634,6 +2074,31 @@
   <div class="modal-foot"><button class="btn-outline" data-close="modalEntrada">Cancelar</button><button class="btn-primary" id="btnSalvarEntrada">Registrar</button></div>
 </div></div>
 
+<!-- MODAL: Entrada em Massa -->
+<div class="overlay" id="modalEntradaMassa"><div class="modal modal-wide">
+  <div class="modal-head"><h3>↓ Entrada em Massa</h3><button class="btn-ghost" data-close="modalEntradaMassa">✕</button></div>
+  <div class="modal-body">
+    <div class="info-box">Preencha a quantidade só dos produtos recebidos nesta entrega — os demais ficam em branco e não são alterados. Fornecedor, NF, data e observação valem para todos os itens preenchidos.</div>
+    <div class="field-row">
+      <div class="field"><label>Fornecedor *</label><input type="text" id="emFornecedor" /></div>
+      <div class="field"><label>Nº da Nota Fiscal *</label><input type="text" id="emNF" /></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Data</label><input type="datetime-local" id="emData" /></div>
+      <div class="field"><label>Observações</label><input type="text" id="emObs" /></div>
+    </div>
+    <div class="field"><label>Buscar produto</label><input type="text" id="emBusca" placeholder="Filtrar pela lista abaixo..." /></div>
+    <div class="modal-table-wrap">
+      <table>
+        <thead><tr><th>Produto</th><th class="num">Estoque atual</th><th class="num">Qtd. recebida</th><th class="num">Preço unit. (R$)</th></tr></thead>
+        <tbody id="emTbody"></tbody>
+      </table>
+    </div>
+    <div class="info-box" id="emInfoBox"></div>
+  </div>
+  <div class="modal-foot"><button class="btn-outline" data-close="modalEntradaMassa">Cancelar</button><button class="btn-primary" id="btnSalvarEntradaMassa">Registrar entradas</button></div>
+</div></div>
+
 <!-- MODAL: Saída -->
 <div class="overlay" id="modalSaida"><div class="modal">
   <div class="modal-head"><h3>↑ Baixa de Produtos</h3><button class="btn-ghost" data-close="modalSaida">✕</button></div>
@@ -647,6 +2112,34 @@
     <div class="info-box" id="saiInfoBox">Selecione um produto para ver o estoque disponível.</div>
   </div>
   <div class="modal-foot"><button class="btn-outline" data-close="modalSaida">Cancelar</button><button class="btn-primary" id="btnSalvarSaida">Registrar</button></div>
+</div></div>
+
+<!-- MODAL: Baixa em Massa — um departamento pede vários materiais no mesmo
+     dia e nem sempre consegue abrir a requisição; aqui o almoxarifado lança
+     tudo de uma vez, com o departamento e a data do pedido valendo para
+     todos os itens (o mesmo desenho da Entrada em Massa). -->
+<div class="overlay" id="modalBaixaMassa"><div class="modal modal-wide">
+  <div class="modal-head"><h3>↑ Baixa em Massa por Departamento</h3><button class="btn-ghost" data-close="modalBaixaMassa">✕</button></div>
+  <div class="modal-body">
+    <div class="info-box">Preencha a quantidade só dos materiais entregues a este departamento — os demais ficam em branco e não são alterados. Departamento, data do pedido, solicitante e observação valem para todos os itens preenchidos.</div>
+    <div class="field-row">
+      <div class="field"><label>Departamento *</label><select id="bmDepartamento"></select><div class="muted" id="bmEncarregadoHint"></div></div>
+      <div class="field"><label>Data do pedido *</label><input type="datetime-local" id="bmData" /></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Solicitante</label><input type="text" id="bmSolicitante" list="listaSolicitantes" /></div>
+      <div class="field"><label>Observações</label><input type="text" id="bmObs" /></div>
+    </div>
+    <div class="field"><label>Buscar material</label><input type="text" id="bmBusca" placeholder="Filtrar pela lista abaixo..." /></div>
+    <div class="modal-table-wrap">
+      <table>
+        <thead><tr><th></th><th>Material</th><th class="num">Disponível</th><th class="num">Qtd. a baixar</th><th class="num">Valor estimado</th></tr></thead>
+        <tbody id="bmTbody"></tbody>
+      </table>
+    </div>
+    <div class="info-box" id="bmInfoBox"></div>
+  </div>
+  <div class="modal-foot"><button class="btn-outline" data-close="modalBaixaMassa">Cancelar</button><button class="btn-primary" id="btnSalvarBaixaMassa">Registrar baixas</button></div>
 </div></div>
 
 <!-- MODAL: Correção -->
@@ -725,8 +2218,12 @@
 
 <!-- MODAL: Nova requisição -->
 <div class="overlay" id="modalRequisicao"><div class="modal modal-wide">
-  <div class="modal-head"><h3>＋ Nova requisição</h3><button class="btn-ghost" data-close="modalRequisicao">✕</button></div>
+  <div class="modal-head"><h3 id="modalRequisicaoTitulo">＋ Nova requisição</h3><button class="btn-ghost" data-close="modalRequisicao">✕</button></div>
   <div class="modal-body">
+    <div class="info-box" id="reqAvisoJanelaFechada" style="display:none;background:var(--warning-soft);border-color:var(--warning);">
+      ⚠ A janela de pedidos está fechada. Este lançamento é uma exceção — use para registrar o pedido de
+      quem esqueceu de pedir no prazo.
+    </div>
     <div class="field" id="reqDepartamentoBox" style="display:none;">
       <label>Departamento *</label>
       <select id="reqDepartamento"></select>
@@ -735,7 +2232,12 @@
     <div class="info-box" id="reqDepartamentoFixo"></div>
 
     <div class="field-row" style="align-items:end;">
-      <div class="field"><label>Material</label><select id="reqProduto"></select></div>
+      <div class="field"><label>Material</label>
+        <div class="campo-com-foto">
+          <div class="thumb-cell" id="reqProdutoFoto"><span class="thumb-placeholder"></span></div>
+          <select id="reqProduto"></select>
+        </div>
+      </div>
       <div class="field" style="max-width:150px;"><label>Quantidade</label>
         <input type="number" id="reqQtd" min="0.0001" step="any" /></div>
       <div class="field" style="max-width:130px;"><label>&nbsp;</label>
@@ -745,7 +2247,7 @@
 
     <div class="panel" style="margin-top:var(--sp-3);">
       <table>
-        <thead><tr><th>Material</th><th class="num">Qtd.</th><th class="num">Disponível</th><th></th></tr></thead>
+        <thead><tr><th></th><th>Material</th><th class="num">Qtd.</th><th class="num">Disponível</th><th></th></tr></thead>
         <tbody id="reqItensTbody"></tbody>
       </table>
     </div>
@@ -775,6 +2277,35 @@
   </div>
   <div class="modal-foot"><button class="btn-outline" data-close="modalDecisao">Voltar</button>
     <button class="btn-primary" id="btnConfirmarDecisao">Confirmar</button></div>
+</div></div>
+
+<!-- MODAL: Abrir janela de requisições (período em que o sistema aceita pedidos) -->
+<div class="overlay" id="modalJanela"><div class="modal">
+  <div class="modal-head"><h3>Abrir janela de requisições</h3><button class="btn-ghost" data-close="modalJanela">✕</button></div>
+  <div class="modal-body">
+    <div class="field-row">
+      <div class="field"><label>Abertura *</label>
+        <input type="datetime-local" id="janelaAbertura" /></div>
+      <div class="field"><label>Fechamento *</label>
+        <input type="datetime-local" id="janelaFechamento" /></div>
+    </div>
+    <div class="field"><label>Observação</label>
+      <input type="text" id="janelaObs" placeholder="Ex.: pedidos de setembro" /></div>
+    <div class="warn-box">
+      Ao chegar o <b>fechamento</b>, o sistema para de aceitar pedidos <b>sozinho</b> — ninguém
+      precisa desligar nada. Para voltar a receber requisições, abra uma nova janela.
+    </div>
+  </div>
+  <div class="modal-foot"><button class="btn-outline" data-close="modalJanela">Cancelar</button>
+    <button class="btn-primary" id="btnSalvarJanela">Abrir janela</button></div>
+</div></div>
+
+<!-- MODAL: Confirmação do pedido enviado. É um modal, e não só um toast, para
+     o solicitante ter o número do pedido na tela até fechar por conta. -->
+<div class="overlay" id="modalPedidoOk"><div class="modal">
+  <div class="modal-head"><h3>Pedido realizado com sucesso</h3><button class="btn-ghost" data-close="modalPedidoOk">✕</button></div>
+  <div class="modal-body" id="pedidoOkCorpo"></div>
+  <div class="modal-foot"><button class="btn-primary" data-close="modalPedidoOk">Entendi</button></div>
 </div></div>
 
 <!-- MODAL: Usuário -->

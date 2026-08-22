@@ -24,6 +24,15 @@ export function fmtDateTimeBR(msOrIso) {
   const d = typeof msOrIso === 'number' ? new Date(msOrIso) : new Date(msOrIso);
   return d.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
+// "2026-08" (o formato que <input type="month"> grava, e por isso o que os
+// registros guardam em dataReferencia) → "08/2026", o padrão BR — nunca o
+// "YYYY-MM" cru do input, que lê como data americana pra quem só olha o
+// relatório impresso.
+export function fmtMesAnoBR(yyyymm) {
+  if (!yyyymm || yyyymm.length !== 7) return '—';
+  const [ano, mes] = yyyymm.split('-');
+  return `${mes}/${ano}`;
+}
 export function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
@@ -84,4 +93,54 @@ export function nowLocalInputValue() {
   const d = new Date();
   d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
   return d.toISOString().slice(0, 16);
+}
+
+/* Carimbo de data/hora para NOME DE ARQUIVO, no fuso do computador.
+
+   `new Date().toISOString()` devolve UTC: em Brasília (UTC-3), das 21h à
+   meia-noite ele já virou o dia seguinte — um backup tirado às 21h58 do dia
+   13 saía nomeado com a data do dia 14. Aqui a conta é feita com os
+   getters locais (getFullYear/getMonth/...), que respeitam o fuso da
+   máquina, e NUNCA passando por toISOString().
+
+   Isto vale só para nomear arquivo. As datas gravadas DENTRO do banco e do
+   backup continuam em UTC (ISO 8601 com Z), que é a forma correta de
+   armazenar — a tela converte para o fuso local na hora de exibir. */
+function doisDigitos(n) {
+  return String(n).padStart(2, '0');
+}
+export function hojeLocalArquivo() {
+  const d = new Date();
+  return `${d.getFullYear()}-${doisDigitos(d.getMonth() + 1)}-${doisDigitos(d.getDate())}`;
+}
+export function agoraLocalArquivo() {
+  const d = new Date();
+  return `${hojeLocalArquivo()}_${doisDigitos(d.getHours())}h${doisDigitos(d.getMinutes())}`;
+}
+
+/* Ordem da lista de posição de estoque: primeiro a curva (A, depois B,
+   depois C), e DENTRO de cada curva por nome, em ordem alfabética.
+
+   A classe ABC continua sendo calculada por valor acumulado decrescente
+   (isso é a definição da curva, no backend) — o que muda aqui é só como a
+   lista é APRESENTADA. Quem lê a folha impressa procura um material pelo
+   nome dentro da curva dele, não pelo valor: ordenar por valor obriga a
+   varrer a coluna inteira para achar "Papel A4".
+
+   localeCompare com 'pt-BR' é o que faz acento ordenar junto da letra sem
+   acento (Ó ao lado de O), em vez de ir para o fim da lista como
+   aconteceria numa comparação de código de caractere. */
+const ORDEM_CURVA = { A: 0, B: 1, C: 2 };
+export function porCurvaDepoisNome(a, b) {
+  const ca = ORDEM_CURVA[a.classe] ?? 9;
+  const cb = ORDEM_CURVA[b.classe] ?? 9;
+  return ca - cb || a.name.localeCompare(b.name, 'pt-BR');
+}
+
+/* Texto para BUSCA: sem acento e em minúsculas, para "alcool" encontrar
+   "Álcool 70% 1L" e "lampada" encontrar "Lâmpada LED 9W" — ninguém digita
+   acento em campo de filtro. NFD separa a letra do sinal de acento, e o
+   replace descarta os sinais (U+0300–U+036F, a faixa dos diacríticos). */
+export function paraBusca(t) {
+  return String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 }

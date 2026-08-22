@@ -16,6 +16,19 @@ struct Product {
   double qty = 0;
   double avgCost = 0;
   std::string createdAt;  // ISO 8601
+  // Identificador de estoque no formato CMT###### — gerado automaticamente
+  // (nunca pelo chamador) e permanente: uma vez atribuído, nunca muda nem é
+  // reciclado. Ver inventory_engine::nextSku.
+  std::string sku;
+  // Caminhos RELATIVOS (à pasta onde o executável está, nunca absolutos —
+  // ver bridge/src/images.rs) da foto principal (≤800×800) e da miniatura
+  // (≤200×200), sempre .webp. "" = produto sem foto (opcional, sempre foi
+  // e continua sendo). O core-cpp nunca lê o arquivo em si, só guarda a
+  // referência — quem decodifica/gera a imagem é o módulo Rust; manter
+  // essa fronteira é o que permite trocar o armazenamento por nuvem no
+  // futuro sem mexer no núcleo de negócio.
+  std::string imagePath;
+  std::string thumbnailPath;
 };
 
 enum class MovementType { Entrada, Saida, Ajuste };
@@ -37,6 +50,9 @@ struct Movement {
   std::string requester;
   std::string obs;
   std::string date;       // data do lançamento (pode ser retroativa)
+  // Só usado num ajuste: correção manual do custo médio, opcional. 0 = o
+  // ajuste não mexe no custo (comportamento padrão, igual sempre foi).
+  double newAvgCost = 0;
   double resultingQty = 0;
   double resultingAvgCost = 0;
   std::string createdAt;  // timestamp real de criação — desempate cronológico quando `date` empata

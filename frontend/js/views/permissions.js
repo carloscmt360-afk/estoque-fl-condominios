@@ -2,6 +2,7 @@ import { api, errorText } from '../api.js';
 import { escapeHtml, uid, nowIso, fmtNum } from '../format.js';
 import { openModal, closeModal } from '../components/modal.js';
 import { toast } from '../components/toast.js';
+import { enableRowSelection } from '../components/tableTools.js';
 
 // Grupos de permissão e o vínculo com os departamentos.
 //
@@ -31,6 +32,8 @@ export async function initPermissions() {
     wired = true;
     document.getElementById('btnNovoGrupo').addEventListener('click', () => openGroupModal());
     document.getElementById('btnSalvarGrupo').addEventListener('click', saveGroup);
+    enableRowSelection(document.getElementById('groupsTbody'));
+    enableRowSelection(document.getElementById('deptGroupsTbody'));
   }
   await reload();
 }

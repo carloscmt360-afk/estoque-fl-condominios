@@ -27,6 +27,7 @@ struct Cenario {
     p.id = "p1";
     p.name = "Papel A4";
     p.unit = "Resma";
+    p.category = "Papelaria";
     p.createdAt = kNow;
     createProduct(db, p);
     applyEntrada(db, "m_ini", "p1", 10, 20.0, "Fornecedor", "NF1", kNow, "", kNow);
@@ -211,6 +212,7 @@ TEST_CASE("entrega com vários itens é atômica: um item sem saldo não baixa n
   p2.id = "p2";
   p2.name = "Caneta";
   p2.unit = "Unidade";
+  p2.category = "Papelaria";
   p2.createdAt = kNow;
   createProduct(c.db, p2);
   applyEntrada(c.db, "m_ini2", "p2", 5, 2.0, "Fornecedor", "NF2", kNow, "", kNow);
@@ -243,6 +245,7 @@ TEST_CASE("a entrega de vários itens gera uma saída por item") {
   p2.id = "p2";
   p2.name = "Caneta";
   p2.unit = "Unidade";
+  p2.category = "Papelaria";
   p2.createdAt = kNow;
   createProduct(c.db, p2);
   applyEntrada(c.db, "m_ini2", "p2", 5, 2.0, "Fornecedor", "NF2", kNow, "", kNow);
@@ -300,6 +303,15 @@ TEST_CASE("pela Api, o usuário comum requisita só para o próprio setor e só 
   Api api(":memory:");
   api.loginAsService("teste");
 
+  // A Api confere a janela contra o RELÓGIO DO SISTEMA (não contra kNow), então
+  // um teste que cria requisição por ela precisa de uma janela que cubra o
+  // instante real da execução — daí o período propositalmente absurdo.
+  json janelaAmpla;
+  janelaAmpla["id"] = "jan_teste";
+  janelaAmpla["opensAt"] = "2000-01-01T00:00:00.000Z";
+  janelaAmpla["closesAt"] = "2099-12-31T23:59:59.999Z";
+  api.createRequestWindow(janelaAmpla.dump());
+
   Department d1;
   d1.id = "dep_x";
   d1.name = "Manutenção";
@@ -315,6 +327,7 @@ TEST_CASE("pela Api, o usuário comum requisita só para o próprio setor e só 
   p.id = "p1";
   p.name = "Papel A4";
   p.unit = "Resma";
+  p.category = "Papelaria";
   p.createdAt = kNow;
   api.createProduct(p);
   api.applyEntrada("m_ini", "p1", 10, 20.0, "Fornecedor", "NF1", kNow, "", kNow);
@@ -404,4 +417,243 @@ TEST_CASE("quem não tem permissão de requisição não cria nem lê") {
   CHECK_THROWS_AS(api.listRequestsJson(), ForbiddenError);
   CHECK_THROWS_AS(api.createRequest("{\"id\":\"r\",\"items\":[]}"), ForbiddenError);
   CHECK_THROWS_AS(api.stockAvailabilityJson(), ForbiddenError);
+}
+
+// ------------------------------------------------------- janela de pedidos
+
+namespace {
+
+// Datas em torno de kNow (10/08 12:00) para montar janelas passadas, valendo
+// agora e futuras sem depender do relógio da máquina que roda o teste.
+constexpr const char* kOntem = "2026-08-09T12:00:00.000Z";
+constexpr const char* kHojeCedo = "2026-08-10T08:00:00.000Z";
+constexpr const char* kHojeTarde = "2026-08-10T18:00:00.000Z";
+constexpr const char* kAmanha = "2026-08-11T08:00:00.000Z";
+constexpr const char* kAmanhaTarde = "2026-08-11T18:00:00.000Z";
+
+RequestWindow janela(const std::string& id, const std::string& abre, const std::string& fecha) {
+  RequestWindow w;
+  w.id = id;
+  w.opensAt = abre;
+  w.closesAt = fecha;
+  w.createdByName = "Carlos";
+  return w;
+}
+
+}  // namespace
+
+TEST_CASE("banco sem nenhuma janela cadastrada não aceita requisição") {
+  Cenario c;
+  CHECK_FALSE(openRequestWindowAt(c.db, kNow).has_value());
+  CHECK_THROWS_AS(requireOpenRequestWindow(c.db, kNow), std::invalid_argument);
+}
+
+TEST_CASE("a janela vale exatamente do instante de abertura ao de fechamento") {
+  Cenario c;
+  createRequestWindow(c.db, janela("j1", kHojeCedo, kHojeTarde), kOntem);
+
+  // Antes de abrir: fechado.
+  CHECK_FALSE(openRequestWindowAt(c.db, kOntem).has_value());
+  // O instante da abertura JÁ vale (limite fechado à esquerda).
+  CHECK(openRequestWindowAt(c.db, kHojeCedo).has_value());
+  CHECK(openRequestWindowAt(c.db, kNow).has_value());
+  // O instante do fechamento NÃO vale mais (limite aberto à direita) — senão
+  // um pedido feito no milissegundo do prazo entraria fora dele.
+  CHECK_FALSE(openRequestWindowAt(c.db, kHojeTarde).has_value());
+  CHECK_NOTHROW(requireOpenRequestWindow(c.db, kNow));
+  CHECK_THROWS_AS(requireOpenRequestWindow(c.db, kHojeTarde), std::invalid_argument);
+}
+
+TEST_CASE("passado o prazo o sistema tranca sozinho, sem ninguém mexer no banco") {
+  Cenario c;
+  createRequestWindow(c.db, janela("j1", kHojeCedo, kHojeTarde), kOntem);
+  CHECK_NOTHROW(requireOpenRequestWindow(c.db, kNow));
+
+  // Nada é atualizado entre uma chamada e outra: a MESMA linha do banco
+  // responde "aberta" às 12h e "fechada" às 18h, só porque a pergunta mudou.
+  CHECK_THROWS_AS(requireOpenRequestWindow(c.db, kAmanha), std::invalid_argument);
+  auto ainda = findRequestWindow(c.db, "j1");
+  REQUIRE(ainda.has_value());
+  CHECK(ainda->closedAt.empty());
+}
+
+TEST_CASE("fora do prazo a mensagem aponta a próxima janela quando existe uma") {
+  Cenario c;
+  createRequestWindow(c.db, janela("j1", kAmanha, kAmanhaTarde), kNow);
+
+  auto proxima = nextRequestWindowAfter(c.db, kNow);
+  REQUIRE(proxima.has_value());
+  CHECK(proxima->id == "j1");
+
+  try {
+    requireOpenRequestWindow(c.db, kNow);
+    FAIL("deveria ter recusado: a janela ainda não abriu");
+  } catch (const std::invalid_argument& e) {
+    CHECK(std::string(e.what()).find(kAmanha) != std::string::npos);
+  }
+}
+
+TEST_CASE("encerrar antes do prazo fecha as requisições na hora") {
+  Cenario c;
+  createRequestWindow(c.db, janela("j1", kHojeCedo, kHojeTarde), kOntem);
+  CHECK_NOTHROW(requireOpenRequestWindow(c.db, kNow));
+
+  closeRequestWindowNow(c.db, "j1", c.admin, kNow);
+
+  // Fechada a partir de kNow, mesmo faltando horas para kHojeTarde.
+  CHECK_THROWS_AS(requireOpenRequestWindow(c.db, kNow), std::invalid_argument);
+  // E continua valendo para o passado dela: quem pediu às 8h pediu dentro.
+  CHECK(openRequestWindowAt(c.db, kHojeCedo).has_value());
+  // Encerrar de novo não faz sentido.
+  CHECK_THROWS_AS(closeRequestWindowNow(c.db, "j1", c.admin, kNow), std::invalid_argument);
+}
+
+TEST_CASE("período inválido é recusado na abertura da janela") {
+  Cenario c;
+  // Fechamento antes da abertura.
+  CHECK_THROWS_AS(createRequestWindow(c.db, janela("a", kHojeTarde, kHojeCedo), kOntem),
+                  std::invalid_argument);
+  // Fechamento igual à abertura (janela de duração zero).
+  CHECK_THROWS_AS(createRequestWindow(c.db, janela("b", kHojeCedo, kHojeCedo), kOntem),
+                  std::invalid_argument);
+  // Janela que já nasceria encerrada.
+  CHECK_THROWS_AS(createRequestWindow(c.db, janela("c", kOntem, kHojeCedo), kNow),
+                  std::invalid_argument);
+}
+
+TEST_CASE("duas janelas não podem valer ao mesmo tempo") {
+  Cenario c;
+  createRequestWindow(c.db, janela("j1", kHojeCedo, kAmanhaTarde), kOntem);
+  CHECK_THROWS_AS(createRequestWindow(c.db, janela("j2", kNow, kAmanha), kOntem),
+                  std::invalid_argument);
+
+  // Mas encerrar a primeira devolve o período restante: a segunda janela
+  // passa a caber onde a primeira teria ficado.
+  closeRequestWindowNow(c.db, "j1", c.admin, kNow);
+  CHECK_NOTHROW(createRequestWindow(c.db, janela("j2", kHojeTarde, kAmanhaTarde), kNow));
+}
+
+TEST_CASE("janela que já começou não pode ser apagada, só encerrada") {
+  Cenario c;
+  createRequestWindow(c.db, janela("passada", kHojeCedo, kHojeTarde), kOntem);
+  createRequestWindow(c.db, janela("futura", kAmanha, kAmanhaTarde), kOntem);
+
+  CHECK_THROWS_AS(deleteRequestWindow(c.db, "passada", kNow), std::invalid_argument);
+  CHECK_NOTHROW(deleteRequestWindow(c.db, "futura", kNow));
+  CHECK_FALSE(findRequestWindow(c.db, "futura").has_value());
+  CHECK(findRequestWindow(c.db, "passada").has_value());
+}
+
+TEST_CASE("pela Api, sem janela aberta a requisição é recusada — e o status diz por quê") {
+  Api api(":memory:");
+  api.loginAsService("teste");
+
+  Department d;
+  d.id = "dep_x";
+  d.name = "Manutenção";
+  d.encarregado = "Zé";
+  d.createdAt = kNow;
+  api.createDepartment(d);
+
+  Product p;
+  p.id = "p1";
+  p.name = "Papel A4";
+  p.unit = "Resma";
+  p.category = "Papelaria";
+  p.createdAt = kNow;
+  api.createProduct(p);
+  api.applyEntrada("m_ini", "p1", 10, 20.0, "Fornecedor", "NF1", kNow, "", kNow);
+
+  json pedido;
+  pedido["id"] = "req1";
+  pedido["createdAt"] = kNow;
+  pedido["departmentId"] = "dep_x";
+  pedido["items"] = json::array({{{"id", "req1_i1"}, {"productId", "p1"}, {"qty", 2}}});
+
+  // Banco novo = nenhuma janela = fechado. Nem o superadministrador escapa: a
+  // trava é de prazo, não de permissão.
+  json status = json::parse(api.requestWindowStatusJson());
+  CHECK(status["open"] == false);
+  CHECK(status["current"].is_null());
+  CHECK_THROWS_AS(api.createRequest(pedido.dump()), std::invalid_argument);
+
+  // Aberta a janela, o mesmo pedido passa.
+  json janela;
+  janela["id"] = "jan1";
+  janela["opensAt"] = "2000-01-01T00:00:00.000Z";
+  janela["closesAt"] = "2099-12-31T23:59:59.999Z";
+  janela["obs"] = "período de teste";
+  api.createRequestWindow(janela.dump());
+
+  status = json::parse(api.requestWindowStatusJson());
+  CHECK(status["open"] == true);
+  CHECK(status["current"]["obs"] == "período de teste");
+  CHECK_NOTHROW(api.createRequest(pedido.dump()));
+
+  // Encerrada a janela, volta a recusar — sem ninguém tocar em mais nada.
+  api.closeRequestWindowNow("jan1");
+  CHECK(json::parse(api.requestWindowStatusJson())["open"] == false);
+  pedido["id"] = "req2";
+  pedido["items"] = json::array({{{"id", "req2_i1"}, {"productId", "p1"}, {"qty", 1}}});
+  CHECK_THROWS_AS(api.createRequest(pedido.dump()), std::invalid_argument);
+
+  // A janela encerrada continua no histórico, com quem encerrou.
+  json lista = json::parse(api.listRequestWindowsJson());
+  REQUIRE(lista.size() == 1);
+  CHECK(lista[0]["situacao"] == "encerrada");
+  CHECK_FALSE(lista[0]["closedAt"].get<std::string>().empty());
+
+  // E o backup carrega as janelas junto (senão restaurar deixaria o app
+  // fechado para pedidos sem explicação).
+  json backup = json::parse(api.backupJson());
+  REQUIRE(backup.contains("requestWindows"));
+  CHECK(backup["requestWindows"].size() == 1);
+  CHECK(backup["requestWindows"][0]["id"] == "jan1");
+}
+
+TEST_CASE("quem não valida requisições não abre nem encerra janela") {
+  Api api(":memory:");
+  api.loginAsService("teste");
+
+  Department d;
+  d.id = "dep_x";
+  d.name = "Manutenção";
+  d.encarregado = "Zé";
+  d.createdAt = kNow;
+  api.createDepartment(d);
+
+  json grupo;
+  grupo["id"] = "grp";
+  grupo["name"] = "Solicitante";
+  grupo["createdAt"] = kNow;
+  grupo["perms"] = {{"requisicoes", {{"create", true}, {"read", true}}}};
+  api.createPermissionGroup(grupo.dump());
+  api.setDepartmentPermissionGroup("dep_x", "grp");
+
+  UserInput u;
+  u.id = "u1";
+  u.name = "Pedro";
+  u.email = "pedro@flcondominios.com.br";
+  u.role = kRoleUsuario;
+  u.departmentId = "dep_x";
+  u.createdAt = kNow;
+  u.password = "SenhaForte1";
+  api.createUser(u);
+
+  api.login("pedro@flcondominios.com.br", "SenhaForte1", kNow);
+
+  json janela;
+  janela["id"] = "jan1";
+  janela["opensAt"] = "2000-01-01T00:00:00.000Z";
+  janela["closesAt"] = "2099-12-31T23:59:59.999Z";
+  CHECK_THROWS_AS(api.createRequestWindow(janela.dump()), ForbiddenError);
+  CHECK_THROWS_AS(api.listRequestWindowsJson(), ForbiddenError);
+  CHECK_THROWS_AS(api.closeRequestWindowNow("jan1"), ForbiddenError);
+  CHECK_THROWS_AS(api.deleteRequestWindow("jan1"), ForbiddenError);
+
+  // Mas CONSULTAR o status ele pode: é o que explica na tela por que não dá
+  // para pedir agora.
+  json status = json::parse(api.requestWindowStatusJson());
+  CHECK(status["open"] == false);
+  CHECK(status["canManage"] == false);
 }

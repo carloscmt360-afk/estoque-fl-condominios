@@ -13,7 +13,21 @@
 @media print {
   @page {
     size: A4 portrait;
-    margin: 12mm 10mm 14mm;
+    /* Margens generosas — o conteúdo não encosta na borda da folha. */
+    margin: 18mm 15mm 20mm;
+  }
+
+  /* Retrospecto: a matriz departamento × 12 meses + total tem 14 colunas e
+     não cabe em A4 retrato — usa uma página nomeada em paisagem só para
+     esse documento (ver #printArea.pr-landscape logo abaixo e o
+     `opts.landscape` de printDocument em js/print.js). Os demais
+     relatórios continuam na página padrão (retrato) declarada acima. */
+  @page pr-wide {
+    size: A4 landscape;
+    margin: 14mm 12mm 16mm;
+  }
+  #printArea.pr-landscape {
+    page: pr-wide;
   }
 
   html,
@@ -39,27 +53,48 @@
     print-color-adjust: exact;
   }
 
-  /* Cabeçalho do documento — azul institucional da marca */
+  /* Cabeçalho do documento — faixa cheia de azul institucional, mais forte
+     que um simples texto colorido: é o primeiro elemento visto na folha. */
   .pr-head {
-    border-bottom: 2px solid var(--accent);
-    padding-bottom: 6pt;
-    margin-bottom: 10pt;
+    background: var(--accent);
+    color: var(--ink-on-accent);
+    padding: 8pt 10pt;
+    margin: 0 0 10pt;
+    border-radius: 3pt;
+  }
+  /* Logo da FL (Configurações › canto da barra lateral) — flutua à direita
+     do cabeçalho colorido, em TODO relatório impresso (pedido do usuário:
+     "essa foto deve aparecer sempre na barra superior dos relatórios"). */
+  .pr-head .pr-logo {
+    float: right;
+    max-height: 28pt;
+    max-width: 90pt;
+    background: #fff;
+    border-radius: 2pt;
+    padding: 2pt 4pt;
   }
   .pr-head h1 {
     font-size: 15pt;
     margin: 0;
-    color: var(--accent);
+    color: var(--ink-on-accent);
   }
   .pr-head .pr-sub {
     font-size: 9pt;
     margin-top: 2pt;
+    color: var(--ink-on-accent);
   }
   .pr-head .pr-meta {
     font-size: 8pt;
     margin-top: 4pt;
-    color: var(--ink-secondary);
+    color: var(--accent-soft);
   }
 
+  /* Volta a ser texto colorido + linha, sem preenchimento cheio: diferente
+     do banner do topo (uma vez por relatório), .pr-sec se repete várias
+     vezes por página em relatórios longos — um retângulo de tinta a cada
+     seção soma bastante área colorida e deixa a impressão mais lenta em
+     máquinas físicas (print-color-adjust:exact, logo abaixo, força TODO
+     fundo colorido a ser mandado pra impressora). */
   .pr-sec {
     font-size: 10pt;
     font-weight: 700;
@@ -86,6 +121,10 @@
     border-collapse: collapse;
     font-size: 8.5pt;
   }
+  /* Cabeçalho de tabela repete no topo de TODA página do relatório (ver
+     #printArea thead mais abaixo) — preenchimento cheio aqui multiplica pela
+     quantidade de páginas, o maior peso de tinta/toner do documento inteiro.
+     Volta ao estilo leve: fundo suave + texto na cor da marca. */
   #printArea th {
     background: var(--accent-soft);
     color: var(--accent);
@@ -104,6 +143,26 @@
     border-top: 1pt solid var(--accent);
     font-weight: 700;
   }
+  /* Por padrão um <tfoot> tem display:table-footer-group, que faz o
+     navegador REPETIR a linha de total no fim de CADA página que a tabela
+     ocupa (o mesmo mecanismo que repete o <thead> no topo) — numa tabela
+     de várias páginas isso mostra "TOTAL" errado (parcial) em toda página
+     menos a última, e duplicado na última. table-row-group desliga esse
+     comportamento: o total passa a se comportar como uma linha normal,
+     aparecendo só uma vez, no fim de verdade dos dados.
+     https://www.w3.org/TR/CSS22/tables.html#table-display (repetição de
+     thead/tfoot em "paged media" é comportamento do UA, não do spec). */
+  #printArea tfoot {
+    display: table-row-group;
+  }
+  /* A linha de total nunca fica sozinha numa página nova, separada do
+     corpo da tabela que ela soma. */
+  #printArea tfoot tr {
+    break-before: avoid;
+    break-inside: avoid;
+    page-break-before: avoid;
+    page-break-inside: avoid;
+  }
   /* Uma linha de tabela nunca é partida entre duas páginas, e o cabeçalho se
      repete no alto de cada página — senão a segunda folha vira uma lista de
      números sem título de coluna. */
@@ -119,6 +178,25 @@
     font-variant-numeric: tabular-nums;
   }
 
+  /* Matriz do Retrospecto (departamento × 12 meses + total = 14 colunas):
+     largura fixa com a 1ª coluna (departamento) maior e as demais divididas
+     igualmente, fonte e preenchimento mais compactos. Combinado com a
+     página em paisagem acima, é o que evita que os últimos meses caiam
+     fora da área impressa. */
+  #printArea table.pr-matrix {
+    table-layout: fixed;
+    font-size: 7.5pt;
+  }
+  #printArea table.pr-matrix th,
+  #printArea table.pr-matrix td {
+    padding: 2pt 3pt;
+  }
+  #printArea table.pr-matrix th:first-child,
+  #printArea table.pr-matrix td:first-child {
+    width: 15%;
+    word-break: break-word;
+  }
+
   /* Cabeçalho de grupo (departamento) dentro da tabela de detalhamento do
      relatório de custo mensal — mesma linha, sem quebrar antes das primeiras
      linhas do grupo que ela abre. */
@@ -131,6 +209,17 @@
   #printArea .pr-group {
     break-after: avoid;
     page-break-after: avoid;
+  }
+  /* Cada departamento é um <tbody> próprio (ver buildCustoDeptoDoc em
+     js/print.js): impede que a última linha de um grupo continue sozinha
+     na página seguinte, sem o cabeçalho do departamento a que pertence —
+     um <tr> isolado não pode ser protegido assim, um <tbody> pode. Só tem
+     efeito quando o grupo inteiro cabe numa página; um departamento maior
+     que uma página quebra normalmente (o cabeçalho não se repete nesse
+     caso raro, mas nenhuma linha some). */
+  #printArea tbody.pr-group-body {
+    break-inside: avoid;
+    page-break-inside: avoid;
   }
 
   /* Gráfico embutido no relatório de custo por departamento */
@@ -150,6 +239,8 @@
     display: grid;
     grid-template-columns: repeat(3, 1fr);
     gap: 4pt;
+    break-inside: avoid;
+    page-break-inside: avoid;
   }
   #printArea .pr-kpi {
     background: var(--page-bg);
@@ -178,6 +269,8 @@
     padding: 4pt 6pt;
     font-size: 8.5pt;
     margin-bottom: 6pt;
+    break-inside: avoid;
+    page-break-inside: avoid;
   }
   #printArea .pr-alert {
     border: 1pt solid var(--danger);
@@ -187,6 +280,8 @@
     font-size: 8.5pt;
     font-weight: 700;
     margin-bottom: 6pt;
+    break-inside: avoid;
+    page-break-inside: avoid;
   }
   #printArea .pr-alert-warn {
     border-color: var(--warning);
@@ -238,6 +333,8 @@
     gap: 24pt;
     font-size: 8pt;
     text-align: center;
+    break-inside: avoid;
+    page-break-inside: avoid;
   }
   #printArea .pr-sign div {
     border-top: 0.5pt solid var(--ink-primary);
@@ -250,5 +347,50 @@
     font-size: 6.5pt;
     color: var(--ink-muted);
     text-align: center;
+  }
+
+  /* ---------------------------------------- lista de separação (picking) */
+
+  /* Quadradinho para marcar à caneta. É um quadrado desenhado por borda, e
+     não o caractere ☐: caractere depende da fonte instalada e some (ou vira
+     tofu) em impressora que não a tenha. */
+  #printArea .pr-check {
+    display: inline-block;
+    width: 9pt;
+    height: 9pt;
+    border: 0.75pt solid var(--ink-primary);
+    border-radius: 1pt;
+    vertical-align: middle;
+  }
+  #printArea .pr-nota {
+    font-size: 7.5pt;
+    color: var(--ink-secondary);
+    margin: -2pt 0 5pt;
+  }
+  #printArea .pr-vazio {
+    padding: 14pt;
+    text-align: center;
+    font-size: 9pt;
+    color: var(--ink-secondary);
+    border: 0.5pt dashed var(--border-strong);
+    border-radius: 3pt;
+  }
+  /* Um pedido nunca é partido entre duas folhas: metade da lista numa página
+     e metade na outra é o jeito mais fácil de esquecer um item na separação. */
+  #printArea .pr-pedido {
+    margin-bottom: 7pt;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  #printArea .pr-pedido-cab {
+    font-size: 8.5pt;
+    padding: 3pt 5pt;
+    background: var(--accent-soft);
+    border-left: 2.5pt solid var(--accent);
+  }
+  #printArea .pr-pedido-obs {
+    font-size: 7.5pt;
+    color: var(--ink-secondary);
+    margin-top: 1pt;
   }
 }

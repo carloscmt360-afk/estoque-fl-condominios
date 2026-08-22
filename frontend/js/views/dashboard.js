@@ -4,9 +4,9 @@ import { drawSpark } from '../charts/sparkline.js';
 import { drawConsumoAnual } from '../charts/groupedBars.js';
 import { drawValorEstoque } from '../charts/stockValueLine.js';
 import { drawBarrasH } from '../charts/deptHBars.js';
-import { drawDumbbell } from '../charts/dumbbell.js';
+import { drawDeptoAcumulado } from '../charts/deptoAcumulado.js';
 import { drawABC } from '../charts/abcStacked.js';
-import { fmtBRL, fmtNum, fmtPct, fmtDateBR, deltaHTML, deltaCell, escapeHtml, meterHTML } from '../format.js';
+import { fmtBRL, fmtNum, fmtPct, fmtDateBR, deltaHTML, deltaCell, escapeHtml, meterHTML, porCurvaDepoisNome } from '../format.js';
 import { toast } from '../components/toast.js';
 import { can } from '../session.js';
 import { printDocument, buildEstoqueDoc, buildAnaliticoDoc, buildCustoDeptoDoc } from '../print.js';
@@ -17,6 +17,10 @@ const MESES_ABR = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','
 let repRef = { y: null, m: null };
 let repData = null;
 let controlsPopulated = false;
+// Página atual da "Posição de estoque". Só a EXIBIÇÃO é paginada: o total do
+// rodapé e os relatórios impressos continuam somando a lista filtrada
+// inteira, não a página à vista (ver renderPosicao e js/print.js).
+let posicaoPagina = 1;
 
 export async function initDashboard() {
   installTooltip();
@@ -43,9 +47,17 @@ function wireStaticControls() {
   document.getElementById('btnImprimirAnalitico').addEventListener('click', () => imprimir(buildAnaliticoDoc));
   document.getElementById('btnImprimirCustoDepto').addEventListener('click', () => imprimir(buildCustoDeptoDoc));
   document.getElementById('repLimiteSoConfig').addEventListener('change', renderLimites);
-  document.getElementById('repFiltroProduto').addEventListener('input', renderPosicao);
-  document.getElementById('repFiltroClasse').addEventListener('change', renderPosicao);
-  document.getElementById('repFiltroSituacao').addEventListener('change', renderPosicao);
+  // Mexer em qualquer filtro volta para a primeira página: continuar na
+  // página 7 depois de filtrar mostraria uma tabela vazia sem explicação.
+  ['repFiltroProduto', 'repFiltroClasse', 'repFiltroSituacao'].forEach((id) =>
+    document.getElementById(id).addEventListener(id === 'repFiltroProduto' ? 'input' : 'change', () => {
+      posicaoPagina = 1;
+      renderPosicao();
+    }));
+  document.getElementById('repPosicaoPorPagina').addEventListener('change', () => {
+    posicaoPagina = 1;
+    renderPosicao();
+  });
   document.getElementById('repFiltroPedido').addEventListener('input', renderPedidos);
   document.querySelectorAll('#view-dashboard [data-toggle-table]').forEach((btn) =>
     btn.addEventListener('click', () => toggleCardTable(btn.dataset.toggleTable)));
@@ -267,13 +279,7 @@ function renderCharts(R) {
     : '<div class="chart-empty">Nenhuma saída no mês de referência.</div>';
 
   const ytdRows = Object.entries(R.deptYTD).map(([label, e]) => ({ label, cur: e.cur, prev: e.prev })).filter((r) => r.cur > 0 || r.prev > 0).sort((a, b) => Math.max(b.cur, b.prev) - Math.max(a.cur, a.prev));
-  document.getElementById('legDeptoYTD').innerHTML = legendHTML([{ label: 'Ano atual', color: VIZ.cur }, { label: 'Ano anterior', color: VIZ.prior }]);
-  drawDumbbell(document.getElementById('chartDeptoYTD'), ytdRows, { curLabel: `${R.y} (parcial)`, prevLabel: `${R.y - 1} (mesmo período)` });
-  document.getElementById('tblDeptoYTD').innerHTML = ytdRows.length
-    ? `<table><thead><tr><th>Departamento</th><th class="num">${R.y}</th><th class="num">${R.y - 1}</th><th class="num">Δ %</th></tr></thead>
-       <tbody>${ytdRows.map((r) => `<tr><td>${escapeHtml(r.label)}</td><td class="num">${fmtBRL(r.cur)}</td><td class="num">${fmtBRL(r.prev)}</td><td class="num">${deltaCell(r.cur, r.prev)}</td></tr>`).join('')}</tbody>
-       <tfoot><tr><td>TOTAL</td><td class="num">${fmtBRL(R.ytdCur)}</td><td class="num">${fmtBRL(R.ytdPrev)}</td><td class="num">${deltaCell(R.ytdCur, R.ytdPrev)}</td></tr></tfoot></table>`
-    : '<div class="chart-empty">Sem acumulado comparável.</div>';
+  drawDeptoAcumulado(document.getElementById('chartDeptoYTD'), ytdRows, { curLabel: `${R.y} (parcial)`, prevLabel: `${R.y - 1} (mesmo período)` });
 
   document.getElementById('legABC').innerHTML = legendHTML([{ label: 'Classe A', color: VIZ.abc.A }, { label: 'Classe B', color: VIZ.abc.B }, { label: 'Classe C', color: VIZ.abc.C }]);
   const totalItensValorados = R.abc.A.n + R.abc.B.n + R.abc.C.n;
@@ -342,22 +348,34 @@ function renderPosicao() {
   const classe = document.getElementById('repFiltroClasse').value;
   const situacao = document.getElementById('repFiltroSituacao').value;
 
-  let list = [...R.itens].sort((a, b) => b.valor - a.valor || a.name.localeCompare(b.name, 'pt-BR'));
-  if (busca) list = list.filter((i) => i.name.toLowerCase().includes(busca));
+  let list = [...R.itens].sort(porCurvaDepoisNome);
+  if (busca) list = list.filter((i) => i.name.toLowerCase().includes(busca) || (i.sku || '').toLowerCase().includes(busca));
   if (classe) list = list.filter((i) => i.classe === classe);
   if (situacao) list = list.filter((i) => i.situacao === situacao);
 
   const tbody = document.getElementById('repPosicaoTbody');
   const tfoot = document.getElementById('repPosicaoTfoot');
+  const paginacao = document.getElementById('repPosicaoPaginacao');
   if (!list.length) {
-    tbody.innerHTML = `<tr class="empty-row"><td colspan="11">${R.itens.length ? 'Nenhum material com esses filtros.' : 'Nenhum produto cadastrado.'}</td></tr>`;
+    tbody.innerHTML = `<tr class="empty-row"><td colspan="12">${R.itens.length ? 'Nenhum material com esses filtros.' : 'Nenhum produto cadastrado.'}</td></tr>`;
     tfoot.innerHTML = '';
+    paginacao.innerHTML = '';
     return;
   }
+
+  // Recorte da página. A página é limitada ao total disponível para o caso de
+  // a lista encolher (ex.: o usuário estava na 5ª página e trocou o mês por um
+  // com menos itens) — sem isso a tabela ficaria vazia sem motivo aparente.
+  const porPagina = Number(document.getElementById('repPosicaoPorPagina').value) || 50;
+  const totalPaginas = Math.max(1, Math.ceil(list.length / porPagina));
+  posicaoPagina = Math.min(Math.max(1, posicaoPagina), totalPaginas);
+  const inicio = (posicaoPagina - 1) * porPagina;
+  const pagina = list.slice(inicio, inicio + porPagina);
+
   const sit = { ruptura: { cls: 'flag-critical', ico: '⛔', txt: 'Ruptura' }, baixo: { cls: 'flag-warn', ico: '⚠', txt: 'Abaixo do mínimo' }, parado: { cls: 'flag-serious', ico: '◆', txt: 'Capital parado' }, ok: { cls: 'flag-good', ico: '✓', txt: 'Normal' } };
-  tbody.innerHTML = list.map((i) => {
+  tbody.innerHTML = pagina.map((i) => {
     const s = sit[i.situacao];
-    return `<tr><td><b>${escapeHtml(i.name)}</b></td><td>${i.category ? escapeHtml(i.category) : '<span class="muted">—</span>'}</td>
+    return `<tr><td>${escapeHtml(i.sku || '') || '<span class="muted">—</span>'}</td><td><b>${escapeHtml(i.name)}</b></td><td>${i.category ? escapeHtml(i.category) : '<span class="muted">—</span>'}</td>
       <td>${escapeHtml(i.unit)}</td><td class="num">${fmtNum(i.qty)}</td>
       <td class="num">${fmtBRL(i.avgCost)}</td><td class="num">${fmtBRL(i.valor)}</td>
       <td class="num">${R.valorTotal > 0 ? fmtPct(i.valor / R.valorTotal, 1) : '—'}</td>
@@ -366,9 +384,41 @@ function renderPosicao() {
       <td class="num">${i.cobertura === null ? '<span class="muted">—</span>' : i.cobertura > 99 ? '99+ m' : fmtNum(Math.round(i.cobertura * 10) / 10) + ' m'}</td>
       <td><span class="flag ${s.cls}">${s.ico} ${s.txt}</span></td></tr>`;
   }).join('');
+  // O total é da lista FILTRADA inteira, nunca só da página à vista: um
+  // "valor em estoque" que mudasse ao virar de página não seria um total.
   const soma = list.reduce((s, i) => s + i.valor, 0);
-  tfoot.innerHTML = `<tr><td colspan="5">TOTAL${list.length !== R.itens.length ? ` (${list.length} de ${R.itens.length})` : ' GERAL'}</td>
+  tfoot.innerHTML = `<tr><td colspan="6">TOTAL${list.length !== R.itens.length ? ` (${list.length} de ${R.itens.length})` : ' GERAL'}</td>
     <td class="num">${fmtBRL(soma)}</td><td class="num">${R.valorTotal > 0 ? fmtPct(soma / R.valorTotal, 1) : '—'}</td><td colspan="4"></td></tr>`;
+
+  renderPosicaoPaginacao(paginacao, list.length, inicio, pagina.length, totalPaginas);
+}
+
+function renderPosicaoPaginacao(host, total, inicio, naPagina, totalPaginas) {
+  // Uma página só: nada de controles ocupando espaço à toa. A contagem
+  // continua aparecendo porque é ela que confirma que a lista está inteira.
+  const contagem = `<span class="paginacao-info">Mostrando <b>${fmtNum(inicio + 1)}–${fmtNum(inicio + naPagina)}</b> de <b>${fmtNum(total)}</b> materiais</span>`;
+  if (totalPaginas <= 1) { host.innerHTML = contagem; return; }
+
+  host.innerHTML = contagem +
+    `<div class="paginacao-botoes">
+       <button class="btn-sm btn-outline" data-pag="primeira" ${posicaoPagina === 1 ? 'disabled' : ''}>« Primeira</button>
+       <button class="btn-sm btn-outline" data-pag="anterior" ${posicaoPagina === 1 ? 'disabled' : ''}>‹ Anterior</button>
+       <span class="paginacao-pagina">Página <b>${posicaoPagina}</b> de <b>${totalPaginas}</b></span>
+       <button class="btn-sm btn-outline" data-pag="proxima" ${posicaoPagina === totalPaginas ? 'disabled' : ''}>Próxima ›</button>
+       <button class="btn-sm btn-outline" data-pag="ultima" ${posicaoPagina === totalPaginas ? 'disabled' : ''}>Última »</button>
+     </div>`;
+
+  host.querySelectorAll('[data-pag]').forEach((b) => b.addEventListener('click', () => {
+    const acao = b.dataset.pag;
+    if (acao === 'primeira') posicaoPagina = 1;
+    else if (acao === 'anterior') posicaoPagina--;
+    else if (acao === 'proxima') posicaoPagina++;
+    else posicaoPagina = totalPaginas;
+    renderPosicao();
+    // Volta ao topo da tabela: virar de página deixando o usuário no meio da
+    // rolagem faz parecer que nada aconteceu.
+    host.closest('.panel').scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }));
 }
 
 function renderDeptos(R) {
@@ -399,12 +449,12 @@ function renderPedidos() {
   const busca = (document.getElementById('repFiltroPedido').value || '').toLowerCase();
   const byId = new Map(R.itens.map((i) => [i.id, i]));
   let list = [...R.pedidos].sort((a, b) => a._ts - b._ts);
-  if (busca) list = list.filter((p) => [byId.get(p.productId)?.name, p.recipient, p.requester, p.encarregado, p.obs].some((v) => String(v || '').toLowerCase().includes(busca)));
+  if (busca) list = list.filter((p) => [byId.get(p.productId)?.sku, byId.get(p.productId)?.name, p.recipient, p.requester, p.encarregado, p.obs].some((v) => String(v || '').toLowerCase().includes(busca)));
 
   const tbody = document.getElementById('repPedidosTbody');
   const tfoot = document.getElementById('repPedidosTfoot');
   if (!list.length) {
-    tbody.innerHTML = `<tr class="empty-row"><td colspan="8">${R.pedidos.length ? 'Nenhum pedido com esse filtro.' : 'Nenhuma saída no mês de referência.'}</td></tr>`;
+    tbody.innerHTML = `<tr class="empty-row"><td colspan="9">${R.pedidos.length ? 'Nenhum pedido com esse filtro.' : 'Nenhuma saída no mês de referência.'}</td></tr>`;
     tfoot.innerHTML = '';
     return;
   }
@@ -414,11 +464,12 @@ function renderPedidos() {
     const val = p.qty * p.unitPrice;
     total += val;
     return `<tr><td>${fmtDateBR(p._ts)}</td><td>${escapeHtml(p.recipient || '(sem departamento)')}</td>
+      <td>${escapeHtml((prod && prod.sku) || '') || '<span class="muted">—</span>'}</td>
       <td>${escapeHtml(prod ? prod.name : '(produto excluído)')}</td><td class="num">${fmtNum(p.qty)} ${escapeHtml(prod ? prod.unit : '')}</td>
       <td class="num">${fmtBRL(p.unitPrice)}</td><td class="num">${fmtBRL(val)}</td>
       <td>${p.requester ? escapeHtml(p.requester) : '<span class="muted">não informado</span>'}</td><td>${escapeHtml(p.encarregado || '—')}</td></tr>`;
   }).join('');
-  tfoot.innerHTML = `<tr><td colspan="5">TOTAL — ${fmtNum(list.length)} pedido(s)</td><td class="num">${fmtBRL(total)}</td><td colspan="2"></td></tr>`;
+  tfoot.innerHTML = `<tr><td colspan="6">TOTAL — ${fmtNum(list.length)} pedido(s)</td><td class="num">${fmtBRL(total)}</td><td colspan="2"></td></tr>`;
 }
 
 function downloadFile(filename, content, mime) {
@@ -460,13 +511,13 @@ function exportReportCSV() {
     money(l.gasto), l.temLimite ? money(l.saldo) : '', l.pct === null ? '' : (l.pct * 100).toFixed(1), l.status));
   push('');
   push('3. POSICAO DE ESTOQUE');
-  push('Material', 'Unidade', 'Saldo', 'Custo medio', 'Valor', 'Classe ABC', 'Situacao');
-  [...R.itens].sort((a, b) => b.valor - a.valor).forEach((i) => push(i.name, i.unit, i.qty.toFixed(3), money(i.avgCost), money(i.valor), i.classe, i.situacao));
+  push('SKU', 'Material', 'Unidade', 'Saldo', 'Custo medio', 'Valor', 'Classe ABC', 'Situacao');
+  [...R.itens].sort(porCurvaDepoisNome).forEach((i) => push(i.sku || '', i.name, i.unit, i.qty.toFixed(3), money(i.avgCost), money(i.valor), i.classe, i.situacao));
   push('');
   push('4. PEDIDOS DE ' + ref.toUpperCase());
-  push('Data', 'Departamento', 'Material', 'Qtd', 'Valor unit.', 'Valor total', 'Solicitante');
+  push('Data', 'Departamento', 'SKU', 'Material', 'Qtd', 'Valor unit.', 'Valor total', 'Solicitante');
   const byId = new Map(R.itens.map((i) => [i.id, i]));
-  R.pedidos.forEach((p) => push(fmtDateBR(p._ts), p.recipient, byId.get(p.productId)?.name || '', p.qty.toFixed(3), money(p.unitPrice), money(p.qty * p.unitPrice), p.requester || ''));
+  R.pedidos.forEach((p) => push(fmtDateBR(p._ts), p.recipient, byId.get(p.productId)?.sku || '', byId.get(p.productId)?.name || '', p.qty.toFixed(3), money(p.unitPrice), money(p.qty * p.unitPrice), p.requester || ''));
 
   downloadFile(`relatorio_fl_${R.y}-${String(R.m + 1).padStart(2, '0')}.csv`, '﻿' + L.join('\r\n'), 'text/csv;charset=utf-8;');
   toast('Relatório exportado.', 'success');

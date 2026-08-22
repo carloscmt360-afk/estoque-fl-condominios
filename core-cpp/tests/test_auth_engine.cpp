@@ -235,6 +235,7 @@ TEST_CASE("a Api recusa qualquer operação sem sessão") {
   CHECK_THROWS_AS(api.backupJson(), AuthError);
   CHECK_THROWS_AS(api.listUsersJson(), AuthError);
   CHECK_THROWS_AS(api.computeReportJson(2026, 5, "", 6, kNow), AuthError);
+  CHECK_THROWS_AS(api.assertPodeEditarLogoFl(), AuthError);
   CHECK(api.currentSessionJson() == "null");
 }
 
@@ -276,14 +277,21 @@ TEST_CASE("login pela Api devolve a sessão com a matriz de permissões efetiva"
   p.id = "p1";
   p.name = "Papel";
   p.unit = "Unidade";
+  p.category = "Papelaria";
   p.createdAt = kNow;
   CHECK_THROWS_AS(api.createProduct(p), ForbiddenError);
   CHECK_THROWS_AS(api.listMovements(), ForbiddenError);
   CHECK_THROWS_AS(api.listUsersJson(), ForbiddenError);
   CHECK_THROWS_AS(api.backupJson(), ForbiddenError);
+  // Logo da FL: mesmo com departamento/grupo dando tudo em requisições, um
+  // usuário comum não é superadministrador — a logo continua fora do alcance
+  // (ver assertPodeEditarLogoFl, chamado pelo comando Tauri antes de gravar
+  // ou apagar o arquivo).
+  CHECK_THROWS_AS(api.assertPodeEditarLogoFl(), ForbiddenError);
 
   api.login("carlos.matos@flcondominios.com.br", "Mudar@2025", kNow);
   CHECK_NOTHROW(api.createProduct(p));
+  CHECK_NOTHROW(api.assertPodeEditarLogoFl());
 }
 
 TEST_CASE("quem só pode ver Produtos consegue abrir a tela inteira") {

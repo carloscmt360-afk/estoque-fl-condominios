@@ -19,6 +19,7 @@ Product makeProduct(const std::string& id, const std::string& name) {
   p.id = id;
   p.name = name;
   p.unit = "Unidade";
+  p.category = "Papelaria";  // createProduct exige uma das seis categorias válidas
   p.createdAt = "2026-01-01T00:00:00.000Z";
   return p;
 }

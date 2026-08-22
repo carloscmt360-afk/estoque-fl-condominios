@@ -8,6 +8,8 @@ mod dto;
 
 use bridge::ffi;
 use std::sync::Mutex;
+use tauri::menu::{Menu, MenuItem};
+use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::Manager;
 
 /// Estado da aplicação: ou há uma sessão pronta, ou há um erro de
@@ -47,17 +49,78 @@ pub fn init_session(state: &AppState) {
     }
 }
 
+/// Traz a janela de volta da bandeja: reexibe, restaura se estava minimizada
+/// e põe na frente. Os três passos são necessários — só `show()` devolve uma
+/// janela escondida ATRÁS das outras, e uma janela minimizada antes de ser
+/// escondida continua minimizada ao reaparecer.
+fn mostrar_janela(app: &tauri::AppHandle) {
+    if let Some(win) = app.get_webview_window("main") {
+        let _ = win.show();
+        let _ = win.unminimize();
+        let _ = win.set_focus();
+    }
+}
+
+/// Ícone na bandeja do sistema, com menu de contexto (botão direito):
+/// "Abrir" e "Encerrar". Clique esquerdo simples também reabre a janela,
+/// que é o gesto que a maioria dos usuários tenta primeiro.
+fn instalar_bandeja(app: &tauri::AppHandle) -> tauri::Result<()> {
+    let abrir = MenuItem::with_id(app, "abrir", "Abrir Estoque FL", true, None::<&str>)?;
+    let encerrar = MenuItem::with_id(app, "encerrar", "Encerrar", true, None::<&str>)?;
+    let menu = Menu::with_items(app, &[&abrir, &encerrar])?;
+
+    let mut construtor = TrayIconBuilder::with_id("bandeja");
+    // Sem ícone o item da bandeja fica invisível, mas derrubar o app inteiro
+    // por causa disso seria pior: se o contexto não trouxer o ícone, a
+    // bandeja é criada mesmo assim (no Windows ele vem sempre do icon.ico).
+    if let Some(icone) = app.default_window_icon() {
+        construtor = construtor.icon(icone.clone());
+    }
+    construtor
+        .tooltip("Estoque FL Condomínios")
+        .menu(&menu)
+        // false: o clique esquerdo é tratado por nós (reabrir a janela) em vez
+        // de abrir o menu, que é o comportamento padrão do Windows.
+        .show_menu_on_left_click(false)
+        .on_menu_event(|app, event| match event.id.as_ref() {
+            "abrir" => mostrar_janela(app),
+            // exit() encerra de verdade — é a única saída do app junto com o
+            // botão "Encerrar programa" da barra lateral.
+            "encerrar" => app.exit(0),
+            _ => {}
+        })
+        .on_tray_icon_event(|tray, event| {
+            if let TrayIconEvent::Click { button: MouseButton::Left, button_state: MouseButtonState::Up, .. } = event {
+                mostrar_janela(tray.app_handle());
+            }
+        })
+        .build(app)?;
+    Ok(())
+}
+
 fn main() {
     tauri::Builder::default()
         .manage(AppState::empty())
         .setup(|app| {
             let state: tauri::State<AppState> = app.state();
             init_session(&state);
+            instalar_bandeja(app.handle())?;
             Ok(())
+        })
+        // O X da janela ESCONDE em vez de encerrar: o app fica vivo na bandeja
+        // (é assim que ele continua "aberto" sem ocupar a barra de tarefas).
+        // Encerrar de verdade só pelo menu da bandeja ou pelo botão
+        // "Encerrar programa" dentro do app.
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                api.prevent_close();
+                let _ = window.hide();
+            }
         })
         .invoke_handler(tauri::generate_handler![
             commands::app_status,
             commands::retry_init,
+            commands::encerrar_app,
             // Sessão. `login_as_service` (a ponte tem) NÃO entra aqui de
             // propósito: é acesso total sem senha, só para o core-cli.
             commands::login,
@@ -76,15 +139,27 @@ fn main() {
             commands::set_department_permission_group,
             commands::list_requests,
             commands::create_request,
+            commands::update_request_items,
             commands::approve_request,
             commands::reject_request,
             commands::cancel_request,
             commands::deliver_request,
             commands::stock_availability,
+            commands::request_window_status,
+            commands::list_request_windows,
+            commands::create_request_window,
+            commands::close_request_window_now,
+            commands::delete_request_window,
             commands::list_products,
             commands::create_product,
             commands::update_product,
             commands::delete_product,
+            commands::upload_product_image,
+            commands::delete_product_image,
+            commands::read_product_image,
+            commands::upload_app_logo,
+            commands::delete_app_logo,
+            commands::get_app_logo,
             commands::list_departments,
             commands::create_department,
             commands::update_department,
@@ -101,6 +176,81 @@ fn main() {
             commands::import_dept_cost_history,
             commands::backup,
             commands::restore_backup,
+            commands::list_condominios,
+            commands::create_condominio,
+            commands::update_condominio,
+            commands::delete_condominio,
+            commands::list_tipos_servico,
+            commands::create_tipo_servico,
+            commands::update_tipo_servico,
+            commands::delete_tipo_servico,
+            commands::list_servicos_condominio,
+            commands::create_servico_condominio,
+            commands::update_servico_condominio,
+            commands::delete_servico_condominio,
+            commands::renovar_servico,
+            commands::list_renovacoes,
+            commands::list_setorizacao,
+            commands::create_especialidade,
+            commands::update_especialidade,
+            commands::delete_especialidade,
+            commands::list_empresas,
+            commands::list_parceiros,
+            commands::create_empresa,
+            commands::update_empresa,
+            commands::delete_empresa,
+            commands::list_gerentes,
+            commands::create_gerente,
+            commands::update_gerente,
+            commands::delete_gerente,
+            commands::list_servicos,
+            commands::create_servico,
+            commands::update_servico,
+            commands::delete_servico,
+            commands::list_fechamentos,
+            commands::fechar_mes,
+            commands::reabrir_fechamento,
+            commands::get_sos_config,
+            commands::set_sos_config,
+            commands::list_delta_sindicos,
+            commands::montar_dashboard,
+            commands::salvar_dashboard,
+            commands::list_dashboards,
+            commands::list_suprimentos,
+            commands::create_suprimento,
+            commands::update_suprimento,
+            commands::delete_suprimento,
+            commands::list_aquisicoes,
+            commands::create_aquisicao,
+            commands::update_aquisicao,
+            commands::delete_aquisicao,
+            commands::upload_aquisicao_attachment,
+            commands::delete_aquisicao_attachment,
+            commands::read_aquisicao_attachment,
+            commands::list_ordens_orcamento,
+            commands::create_ordem_orcamento,
+            commands::update_ordem_orcamento_info,
+            commands::delete_ordem_orcamento,
+            commands::solicitar_orcamento_para_empresas,
+            commands::reenviar_solicitacao_proposta,
+            commands::set_proposta_valor,
+            commands::upload_proposta_attachment,
+            commands::delete_proposta_attachment,
+            commands::read_proposta_attachment,
+            commands::marcar_proposta_recomendada,
+            commands::desmarcar_proposta_recomendada,
+            commands::enviar_orcamento_para_cliente,
+            commands::aprovar_proposta_orcamento,
+            commands::reativar_ordem_orcamento,
+            commands::get_email_config,
+            commands::set_email_config,
+            commands::send_test_email,
+            commands::abrir_email_outlook,
+            commands::list_pagamentos,
+            commands::create_pagamento,
+            commands::update_pagamento,
+            commands::delete_pagamento,
+            commands::marcar_parcela,
         ])
         .run(tauri::generate_context!())
         .expect("erro ao iniciar o Estoque FL Condomínios");

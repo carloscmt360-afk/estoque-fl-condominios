@@ -18,6 +18,7 @@ Product makeProduct(const std::string& id, const std::string& name, double minSt
   p.name = name;
   p.unit = "Unidade";
   p.minStock = minStock;
+  p.category = "Papelaria";  // createProduct exige uma das seis categorias válidas
   p.createdAt = "2026-01-01T00:00:00.000Z";
   return p;
 }
@@ -121,6 +122,68 @@ TEST_CASE("YTD de um ano totalmente no passado usa o mês inteiro pedido, não o
 
   CHECK(r["mYTD"].get<int>() == 10);  // novembro (mês 10) — o ano já acabou, usa o mês pedido inteiro
   CHECK(r["ytdCur"].get<double>() == doctest::Approx(7.0));
+}
+
+TEST_CASE("baixa em massa: várias saídas do mesmo depto/data entram no consumo, no custo por departamento e na posição") {
+  auto db = freshDb();
+  createDepartment(db, makeDept("d1", "Administração e Financeiro"));
+  createProduct(db, makeProduct("p1", "Vassoura de Nylon"));
+  createProduct(db, makeProduct("p2", "Papel A4"));
+  applyEntrada(db, "e1", "p1", 40, 15.0, "F", "NF1", "2026-08-01T00:00:00.000Z", "", "2026-08-01T00:00:00.000Z");
+  applyEntrada(db, "e2", "p2", 100, 20.0, "F", "NF2", "2026-08-01T00:00:00.000Z", "", "2026-08-01T00:00:00.000Z");
+
+  // É exatamente o que a Baixa em Massa faz: uma applySaida por material, com
+  // o MESMO departamento e a MESMA data do pedido para todas as linhas.
+  const std::string data = "2026-08-16T14:00:00.000Z";
+  applySaida(db, "s1", "p1", 5, "d1", data, "Pedido do dia", "Maria Souza", data);
+  applySaida(db, "s2", "p2", 3, "d1", data, "Pedido do dia", "Maria Souza", data);
+
+  ReportParams params{2026, 7, "", 6, "2026-08-31T23:59:59.000Z"};  // agosto/2026 (mês 7)
+  json r = json::parse(computeReportJson(db, params));
+
+  // 1) consumo do mês = 5×15 + 3×20 = 135
+  CHECK(r["kpi"]["consumo"].get<double>() == doctest::Approx(135.0));
+
+  // 2) custo por departamento credita o setor escolhido no modal
+  CHECK(r["deptMes"]["Administração e Financeiro"].get<double>() == doctest::Approx(135.0));
+
+  // 3) posição de estoque reflete a saída (40-5 e 100-3)
+  double qtyP1 = 0, qtyP2 = 0;
+  for (auto& it : r["itens"]) {
+    if (it["id"] == "p1") qtyP1 = it["qty"].get<double>();
+    if (it["id"] == "p2") qtyP2 = it["qty"].get<double>();
+  }
+  CHECK(qtyP1 == doctest::Approx(35.0));
+  CHECK(qtyP2 == doctest::Approx(97.0));
+
+  // 4) os dois materiais aparecem na lista de pedidos do mês, com solicitante
+  int doDia = 0;
+  for (auto& p : r["pedidos"]) {
+    if (p["requester"] == "Maria Souza") doDia++;
+  }
+  CHECK(doDia == 2);
+}
+
+TEST_CASE("correção manual do custo médio (applyCorrecao/newAvgCost) aparece na posição de estoque do relatório") {
+  auto db = freshDb();
+  createProduct(db, makeProduct("p1", "Saco 4 furos"));
+  // entrada original a R$19,60 — é o valor que ficaria "grudado" no relatório
+  // se a correção de custo abaixo fosse ignorada na hora de montar a posição.
+  applyEntrada(db, "m1", "p1", 125, 19.60, "F", "NF1", "2026-01-01T00:00:00.000Z", "", "2026-01-01T00:00:00.000Z");
+  // correção manual do custo médio para R$4,60, saldo mantido (qtyReal = saldo atual)
+  applyCorrecao(db, "c1", "p1", 125, "Correção do custo médio via edição do produto",
+                "2026-01-02T00:00:00.000Z", "2026-01-02T00:00:00.000Z", 4.60);
+
+  ReportParams params{2026, 0, "", 6, "2026-01-31T00:00:00.000Z"};
+  json r = json::parse(computeReportJson(db, params));
+
+  json item;
+  for (auto& it : r["itens"]) {
+    if (it["id"] == "p1") item = it;
+  }
+  REQUIRE(!item.is_null());
+  CHECK(item["avgCost"].get<double>() == doctest::Approx(4.60));
+  CHECK(item["valor"].get<double>() == doctest::Approx(125 * 4.60));
 }
 
 TEST_CASE("curva ABC classifica pelo valor acumulado em ordem decrescente (A<=80%, B<=95%, C=resto)") {

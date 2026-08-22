@@ -35,7 +35,7 @@ export async function initRetrospect() {
   document.getElementById('btnExportarRetro').addEventListener('click', exportarCSV);
   document.getElementById('btnImprimirRetro').addEventListener('click', () => {
     if (!RE) { toast('Abra o retrospecto antes de imprimir.', 'error'); return; }
-    printDocument(buildRetrospectDoc(RE));
+    printDocument(buildRetrospectDoc(RE), { landscape: true });
   });
   document.querySelectorAll('#view-retrospect [data-toggle-table]').forEach((btn) =>
     btn.addEventListener('click', () => toggleCardTable(btn.dataset.toggleTable)));

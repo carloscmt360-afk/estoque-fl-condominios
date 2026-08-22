@@ -3,37 +3,132 @@
 .app-shell {
   display: grid;
   grid-template-columns: var(--sidebar-w) 1fr;
+  /* minmax(0, 1fr) e não o `auto` implícito: uma linha de grid `auto` cresce
+     até caber o conteúdo mais alto, ignorando os 100vh do container — a barra
+     lateral então ficava com a altura que ela QUERIA (uns 680px) e o excesso
+     era simplesmente cortado pelo overflow:hidden, levando junto o rodapé.
+     Com minmax(0, 1fr) a linha vale exatamente a altura da tela e pode
+     encolher abaixo do conteúdo, que é o que deixa o menu rolar por dentro. */
+  /* Duas linhas: o corpo (barra lateral + conteúdo) e a barra fixa do rodapé,
+     que atravessa as DUAS colunas. `auto` na segunda porque a barra tem
+     altura própria (o conteúdo dela) e nunca cede espaço — quem encolhe é a
+     primeira linha, pelo minmax(0, 1fr). */
+  grid-template-rows: minmax(0, 1fr) auto;
   height: 100vh;
   overflow: hidden;
 }
 
 .sidebar {
-  background: var(--surface);
+  /* Paleta escura só para a barra lateral: redefine aqui os mesmos tokens
+     usados nas regras abaixo (var(--surface), var(--ink-primary) etc.) —
+     como custom properties CSS só valem dentro do elemento onde são
+     redefinidas, o resto do app (conteúdo em tema claro) não é afetado.
+     --accent fica azul porque o círculo do logo o usa; os BOTÕES do menu
+     não usam mais accent nenhum (ver .nav-item), são monocromáticos. */
+  --surface: #2f3136;
+  --surface-sunken: #3a3d44;
+  --border: #45484f;
+  --ink-primary: #ffffff;
+  --ink-secondary: #c6cad1;
+  --ink-muted: #9aa0a8;
+  --accent: #2e6ba6;
+  --accent-hover: #7ec4f0;
+  --accent-soft: rgba(255, 255, 255, 0.10);
+
+  /* Grafite continua sendo a cor dominante (cobre a maior parte da barra);
+     o gradiente só desliza pro azul institucional (--accent, redefinido
+     acima) perto do rodapé — mesmo espírito do gradiente das barras de
+     tabela (th, ver components.css), sem trocar a identidade escura. */
+  background: linear-gradient(180deg, var(--surface) 0%, color-mix(in srgb, var(--surface) 55%, var(--accent) 45%) 100%);
+  /* Precisa ser explícito: `body` resolve color:var(--ink-primary) com o
+     valor da RAIZ (tinta escura) e HERDA essa cor já computada pra cá — a
+     redefinição do token acima não reescreve o que foi herdado. Sem isto,
+     todo texto da barra que não declara cor própria (ex.: o nome de quem
+     está logado) sai quase invisível sobre o grafite. */
+  color: var(--ink-primary);
   border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
+  /* Pelo mesmo motivo do min-height em .sidebar-nav: um item de grid também
+     se recusa a encolher abaixo do próprio conteúdo por padrão. */
+  min-height: 0;
   padding: var(--sp-4) var(--sp-3);
-  gap: var(--sp-6);
+  /* sp-4 (e não sp-6) entre as seções: com o menu de 9 itens e o cartão do
+     usuário, o gap maior sozinho comia ~120px de altura e empurrava o rodapé
+     para fora da tela em notebook. */
+  gap: var(--sp-4);
+}
+
+/* Marca e rodapé têm tamanho fixo; quem cede espaço quando a tela é baixa é o
+   MENU (ver .sidebar-nav). Sem isto o flex encolhe todo mundo por igual e as
+   últimas linhas do rodapé — "Deus seja louvado" e a bandeira — caem para
+   fora da área visível, já que .app-shell tem overflow:hidden. */
+.sidebar-brand,
+.sidebar-foot {
+  flex: none;
+}
+
+/* Barra FIXA do rodapé — atravessa a tela inteira (as duas colunas do grid),
+   sempre visível no pé da janela: é uma linha própria de .app-shell, então
+   nada dentro dela rola nem é empurrado para fora, por mais alto que fique o
+   menu ou o conteúdo.
+   `position: relative` ancora o menu de ações (.user-menu), que abre para
+   CIMA a partir daqui, já que não há espaço abaixo. */
+.app-bottom-bar {
+  grid-column: 1 / -1;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-4);
+  padding: 0 var(--sp-4);
+  height: 34px;
+  /* Mesma paleta escura da barra lateral (ver .sidebar): a faixa é a
+     moldura do app, não parte do conteúdo em tema claro. */
+  --surface: #2f3136;
+  --border: #45484f;
+  --ink-primary: #ffffff;
+  --ink-muted: #9aa0a8;
+  --accent-soft: rgba(255, 255, 255, 0.10);
+  background: var(--surface);
+  color: var(--ink-primary);
+  border-top: 1px solid var(--border);
+}
+/* Créditos CENTRADOS na barra, em uma linha só. Posicionamento absoluto (e
+   não um item flex qualquer) para o centro ser o da TELA, não o do espaço
+   que sobra ao lado do cartão do usuário — que muda de largura conforme o
+   nome de quem está logado. */
+.app-bottom-bar-creditos {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  white-space: nowrap;
+  pointer-events: none;
 }
 
 .sidebar-brand {
   display: flex;
   align-items: center;
   gap: var(--sp-3);
-  padding: var(--sp-2) var(--sp-2);
+  padding: var(--sp-2) var(--sp-2) var(--sp-4);
+  border-bottom: 1px solid var(--accent-hover);
 }
 .sidebar-brand .logo {
-  width: 30px;
-  height: 30px;
-  border-radius: var(--radius-sm);
-  background: var(--accent);
-  color: #fff;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-weight: 800;
-  font-size: 12.5px;
   flex: none;
+}
+.sidebar-brand .logo svg {
+  width: 100%;
+  height: 100%;
+  display: block;
 }
 .sidebar-brand .name {
   font-size: 13px;
@@ -46,17 +141,73 @@
   color: var(--ink-muted);
 }
 
+/* Logo da FL — uma foto só, configurada aqui e usada sempre no cabeçalho
+   dos relatórios impressos (ver components/logoFl.js). Ocupa o lugar do
+   ícone fixo do app no topo da barra lateral (.sidebar-brand), ao lado do
+   nome "Estoque FL". */
+.sidebar-logo-fl {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+  flex: none;
+}
+.sidebar-logo-fl-preview {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-sm);
+  border: 1px dashed var(--accent-hover);
+  background: rgba(255, 255, 255, 0.06);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  cursor: pointer;
+}
+.sidebar-logo-fl-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: #fff;
+}
+/* Sem permissão de trocar a logo: some a borda tracejada de "isto é
+   clicável" e o cursor volta ao normal — só visualização. */
+.sidebar-logo-fl-preview--somente-leitura {
+  border-style: solid;
+  border-color: transparent;
+  cursor: default;
+}
+.logo-fl-placeholder {
+  font-size: 8px;
+  color: var(--ink-muted);
+  text-align: center;
+  line-height: 1.2;
+  padding: 0 2px;
+}
+.sidebar-logo-fl .btn-ghost {
+  color: var(--ink-muted);
+  padding: 2px 6px;
+}
+
+/* O menu é a parte elástica da barra: cresce para empurrar o rodapé até o pé
+   da tela e, se a tela for baixa demais para todos os itens, é ele que rola —
+   nunca o rodapé que desaparece. `min-height: 0` é obrigatório: sem ele um
+   item flex se recusa a encolher abaixo do próprio conteúdo e o overflow
+   volta a estourar para fora da barra. */
 .sidebar-nav {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
 }
 .nav-item {
   display: flex;
   align-items: center;
   gap: var(--sp-3);
   padding: var(--sp-2) var(--sp-3);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius);
   border: none;
   background: transparent;
   color: var(--ink-secondary);
@@ -66,20 +217,39 @@
   cursor: pointer;
   position: relative;
   width: 100%;
+  transition: background-color .15s ease, color .15s ease;
 }
+/* Estados do menu em branco/cinza, sem cor nenhuma: o realce vem só do
+   contraste (fundo translúcido mais claro + texto branco), não de um azul.
+   rgba branco em vez de um cinza fixo para o realce empilhar sobre o
+   grafite sem virar uma segunda cor de fundo a manter em sincronia. */
 .nav-item:hover {
-  background: var(--surface-sunken);
+  background: rgba(255, 255, 255, 0.06);
   color: var(--ink-primary);
 }
+.nav-item:hover .ico {
+  transform: translateX(1px);
+}
+/* Ícones outline (stroke="currentColor" no SVG, definido no HTML): herdam
+   sempre a cor do próprio .nav-item — cinza no padrão, branco em
+   hover/active — nunca um tom fixo próprio, para não competir com o
+   estado do item. */
 .nav-item .ico {
-  width: 16px;
-  text-align: center;
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   flex: none;
-  font-size: 14px;
+  transition: transform .15s ease;
+}
+.nav-item .ico svg {
+  width: 18px;
+  height: 18px;
 }
 .nav-item.active {
-  background: var(--accent-soft);
-  color: var(--accent-hover);
+  background: rgba(255, 255, 255, 0.12);
+  color: var(--ink-primary);
 }
 .nav-item.active::before {
   content: "";
@@ -89,11 +259,70 @@
   bottom: 8px;
   width: 3px;
   border-radius: 2px;
-  background: var(--accent);
+  background: var(--ink-primary);
+  transition: opacity .15s ease;
 }
 
+/* ---------------------------------------------- menu em módulos
+
+   O primeiro nível são MÓDULOS (Estoque, Cadastro de Empresas, Gestão SOS,
+   Gestão de Prazos, Administração). Um módulo com telas abre e fecha; as
+   telas ficam recuadas sob ele, ligadas por um filete vertical, para que se
+   leia de relance a que módulo cada tela pertence. */
+.nav-grupo {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+/* Módulo: um degrau acima das telas na hierarquia — texto mais claro e
+   levemente maior, sem virar outro componente. */
+.nav-modulo {
+  color: var(--ink-primary);
+  font-size: 13.5px;
+}
+.nav-grupo-cab .chevron {
+  width: 14px;
+  height: 14px;
+  margin-left: auto;
+  flex: none;
+  transform: rotate(90deg);
+  transition: transform .18s ease;
+  opacity: 0.75;
+}
+.nav-grupo.fechado .nav-grupo-cab .chevron {
+  transform: rotate(0deg);
+}
+.nav-grupo.fechado .nav-filhos {
+  display: none;
+}
+/* Módulo fechado que contém a tela aberta: o próprio cabeçalho assume o
+   realce, senão o menu não mostraria nada em destaque. */
+.nav-grupo.fechado.tem-ativa .nav-grupo-cab {
+  background: rgba(255, 255, 255, 0.12);
+}
+.nav-filhos {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 2px 0 4px var(--sp-4);
+  padding-left: var(--sp-3);
+  border-left: 1px solid var(--border);
+}
+.nav-filho {
+  font-size: 12.5px;
+  font-weight: 600;
+}
+/* O filete do item ativo encosta no filete do grupo, em vez de flutuar na
+   margem da barra como acontece com um item de primeiro nível. */
+.nav-filho.active::before {
+  left: calc(var(--sp-3) * -1 - 1px);
+}
+
+/* Sem `margin-top: auto` aqui: quem empurra o rodapé para o pé da tela agora
+   é o crescimento do menu (.sidebar-nav com flex:1). Ter os dois mecanismos
+   disputando o mesmo espaço livre é o que fazia o rodapé escorregar para
+   fora em telas baixas. */
 .sidebar-foot {
-  margin-top: auto;
   font-size: 10.5px;
   color: var(--ink-muted);
   padding: var(--sp-2);
@@ -105,7 +334,23 @@
   font-size: 9.5px;
   line-height: 1.4;
   color: var(--ink-muted);
-  padding: 0 var(--sp-2) var(--sp-2);
+}
+
+.app-blessing {
+  font-size: 9.5px;
+  color: var(--ink-muted);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+/* SVG em vez do emoji de bandeira (🇧🇷): o par de indicadores regionais que
+   compõe esse emoji não é combinado em glifo de bandeira pelo WebView2 no
+   Windows — aparecia como o texto "BR" solto. Um SVG inline renderiza igual
+   em qualquer plataforma. */
+.flag-br {
+  flex: none;
+  border-radius: 2px;
 }
 
 .content {
@@ -136,10 +381,17 @@
   display: block;
 }
 
+/* Mesma barra em degradê azul dos cabeçalhos de tabela (ver `th` em
+   components.css) — pedido do usuário pra esses rótulos de subseção
+   (Endereço, Especialidades, PROPOSTAS...) terem o mesmo preenchimento
+   das demais barras "de tópico" do app, em vez de texto solto. */
 .section-title {
+  background: linear-gradient(90deg, var(--accent), var(--accent-hover));
+  color: var(--ink-on-accent);
+  padding: 6px 11px;
+  border-radius: var(--radius-sm);
   font-size: 11px;
   font-weight: 700;
-  color: var(--ink-secondary);
   text-transform: uppercase;
   letter-spacing: 0.04em;
   margin: var(--sp-6) 0 var(--sp-3);
@@ -147,12 +399,25 @@
 .section-title:first-of-type {
   margin-top: 0;
 }
+/* .muted (--ink-muted, cinza claro) fica ilegível sobre o degradê azul do
+   título — mesmo texto "apagado", mas clareado pra continuar lendo em cima
+   do fundo escuro. */
+.section-title .muted {
+  color: rgba(255, 255, 255, 0.78);
+}
 
-@media (max-width: 860px) {
+/* Janela estreita: a barra ENCOLHE, nunca some.
+   Escondê-la (o que esta regra fazia antes) deixava o usuário sem nenhum
+   botão de menu e sem o "Sair" — sem rota de saída, já que não existe outro
+   lugar no app para trocar de tela. Como isto é um app de desktop, e não um
+   site aberto no celular, é melhor ceder largura do conteúdo (onde tabelas e
+   gráficos já rolam ou se reorganizam sozinhos) do que perder a navegação e
+   o rodapé da marca. */
+@media (max-width: 1100px) {
   .app-shell {
-    grid-template-columns: 1fr;
+    grid-template-columns: 196px 1fr;
   }
-  .sidebar {
-    display: none;
+  .content {
+    padding: var(--sp-5) var(--sp-4) var(--sp-6);
   }
 }

@@ -31,7 +31,7 @@ TEST_CASE("backupJson / restoreFromJson fazem round-trip preservando os dados") 
   p.id = "p1";
   p.name = "Papel A4";
   p.unit = "Unidade";
-  p.category = "Escritório";
+  p.category = "Papelaria";
   p.createdAt = "2026-01-01T00:00:00.000Z";
   api.createProduct(p);
   api.applyEntrada("m1", "p1", 10, 20.0, "Fornecedor X", "NF1", "2026-06-01T00:00:00.000Z", "",
@@ -70,6 +70,7 @@ TEST_CASE("restoreFromJson SUBSTITUI os dados atuais, não anexa") {
   p1.id = "velho";
   p1.name = "Produto antigo";
   p1.unit = "Unidade";
+  p1.category = "Papelaria";
   p1.createdAt = "2026-01-01T00:00:00.000Z";
   api.createProduct(p1);
 

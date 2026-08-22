@@ -4,9 +4,15 @@
 #include <vector>
 
 #include "estoque/auth_engine.hpp"
+#include "estoque/companies_engine.hpp"
+#include "estoque/dates_engine.hpp"
 #include "estoque/db.hpp"
+#include "estoque/commissions_engine.hpp"
 #include "estoque/inventory_engine.hpp"  // MovementPatch
+#include "estoque/managers_engine.hpp"
 #include "estoque/models.hpp"
+#include "estoque/purchases_engine.hpp"
+#include "estoque/suprimentos_engine.hpp"
 
 // Fachada única do domínio: junta banco + inventory_engine + report_engine
 // + auth_engine + request_engine + backup/restore num objeto com estado (a
@@ -49,10 +55,21 @@ class Api {
   // --------------------------------------------------------- catálogo/UI
   std::string permissionCatalogJson();
 
+  // Logo da FL: ativo global (fora do banco, ver bridge/src/images.rs),
+  // então o comando Tauri que grava/apaga o arquivo não passa pela sessão
+  // C++ como as outras operações — chama isto antes só pra confirmar que
+  // quem está logado pode trocar a logo. Lança se não houver sessão ou se
+  // quem está logado não for superadministrador; não lança nada (silêncio =
+  // liberado) quando pode.
+  void assertPodeEditarLogoFl();
+
   // ------------------------------------------------------------ produtos
   std::vector<Product> listProducts();
   Product createProduct(const Product& input);
   Product updateProduct(const Product& input);
+  Product setProductImage(const std::string& productId, const std::string& imagePath,
+                          const std::string& thumbnailPath);
+  Product clearProductImage(const std::string& productId);
   void deleteProduct(const std::string& id);
 
   // Posição de estoque com a reserva das requisições em aberto descontada.
@@ -70,7 +87,8 @@ class Api {
                       const std::string& departmentId, const std::string& date, const std::string& obs,
                       const std::string& requester, const std::string& createdAt);
   Movement applyCorrecao(const std::string& movementId, const std::string& productId, double qtyReal,
-                        const std::string& motivo, const std::string& date, const std::string& createdAt);
+                        const std::string& motivo, const std::string& date, const std::string& createdAt,
+                        double newAvgCost = 0);
 
   std::vector<Movement> listMovements();
   Movement updateMovement(const MovementPatch& patch);
@@ -107,11 +125,192 @@ class Api {
   // só as do próprio departamento — é o "histórico de pedidos do seu setor".
   std::string listRequestsJson();
   std::string createRequest(const std::string& payload);
+  // Substitui os itens de uma requisição ainda aberta — só quem valida
+  // requisições pode usar (corrige quantidade errada, acrescenta item
+  // esquecido). `payload` é `{"items":[{"id","productId","qty"}, ...]}`.
+  std::string updateRequestItems(const std::string& id, const std::string& payload, const std::string& nowIso);
   std::string approveRequest(const std::string& id, const std::string& note, const std::string& nowIso);
   std::string rejectRequest(const std::string& id, const std::string& note, const std::string& nowIso);
   std::string cancelRequest(const std::string& id, const std::string& note, const std::string& nowIso);
   std::string deliverRequest(const std::string& id, const std::string& nowIso,
                              const std::string& movementIdPrefix);
+
+  // ------------------------------------------------- janela de requisições
+  // Quem valida requisições (`requisicoes.update`) é quem abre e encerra o
+  // período em que o sistema aceita pedidos; todo mundo pode CONSULTAR o
+  // status, porque é ele que explica a tela ("fechado, reabre em ...").
+  //
+  // O "agora" destes métodos é sempre a hora do sistema, nunca uma data vinda
+  // do frontend: um prazo que o próprio pedido informa não é prazo nenhum.
+  std::string requestWindowStatusJson();
+  std::string listRequestWindowsJson();
+  std::string createRequestWindow(const std::string& payload);
+  std::string closeRequestWindowNow(const std::string& id);
+  void deleteRequestWindow(const std::string& id);
+
+  // ------------------------------------------------------ gestão de prazos
+  // Condomínios: cadastro de referência. É lido tanto pela tela "Cadastro de
+  // Condomínios" quanto pela "Gestão de Prazos" (para o seletor de vínculo) —
+  // mesmo critério de requireAny já usado em listProducts/listDepartments.
+  std::vector<Condominio> listCondominios();
+  Condominio createCondominio(const Condominio& input);
+  Condominio updateCondominio(const Condominio& input);
+  void deleteCondominio(const std::string& id);
+
+  // Tipos de serviço: catálogo (nome, prazo em dias, cor de identificação).
+  std::vector<TipoServico> listTiposServico();
+  TipoServico createTipoServico(const TipoServico& input);
+  TipoServico updateTipoServico(const TipoServico& input);
+  void deleteTipoServico(const std::string& id);
+
+  // Vínculos (condomínio × tipo de serviço), já com vencimento e status
+  // (em dia/atenção/vencido) calculados a partir de `nowIso` — um JSON só,
+  // para a tela de Gestão de Prazos não precisar de três idas.
+  std::string listServicosCondominioJson(const std::string& nowIso);
+  std::string createServicoCondominio(const std::string& payload);
+  std::string updateServicoCondominio(const std::string& payload);
+  void deleteServicoCondominio(const std::string& id);
+
+  // Registra uma renovação (novo histórico) e atualiza a data do vínculo.
+  std::string renovarServico(const std::string& payload);
+
+  // filtro vazio = todo o histórico; preenchido = só as renovações de um
+  // vínculo específico.
+  std::string listRenovacoesJson(const std::string& servicoCondominioFilter);
+
+  // ------------------------------- fornecedores e prestadores de serviços
+  // Um JSON só com os quatro setores (catálogo fixo) e as especialidades de
+  // cada um — é tudo que a tela de Setorização precisa, numa ida.
+  std::string listSetorizacaoJson();
+  std::string createEspecialidade(const std::string& payload);
+  std::string updateEspecialidade(const std::string& payload);
+  void deleteEspecialidade(const std::string& id);
+
+  // Empresas já com as especialidades resolvidas (setor + nome de cada uma),
+  // porque as três telas do módulo mostram isso e nenhuma faz join.
+  std::string listEmpresasJson();
+  // Só as parceiras (o Sim da ficha) — é a lista de Gestão SOS > Parceiros.
+  // A filtragem é feita no SQL, e não na tela: assim quem abre Parceiros não
+  // recebe o cadastro inteiro de empresas pela ponte só para descartar a maior
+  // parte dele no JavaScript.
+  std::string listParceirosJson();
+  std::string createEmpresa(const std::string& payload);
+  std::string updateEmpresa(const std::string& payload);
+  void deleteEmpresa(const std::string& id);
+
+  // ------------------------------------------ gestão sos: gerentes e carteiras
+  // Gerente já com os condomínios da carteira resolvidos (id + nome), porque
+  // tanto a tela de Gerentes quanto a de Carteiras mostram isso sem join.
+  std::string listGerentesJson();
+  std::string createGerente(const std::string& payload);
+  std::string updateGerente(const std::string& payload);
+  void deleteGerente(const std::string& id);
+
+  // --------------------------------- gestão sos: serviços e fechamentos
+  // Serviço já com o valor de comissão calculado (venda × porcentagem ÷ 100)
+  // — nunca gravado, ver commissions_engine.hpp.
+  std::string listServicosJson();
+  std::string createServico(const std::string& payload);
+  std::string updateServico(const std::string& payload);
+  void deleteServico(const std::string& id);
+
+  std::string listFechamentosJson();
+  // payload: {mesReferencia, observacoes}
+  std::string fecharMes(const std::string& payload);
+  void reabrirFechamento(const std::string& id);
+
+  // Configurações do módulo (hoje só a porcentagem padrão de comissão).
+  std::string getSosConfigJson();
+  void setSosConfig(const std::string& payload);
+
+  // ------------------------------------------ gestão sos: delta síndicos
+  // Puxado automaticamente de Serviços (condomínios com deltaSindica=true) —
+  // não existe mais criar/editar/excluir lançamento aqui (ver
+  // commissions_engine.hpp). Comissão vem calculada (venda × porcentagem ÷
+  // 100), nunca gravada, mesmo critério dos serviços.
+  std::string listDeltaSindicosJson();
+
+  // ------------------------------- gestão sos: dashboard de fechamento
+  // Monta o dashboard do mês (não grava). payload: a DashboardEntrada —
+  // mês + os campos que o usuário informa (ver commissions_engine.hpp).
+  std::string montarDashboard(const std::string& payload);
+  // Grava o retrato como foi apresentado. Nunca substitui: gerar de novo o
+  // mesmo mês acrescenta uma entrada ao histórico.
+  std::string salvarDashboard(const std::string& payload);
+  std::string listDashboardsJson();
+
+  // --------------------------------------------- gestão sos: suprimentos
+  std::string listSuprimentosJson();
+  std::string createSuprimento(const std::string& payload);
+  std::string updateSuprimento(const std::string& payload);
+  void deleteSuprimento(const std::string& id);
+
+  // --------------------------------------------------------------- compras
+  // Aquisições FL: compra geral, ligada a um fornecedor cadastrado.
+  std::string listAquisicoesJson();
+  std::string createAquisicao(const std::string& payload);
+  std::string updateAquisicao(const std::string& payload);
+  void deleteAquisicao(const std::string& id);
+  // anexoPath/anexoTipo já vêm prontos (arquivo já salvo em disco pela ponte
+  // Rust — ver bridge/src/attachments.rs) — mesmo critério de
+  // setProductImage/clearProductImage.
+  std::string setAquisicaoAnexo(const std::string& aquisicaoId, const std::string& anexoPath,
+                                const std::string& anexoTipo);
+  std::string clearAquisicaoAnexo(const std::string& aquisicaoId);
+
+  // Orçamentos: fluxo de cotação (ordem 1:N propostas) — ver
+  // purchases_engine.hpp para o modelo. Os métodos que disparam e-mail
+  // (solicitar/enviarParaCliente/aprovar) NÃO enviam nada sozinhos: o C++
+  // não tem acesso a rede — devolvem o JSON da ordem atualizada MAIS um
+  // array "emails" (to/subject/bodyHtml/attachmentPaths) já composto, que o
+  // comando Tauri (src-tauri/src/commands.rs) itera chamando
+  // bridge::mailer para de fato enviar, com as credenciais de
+  // getEmailConfigJson().
+  std::string listOrdensOrcamentoJson(const std::string& nowIso);
+  std::string createOrdemOrcamento(const std::string& payload);
+  std::string updateOrdemOrcamentoInfo(const std::string& payload);
+  void deleteOrdemOrcamento(const std::string& id);
+  // payload: {ordemId, empresas:[{empresaId,empresaNome}]}
+  std::string solicitarOrcamentoParaEmpresas(const std::string& payload, const std::string& nowIso);
+  // Reenvia a solicitação (mesmo texto de composeSolicitacaoBody) para UMA
+  // empresa já solicitada — devolve a ORDEM inteira + "emails" com 1 item,
+  // mesmo padrão dos outros três que disparam e-mail.
+  std::string reenviarSolicitacaoProposta(const std::string& propostaId, const std::string& nowIso);
+  std::string setPropostaValor(const std::string& propostaId, double valor);
+  std::string setPropostaAnexo(const std::string& propostaId, const std::string& anexoPath,
+                               const std::string& anexoTipo);
+  std::string clearPropostaAnexo(const std::string& propostaId);
+  std::string marcarPropostaRecomendada(const std::string& ordemId, const std::string& propostaId);
+  std::string desmarcarPropostaRecomendada(const std::string& ordemId);
+  // payload: {ordemId, destinatarioEmail (opcional — sobrepõe o e-mail do
+  // condomínio), mensagemExtra (opcional)}
+  std::string enviarOrcamentoParaCliente(const std::string& payload, const std::string& nowIso);
+  std::string aprovarPropostaOrcamento(const std::string& ordemId, const std::string& propostaId,
+                                       const std::string& nowIso);
+  std::string reativarOrdemOrcamento(const std::string& ordemId, const std::string& nowIso);
+
+  // Configuração de SMTP (Configurações > E-mail) — só superadministrador
+  // (credencial sensível, sistema inteiro, mesmo critério de
+  // assertPodeEditarLogoFl). Senha nunca volta em getEmailConfigJson (só
+  // "temSenha": bool). setEmailConfig só grava a chave `password` quando o
+  // payload a CONTÉM (mesmo critério de gravarSePresente em setSosConfig) —
+  // reenviar o formulário sem tocar no campo senha não apaga a já salva.
+  std::string getEmailConfigJson();
+  void setEmailConfig(const std::string& payload);
+  // Mesmos campos de getEmailConfigJson, mas com a senha DE VERDADE —
+  // exclusivo de uso interno do comando Tauri que monta o SmtpConfig antes
+  // de mandar pro bridge::mailer (ver src-tauri/src/commands.rs); nunca
+  // volta pro frontend (não tem wrapper em frontend/js/api.js).
+  std::string getEmailConfigInternalJson();
+
+  // Acompanhamento de pagamentos: uma NF (ligada a uma Aquisição) e as
+  // parcelas dela.
+  std::string listPagamentosJson();
+  std::string createPagamento(const std::string& payload);
+  std::string updatePagamento(const std::string& payload);
+  void deletePagamento(const std::string& id);
+  // payload: {pagamentoId, parcelaId, pago, dataPagamento}
+  std::string marcarParcela(const std::string& payload);
 
   // -------------------------------------------------------- backup/restore
   // JSON no MESMO formato do antigo localStorage (products/movements/departments

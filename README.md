@@ -96,6 +96,36 @@ solicitação, de quem aprovou/rejeitou e de quem confirmou a entrega. Um
 usuário comum vê os pedidos **do seu departamento**; quem valida vê todos —
 e é o backend quem filtra, não a tela (`Api::listRequestsJson`).
 
+### Janela de requisições (prazo de pedidos)
+
+O sistema só aceita requisição **dentro de uma janela aberta**: um período com
+data/hora de abertura e de fechamento, cadastrado por quem valida requisições.
+Passado o fechamento, o app **tranca sozinho** e recusa qualquer pedido novo
+até alguém abrir a próxima janela.
+
+Um banco **sem nenhuma janela cadastrada está fechado** — é o estado de
+fábrica, e a mensagem de recusa diz o que fazer.
+
+"Aberta" nunca é uma coluna gravada, e sim uma comparação contra o instante da
+pergunta (`opens_at <= agora < closes_at`, sem fechamento antecipado): a mesma
+linha do banco responde "aberta" às 12h e "fechada" às 18h, sem precisar de
+alguém — ou de um agendador — para virar a chave no minuto exato.
+
+A trava mora em `requireOpenRequestWindow` (`request_engine.cpp`) e é chamada
+por `Api::createRequest` **antes** de qualquer validação de item. O "agora"
+conferido é o do **relógio do sistema** (`time_utils::systemNowIso()`), nunca o
+`createdAt` do payload — deixar o próprio pedido dizer que horas são anularia o
+prazo. Esconder o botão no frontend é só conveniência. (Como todo app desktop,
+o prazo vale contra o relógio da máquina: quem tem administrador do Windows
+pode mudá-lo. A trava é operacional, não uma barreira contra fraude.)
+
+Duas janelas não podem valer ao mesmo tempo (senão "a janela aberta agora"
+teria duas respostas). Uma janela pode ser **encerrada antes do prazo**
+(`closed_at`), o que fecha os pedidos na hora e devolve o período restante para
+uma janela nova ocupar. Janela que já começou não pode ser apagada — só
+encerrada —, porque o histórico dela é o que explica por que os pedidos daquele
+período foram aceitos.
+
 ## Retrospecto (custo mensal por departamento)
 
 A aba **Retrospecto** reproduz dentro do app a aba `RESTROSPECTO` da planilha
@@ -141,6 +171,143 @@ esconderia o estouro dos outros.
 
 O botão "Usar como limite mensal dos departamentos", no Retrospecto, grava o
 teto sugerido de cada setor como o limite cadastrado.
+
+## Fornecedores e Prestadores de Serviços
+
+Três telas, na ordem de uso — o **Catálogo** primeiro porque é o que se abre no
+dia a dia; as outras duas são a manutenção do que alimenta ele:
+
+```
+SETOR (catálogo fixo de 4) ──> Especialidade (o "nicho", cadastrável)
+                                     │
+                                     └──< Empresa (N especialidades)
+```
+
+Os **setores** (Vendas, Contratos/Manutenções, Terceirizadas, Engenharia) são
+fixos no código (`setorCatalog`, `companies_engine.cpp`), pelo mesmo critério do
+`kFeatureCatalog` das permissões: quando a lista é a própria estrutura do
+negócio, ela mora num lugar só e o banco apenas a respeita (via `CHECK`).
+
+As **especialidades** são o que se cadastra dentro de cada setor, na tela de
+**Setorização**, e são exatamente as que a tela de **Cadastro** oferece para
+marcar numa empresa — quantas precisar, de setores diferentes inclusive. Nome
+repetido é recusado **dentro do mesmo setor**, ignorando caixa, acento e espaço
+sobrando (`folded()`): "Impermeabilizacao" e "Impermeabilização" como dois
+nichos separados espalhariam as empresas em duas linhas, que é justamente o que
+o Catálogo existe para evitar. O mesmo nome em setores **diferentes** é
+permitido (Dedetização pode ser de Engenharia e de Terceirizadas).
+
+O **Catálogo de empresas** agrupa por segmento, não por empresa: é a tela de
+quem já tem uma demanda na mão. Cada empresa aparece com telefone e e-mail à
+vista, e com as *outras* especialidades dela como contexto.
+
+`empresas.cnpj_key` guarda só os alfanuméricos em maiúsculas e carrega o
+`UNIQUE` (mesma ideia de `users.email_key`): "12.345.678/0001-99" e
+"12345678000199" são o MESMO CNPJ, mas o texto digitado é preservado para
+exibir. **Não** se confere dígito verificador — o CNPJ alfanumérico convive com
+o numérico, e recusar um cadastro legítimo é pior que aceitar um dígito trocado.
+O campo é opcional.
+
+Excluir uma **empresa** solta as marcações dela (`ON DELETE CASCADE`) mas
+preserva o catálogo; excluir uma **especialidade em uso** é recusado, dizendo em
+quantas empresas ela está.
+
+### Gestão SOS > Parceiros
+
+A ficha da empresa tem a pergunta **"É empresa parceira?"** (Sim/Não). O Sim é o
+que faz a empresa aparecer em **Gestão SOS › Parceiros**, e a marcação vive na
+própria empresa — não há cadastro separado de parceiro, porque duas fichas da
+mesma empresa divergiriam de telefone na primeira atualização, e é o telefone
+que essa tela existe para entregar. Por isso ele vem em destaque ali: num
+chamado emergencial, o passo seguinte a achar é ligar.
+
+### Gestão SOS > Gerentes, Carteiras, Serviços e Comissões
+
+```
+Gerente ──< carteira (N condomínios) >── Condominio
+                                              │
+Servico (condomínio, gerente?, parceiro?, venda, porcentagem, mês) ──> comissão [calculada]
+   │
+   └──< fechamentoId >── Fechamento (totais denormalizados no momento do fechar)
+```
+
+**Gerentes** é cadastro simples; **Carteiras** mostra um card por gerente — o
+clique abre TODOS os condomínios cadastrados, marcados por clique (mesmo
+padrão de chip de Especialidades), e os marcados formam a carteira dele
+(`gerente_condominios`, N:N).
+
+**Serviços** é a planilha de vendas/comissões: cada linha liga um condomínio
+(obrigatório) a um gerente e um parceiro (ambos opcionais, e o parceiro
+precisa ser uma empresa marcada como parceira), com venda, porcentagem e um
+mês de referência (`"YYYY-MM"`). O "ID" da planilha é `numero`
+(`INTEGER PRIMARY KEY AUTOINCREMENT`) — nunca se repete, mesmo depois de
+excluir uma linha, diferente de um rowid comum que reaproveitaria o maior
+número apagado. `id` (TEXT) continua existindo como a chave técnica, mesmo
+padrão do resto do app. Condomínio/gerente/parceiro são referenciados por id
+E por nome denormalizado, **sem FK** (mesmo critério de
+`requests.department_id`): é um lançamento financeiro, e excluir o cadastro de
+origem anos depois não pode apagar nem quebrar a comissão já lançada. A
+**comissão nunca é gravada** — é sempre `venda × porcentagem ÷ 100`, calculada
+na leitura, mesmo critério do vencimento em Gestão de Prazos.
+
+**Fechamento** trava (contra edição/exclusão) todos os serviços em aberto de
+um mês e grava os totais no **Histórico de fechamentos**, denormalizados no
+momento do fechar (como `renovacoes.prazo_dias_aplicado`) — como os serviços
+fechados ficam imutáveis, o total nunca diverge do que ele resume. **Reabrir**
+desfaz um fechamento feito por engano: solta os serviços de volta para edição
+e remove o registro. **Configurações** hoje só guarda a porcentagem padrão de
+comissão (`sos_config`, chave/valor), que pré-preenche o campo ao lançar um
+novo serviço.
+
+## Cadastro de Condomínios e Gestão de Prazos
+
+Os condomínios administrados têm cadastro próprio (**Cadastro de
+Condomínios**), e é essa lista que alimenta o seletor da **Gestão de Prazos**
+— um serviço só é vinculado a um condomínio que exista ali. Além dos campos
+operacionais (síndico, telefone, observações), o cadastro tem CNPJ, Código
+(a "Identificação" de sistemas de origem), Nome fantasia e o endereço
+detalhado (CEP, endereço, complemento, bairro, cidade, UF) — nenhum desses é
+obrigatório. **Localização** é a região da cidade onde o condomínio fica:
+resposta única entre um catálogo fixo (Centro, Leste, Oeste, Norte, Sul, Outra
+cidade — `localizacaoCatalog`, `dates_engine.cpp`), mesmo critério do
+`setorCatalog` de Fornecedores: é estrutura do negócio, não um cadastro à
+parte, então mora no código e o banco só a respeita (via `CHECK`).
+
+A Gestão de Prazos acompanha o vencimento dos serviços contratados por cada
+condomínio:
+
+```
+Condominio ─┐                    ┌─ TipoServico (prazoDias, cor)
+            ├─> ServicoCondominio┤
+            │   (dataUltimaRenovacao)
+            │        │
+            │        └──> Renovacao (histórico: uma linha por renovação)
+```
+
+O **vencimento e a situação nunca são gravados**: saem calculados a cada
+leitura de `dataUltimaRenovacao + TipoServico.prazoDias` contra o "hoje" que o
+chamador passa — mesma disciplina de `nowIso` do resto do núcleo, que é o que
+mantém o cálculo determinístico e testável. A situação é *em dia* (mais de 30
+dias), *atenção* (0 a 30 dias) ou *vencido* (prazo estourado), e o texto da
+pílula diz o número de dias: a cor reforça, nunca é a única informação.
+`TipoServico.prazoDias` continua em dias no núcleo (é o que sustenta a régua de
+30 dias acima); só a tela de Tipo de Serviço fala em **meses** com o usuário,
+convertendo 1 mês = 30 dias na entrada/saída (`frontend/js/views/prazos.js`).
+
+Cada **Renovar** grava uma linha nova em `renovacoes` e atualiza o vínculo, na
+mesma transação — o razão nunca é sobrescrito, mesmo espírito de `movements`
+para produtos. O `prazo_dias_aplicado` fica denormalizado em cada renovação:
+mudar depois o prazo padrão de um tipo de serviço **não** reescreve o
+histórico já gravado.
+
+Excluir um condomínio leva junto seus vínculos e o histórico deles (`ON DELETE
+CASCADE`). Já um **tipo de serviço em uso não pode ser excluído**: apagar em
+silêncio o vínculo de um cliente porque o catálogo mudou seria perda de dado,
+não limpeza.
+
+As permissões **Condomínios** e **Gestão de Prazos** entram na mesma matriz
+grupo → departamento → usuário das demais telas, e as quatro tabelas entram no
+backup/restore.
 
 ## Impressão
 
@@ -190,7 +357,9 @@ gcc -c -O1 -w -DSQLITE_THREADSAFE=1 third_party/sqlite/sqlite3.c -o /tmp/sqlite3
 
 # 2) um binário por arquivo de teste (cada um define seu próprio main)
 for t in test_inventory_engine test_report_engine test_retrospect_engine test_api \
-         test_time_utils test_portable_paths test_crypto test_auth_engine test_request_engine; do
+         test_time_utils test_portable_paths test_crypto test_auth_engine test_request_engine \
+         test_dates_engine test_companies_engine test_managers_engine test_commissions_engine \
+         test_suprimentos_engine test_purchases_engine; do
   g++ -std=c++17 -Iinclude -Ithird_party/sqlite -Ithird_party \
     src/*.cpp tests/$t.cpp /tmp/sqlite3.o -lpthread -ldl -o /tmp/$t && /tmp/$t
 done

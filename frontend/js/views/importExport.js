@@ -1,4 +1,5 @@
 import { api } from '../api.js';
+import { agoraLocalArquivo } from '../format.js';
 import { toast } from '../components/toast.js';
 import { can } from '../session.js';
 
@@ -29,9 +30,12 @@ function downloadFile(filename, content, mime) {
 async function exportBackup() {
   try {
     const data = await api.backup();
-    const stamp = new Date().toISOString().slice(0, 10);
-    downloadFile(`backup_estoque_fl_${stamp}.json`, JSON.stringify(data, null, 2), 'application/json');
-    toast('Backup exportado.', 'success');
+    // Data E hora, no fuso do computador: dois backups no mesmo dia deixam de
+    // brigar pelo mesmo nome, e o arquivo passa a dizer de quando ele é sem
+    // depender da data de modificação (que a cópia entre pastas altera).
+    const carimbo = agoraLocalArquivo();
+    downloadFile(`backup_estoque_fl_${carimbo}.json`, JSON.stringify(data, null, 2), 'application/json');
+    toast(`Backup exportado: backup_estoque_fl_${carimbo}.json`, 'success');
   } catch (e) { toast('Erro ao exportar: ' + e, 'error'); }
 }
 

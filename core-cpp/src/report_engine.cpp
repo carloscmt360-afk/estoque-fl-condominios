@@ -31,7 +31,7 @@ std::string trim(const std::string& s) {
 struct MovementRec {
   std::string id, type, productId, supplier, nf, departmentId, recipient, encarregado, requester, obs,
       date, createdAt;
-  double qty = 0, unitPrice = 0, resultingQty = 0, resultingAvgCost = 0;
+  double qty = 0, unitPrice = 0, resultingQty = 0, resultingAvgCost = 0, newAvgCost = 0;
   int64_t ts = 0;
 };
 
@@ -44,7 +44,7 @@ std::vector<MovementRec> loadMovements(Database& db) {
   std::vector<MovementRec> out;
   auto st = db.prepare(
       "SELECT id, type, product_id, qty, unit_price, supplier, nf, department_id, recipient, "
-      "encarregado, requester, obs, date, resulting_qty, resulting_avg_cost, created_at "
+      "encarregado, requester, obs, date, resulting_qty, resulting_avg_cost, created_at, new_avg_cost "
       "FROM movements ORDER BY date, created_at");
   while (st.step()) {
     MovementRec m;
@@ -64,6 +64,7 @@ std::vector<MovementRec> loadMovements(Database& db) {
     m.resultingQty = st.columnIsNull(13) ? 0.0 : st.columnDouble(13);
     m.resultingAvgCost = st.columnIsNull(14) ? 0.0 : st.columnDouble(14);
     m.createdAt = st.columnText(15);
+    m.newAvgCost = st.columnIsNull(16) ? 0.0 : st.columnDouble(16);
     // SQLite já ordenou por (date, created_at) como TEXT: nosso formato ISO
     // de largura fixa é lexicograficamente ordenável, então isso já é
     // cronológico — não precisamos reordenar aqui.
@@ -90,6 +91,7 @@ void applyToAcc(Snapshot& acc, const MovementRec& m) {
     s.qty -= q;
   } else {
     s.qty += q;  // ajuste: `q` já é o delta (qtyReal - qtyAnterior)
+    if (m.newAvgCost > 0) s.avgCost = m.newAvgCost;  // correção manual do custo médio, opcional
   }
 }
 
@@ -504,6 +506,7 @@ std::string computeReportJson(Database& db, const ReportParams& params) {
   for (auto& it : itens) {
     json j;
     j["id"] = it.p.id;
+    j["sku"] = it.p.sku;
     j["name"] = it.p.name;
     j["unit"] = it.p.unit;
     j["category"] = it.p.category;

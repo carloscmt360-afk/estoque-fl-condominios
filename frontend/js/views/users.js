@@ -3,6 +3,7 @@ import { escapeHtml, uid, nowIso, fmtNum, fmtDateTimeBR } from '../format.js';
 import { openModal, closeModal } from '../components/modal.js';
 import { toast } from '../components/toast.js';
 import { currentUser } from '../session.js';
+import { enableRowSelection } from '../components/tableTools.js';
 
 // Gestão de usuários — tela exclusiva do superadministrador (o backend recusa
 // qualquer chamada daqui vinda de outro papel; ver api.cpp).
@@ -26,6 +27,7 @@ export async function initUsers() {
     ['filtroUsuarioBusca', 'filtroUsuarioPapel', 'filtroUsuarioSituacao'].forEach((id) => {
       document.getElementById(id).addEventListener('input', render);
     });
+    enableRowSelection(document.getElementById('usersTbody'));
   }
   await reload();
 }

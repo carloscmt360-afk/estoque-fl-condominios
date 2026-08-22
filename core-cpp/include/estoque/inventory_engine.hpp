@@ -15,12 +15,35 @@ namespace estoque {
 // ---- Produtos ----
 // `input` já deve trazer id/createdAt preenchidos pelo chamador; qty/avgCost
 // são sempre forçados a 0 na criação (entram por uma entrada explícita).
+// O SKU (input.sku, se vier preenchido) é IGNORADO — sempre gerado pelo
+// servidor no formato CMT###### (ver nextSku em inventory_engine.cpp).
+// Lança std::invalid_argument se input.category não for uma das seis
+// categorias válidas (Papelaria/Informática/Assembleia/Gráfica/Brinde/Valor).
 Product createProduct(Database& db, const Product& input);
 // Atualiza name/unit/minStock/category; nunca mexe em qty/avgCost (esses só
-// mudam via applyEntrada/applySaida/applyCorrecao).
+// mudam via applyEntrada/applySaida/applyCorrecao) nem em sku (permanente
+// por definição — ver o comentário de Product::sku em models.hpp). Mesma
+// validação de categoria de createProduct — inclusive para tirar um item de
+// "Não Classificado": só sai desse estado escolhendo uma categoria válida.
 Product updateProduct(Database& db, const Product& input);
+// Grava/limpa só image_path/thumbnail_path — nunca mexe em SKU, categoria,
+// saldo ou histórico. imagePath/thumbnailPath já devem vir prontos
+// (caminhos relativos gerados pelo módulo Rust de imagens); este par nunca
+// decodifica nem grava bytes de imagem, só a referência. Lança
+// NotFoundError se productId não existir.
+Product setProductImage(Database& db, const std::string& productId, const std::string& imagePath,
+                         const std::string& thumbnailPath);
+Product clearProductImage(Database& db, const std::string& productId);
 void deleteProduct(Database& db, const std::string& id);  // remove também as movimentações do produto
 std::vector<Product> listProducts(Database& db);
+// Preenche o SKU de produtos que ainda não têm um (dados legados/backup
+// restaurado sem SKU) — em ordem de criação, sem alterar quem já tem.
+void backfillMissingSkus(Database& db);
+// Reclassifica produtos cuja categoria não é uma das seis válidas (dado
+// legado/restaurado) por palavra-chave no nome, ou "Não Classificado" se
+// não conseguir — nunca toca em quem já está numa categoria válida. Roda
+// uma única vez (flag em app_settings); devolve quantos produtos mexeu.
+int classifyLegacyCategories(Database& db);
 std::optional<Product> findProduct(Database& db, const std::string& id);
 
 // ---- Departamentos ----
@@ -52,9 +75,14 @@ Movement applySaida(Database& db, const std::string& movementId, const std::stri
 // movements.qty é o delta contra o saldo vigente NA DATA do ajuste (não
 // contra o saldo de hoje) — é isso que faz um ajuste retroativo continuar
 // coerente depois que outro lançamento é editado antes dele.
+//
+// `newAvgCost` (opcional, default 0 = não altera) corrige o CUSTO MÉDIO —
+// diferente de qtyReal, que corrige o SALDO. Os dois podem vir juntos (uma
+// contagem física às vezes revela os dois errados) ou só um dos dois
+// (qtyReal = saldo atual do produto → delta zero, só o custo muda).
 Movement applyCorrecao(Database& db, const std::string& movementId, const std::string& productId,
                         double qtyReal, const std::string& motivo, const std::string& date,
-                        const std::string& createdAt);
+                        const std::string& createdAt, double newAvgCost = 0);
 
 // ---- Consulta de lançamentos ----
 std::vector<Movement> listMovements(Database& db);  // ordem cronológica (date, created_at)
@@ -100,6 +128,32 @@ void deleteMovement(Database& db, const std::string& id);
 // 101 unidades. Com ele, uma edição move o saldo exatamente pelo efeito da
 // edição — nada mais. Os chamadores capturam o offset ANTES de mexer no
 // razão (ver ledgerOffset, no .cpp).
-void recomputeProduct(Database& db, const std::string& productId, double offsetQty);
+//
+// `previousQty` é o saldo do produto ANTES desta operação (o mesmo `product`
+// que os chamadores já buscaram para calcular offsetQty) — usado só pela
+// trava de saldo negativo: uma operação não pode fazer o saldo terminar mais
+// negativo do que já estava. Produtos já negativos (dado legado) não ficam
+// travados para sempre; ver repairNegativeBalances.
+void recomputeProduct(Database& db, const std::string& productId, double offsetQty, double previousQty);
+
+// Corrige, uma única vez, produtos com saldo negativo herdado de antes da
+// trava de saldo negativo existir (ver o comentário em recomputeProduct no
+// .cpp) — zera o saldo deles via um ajuste auditável. Idempotente: chamadas
+// depois da primeira são no-op (flag em app_settings). Devolve os IDs dos
+// produtos corrigidos nesta chamada (vazio se já tinha rodado antes).
+std::vector<std::string> repairNegativeBalances(Database& db, const std::string& nowIso);
+
+// Reconcilia products.avg_cost com o que o razão de movimentações reproduz
+// (ver o comentário longo no .cpp) — sem isso, um produto vindo de um backup
+// restaurado pode mostrar um custo na tela de Produtos e OUTRO no Relatório/
+// Retrospecto, porque só esses últimos recalculam pelo razão. Ao contrário de
+// repairNegativeBalances, não é uma correção "uma vez só": é barata de rodar
+// sempre (só paga o replay completo do produto quando ele já diverge) e
+// idempotente, então roda em toda abertura de sessão e ao fim de todo
+// restoreFromJson. Nunca sobrescreve com um custo zerado (razão sem nenhuma
+// entrada/ajuste que estabeleça um custo) — aí prefere manter o que já
+// estava, a apagar um preço porventura real vindo da origem. Devolve os IDs
+// dos produtos corrigidos nesta chamada.
+std::vector<std::string> reconcileAvgCost(Database& db);
 
 }  // namespace estoque

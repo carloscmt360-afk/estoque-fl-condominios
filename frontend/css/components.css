@@ -270,6 +270,54 @@ label {
   font-size: 12px;
 }
 
+/* "Acumulado por departamento" (js/charts/deptoAcumulado.js): tabela com um
+   pontinho colorido na variação, em vez do texto/seta de .flag — mais perto
+   do "de relance" que um dumbbell chart pede o mouse pra dar.
+
+   table-layout:fixed com largura por coluna: em table-layout:auto (padrão),
+   uma coluna cujo conteúdo não pode quebrar linha (o pontinho + percentual)
+   pode ser desenhada mais larga que o espaço calculado pra ela — a CAIXA da
+   célula não cresce (por isso não aparecia no boundingBox), mas o texto
+   pinta por cima do card vizinho. Com largura fixa por coluna, o navegador
+   nunca tenta encolher essa coluna abaixo do que ela precisa. */
+.acc-depto-table {
+  table-layout: fixed;
+}
+.acc-depto-table th:first-child,
+.acc-depto-table td:first-child {
+  width: 34%;
+}
+.acc-depto-table th:last-child,
+.acc-depto-table td:last-child {
+  width: 22%;
+}
+.acc-depto-table th {
+  white-space: normal;
+}
+.acc-delta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  font-weight: 700;
+}
+.acc-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex: none;
+  display: inline-block;
+}
+
+/* Rede de segurança: se o conteúdo (ex.: uma tabela com cabeçalho em
+   nowrap) ainda precisar de mais largura que o card tem — mesmo com
+   min-width:0 no card (ver .charts-grid) —, rola em vez de vazar por cima
+   do card vizinho. */
+.chart-host,
+.tbl-view {
+  overflow-x: auto;
+}
+
 /* Áreas de captura de mouse/teclado dos gráficos: sem esta regra, o SVG usa
    o preto padrão (fill não declarado) em vez de ficar invisível. */
 .chart-host svg {
@@ -309,6 +357,15 @@ label {
   grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
   gap: var(--sp-3);
 }
+/* Sem isso, um item de grid tem min-width:auto por padrão — se o conteúdo
+   não pode encolher (ex.: cabeçalho de tabela em nowrap), o card "estoura"
+   a largura da coluna em vez de encolher, e o card vizinho (opaco) pinta
+   por cima do que passou da borda. É por isso que uma tabela larga só
+   parecia cortada em monitores grandes: com mais colunas cabendo lado a
+   lado, cada card recebe menos espaço. */
+.charts-grid > .card {
+  min-width: 0;
+}
 
 /* Tabela de dados */
 table {
@@ -319,13 +376,13 @@ table {
 th {
   text-align: left;
   padding: 9px 13px;
-  background: var(--surface-sunken);
-  color: var(--ink-secondary);
+  background: linear-gradient(90deg, var(--accent), var(--accent-hover));
+  color: var(--ink-on-accent);
   font-weight: 700;
   font-size: 10.5px;
   text-transform: uppercase;
   letter-spacing: 0.03em;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--accent);
   white-space: nowrap;
 }
 td {
@@ -335,6 +392,29 @@ td {
 }
 tr:hover td {
   background: var(--surface-sunken);
+}
+
+/* Contêiner de rolagem das planilhas (listas de cadastro) — a lista cresce
+   pra dentro dele em vez de empurrar rodapé/paginação pra fora da tela (ex.:
+   224 condomínios numa lista sem paginação). O cabeçalho azul fica "colado"
+   no topo do contêiner ao rolar, porque já é opaco (degradê, não transparente). */
+.table-scroll {
+  max-height: 62vh;
+  overflow-y: auto;
+  overflow-x: auto;
+}
+.table-scroll table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+/* Seleção única de linha (clique pra destacar, só uma por vez) — ver
+   enableRowSelection em js/components/tableTools.js. Especificidade maior que
+   `tr:hover td` pra continuar destacada mesmo sem o mouse em cima. */
+tbody tr.row-selected td,
+tbody tr.row-selected:hover td {
+  background: var(--accent-soft);
 }
 .num {
   text-align: right;
@@ -446,6 +526,46 @@ tfoot td {
   box-shadow: var(--shadow-overlay);
   overflow: hidden;
 }
+/* Modais com tabela (ex.: Entrada em Massa) precisam de mais largura que o
+   formulário padrão de 480px pra não espremer as colunas numéricas. */
+.modal-wide {
+  max-width: 760px;
+}
+/* Foto ampliada: acompanha o tamanho da própria imagem, até 1000x1000px —
+   grande o bastante pra examinar o produto de verdade, não só confirmar que
+   é a foto certa. Encolhe em telas menores (92vw/80vh) pra nunca vazar da
+   janela. Seletor com duas classes pra vencer .modal-body (max-height:68vh)
+   sem depender da ordem de declaração no arquivo. */
+.modal-foto {
+  max-width: min(1040px, 96vw);
+}
+.modal-body.foto-ampliada-body {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 160px;
+  max-height: 88vh;
+  padding: var(--sp-4);
+}
+.foto-ampliada-body img {
+  width: auto;
+  height: auto;
+  max-width: min(1000px, 92vw);
+  max-height: min(1000px, 80vh);
+  display: block;
+  border-radius: var(--radius-sm);
+}
+.modal-table-wrap {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  max-height: 42vh;
+  overflow-y: auto;
+  overflow-x: auto;
+}
+.modal-table-wrap input[type="number"] {
+  width: 100px;
+  text-align: right;
+}
 .modal-head {
   padding: var(--sp-4) var(--sp-5);
   display: flex;
@@ -471,6 +591,112 @@ tfoot td {
   display: flex;
   justify-content: flex-end;
   gap: var(--sp-2);
+}
+
+/* Foto do produto — modal de cadastro/edição */
+.foto-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+}
+.foto-preview {
+  width: 72px;
+  height: 72px;
+  flex: none;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface-sunken);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  cursor: pointer;
+}
+.foto-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.foto-placeholder {
+  font-size: 9.5px;
+  color: var(--ink-muted);
+  text-align: center;
+  padding: 0 4px;
+}
+.foto-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+/* Miniatura na listagem de produtos — sempre a mesma caixa, com ou sem
+   foto, pra não deslocar as colunas vizinhas quando a imagem carrega
+   (lazy) depois do resto da linha. */
+.thumb-cell {
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface-sunken);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+/* Só quem TEM foto vira link de verdade — a caixa vazia (sem
+   data-thumb-path) não reage a clique, porque não há nada pra ampliar. */
+.thumb-cell[data-thumb-path] {
+  cursor: pointer;
+}
+.thumb-cell[data-thumb-path]:hover {
+  border-color: var(--accent-hover);
+}
+.thumb-cell img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.thumb-cell .thumb-placeholder {
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  border: 1.5px solid var(--ink-muted);
+  opacity: 0.5;
+}
+/* Seletor de material com a foto do item escolhido ao lado (nova requisição):
+   a miniatura fica DENTRO do campo, não como uma coluna da grade de campos —
+   senão ela contaria como célula e empurraria os campos seguintes de linha. */
+.campo-com-foto {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+.campo-com-foto select {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.campo-com-foto .thumb-cell {
+  flex: none;
+}
+
+/* Resumo de materiais na lista de requisições: a miniatura fica ao lado do
+   "2× Papel A4", não numa coluna própria — são até dois itens por linha da
+   tabela, uma coluna separada não teria como alinhar com ambos. */
+.req-item-linha {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 3px;
+}
+.thumb-cell-inline {
+  width: 26px;
+  height: 26px;
+  flex: none;
+}
+.thumb-cell-inline .thumb-placeholder {
+  width: 11px;
+  height: 11px;
 }
 .info-box {
   background: var(--accent-soft);
@@ -501,6 +727,80 @@ tfoot td {
 .danger-box b,
 .warn-box b {
   font-weight: 800;
+}
+
+/* Barra de paginação, no pé de uma tabela longa. `flex-wrap` porque em janela
+   estreita a contagem e os botões não cabem na mesma linha — e aí eles
+   empilham em vez de escapar para fora do painel. */
+.paginacao {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  padding: var(--sp-3);
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--ink-secondary);
+}
+.paginacao-info b {
+  color: var(--ink-primary);
+  font-variant-numeric: tabular-nums;
+}
+.paginacao-botoes {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+}
+.paginacao-pagina {
+  padding: 0 var(--sp-1);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.paginacao-pagina b {
+  color: var(--ink-primary);
+}
+.paginacao button[disabled] {
+  opacity: 0.45;
+  cursor: default;
+}
+
+/* Banner da janela de requisições: a faixa que responde "dá pra pedir agora?"
+   antes de qualquer outra coisa na tela. Aberta e fechada usam as mesmas
+   cores semânticas dos outros avisos (verde de sucesso / vermelho de
+   bloqueio), com a borda esquerda grossa marcando que é um estado do
+   sistema, e não um alerta pontual que some. */
+.janela-banner {
+  border-radius: var(--radius-sm);
+  border: 1px solid;
+  border-left-width: 4px;
+  padding: 10px 14px;
+  margin-bottom: var(--sp-4);
+  font-size: 12.5px;
+  max-width: 820px;
+}
+.janela-banner .titulo {
+  font-weight: 800;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.janela-banner .detalhe {
+  margin-top: 3px;
+}
+.janela-banner.aberta {
+  background: var(--success-soft);
+  border-color: #b9dcc8;
+  border-left-color: var(--success);
+  color: var(--success);
+}
+.janela-banner.fechada {
+  background: var(--danger-soft);
+  border-color: #efc7c0;
+  border-left-color: var(--danger);
+  color: var(--danger);
 }
 
 /* Checkbox com rótulo na mesma linha (cabeçalho de painel) */
@@ -578,10 +878,11 @@ tfoot td {
   margin-right: 5px;
 }
 
-/* Toast */
+/* Toast — acima da barra fixa do rodapé (.app-bottom-bar, layout.css), senão
+   ele cobre os créditos que vivem ali. */
 #toast {
   position: fixed;
-  bottom: 20px;
+  bottom: 52px;
   right: 20px;
   background: var(--ink-primary);
   color: #fff;
@@ -636,22 +937,35 @@ tfoot td {
 }
 .matrix thead .col-dept {
   z-index: 3;
-  background: var(--surface-sunken);
+  background: var(--accent);
+  color: var(--ink-on-accent);
 }
 .matrix tbody tr:hover .col-dept {
   background: var(--surface-sunken);
 }
+/* Coluna do Total do ano — mesma formatação das colunas de mês, só em
+   negrito para destacar o resultado (sem cor/fundo diferentes). */
 .matrix .col-total {
   font-weight: 800;
-  background: var(--surface-sunken);
 }
 .matrix tfoot td {
   position: sticky;
   bottom: 0;
   z-index: 2;
+  background: var(--surface);
 }
 .matrix tfoot .col-dept {
   z-index: 3;
+  background: var(--accent);
+  color: var(--ink-on-accent);
+}
+/* A linha de TOTAL geral é a mais importante da planilha — o cruzamento
+   dela com a coluna de total do ano é o único número que resume tudo. */
+.matrix tfoot .col-total {
+  background: var(--accent);
+  color: var(--ink-on-accent);
+  font-size: 13px;
+  border-left: 2px solid var(--accent-hover);
 }
 /* Mês sem nenhum lançamento em nenhuma fonte: fica visivelmente "vazio" em
    vez de exibir R$ 0,00, que seria uma afirmação que não temos. */
@@ -704,50 +1018,122 @@ tfoot td {
   align-items: center;
   justify-content: center;
   padding: var(--sp-6);
-  background: var(--page-bg);
+  background: linear-gradient(135deg, var(--accent) 0%, var(--accent-hover) 100%);
 }
 .login-card {
   background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: 18px;
   box-shadow: var(--shadow-overlay);
   width: 100%;
-  max-width: 380px;
-  padding: var(--sp-6);
+  max-width: 860px;
+  min-height: 520px;
   display: flex;
-  flex-direction: column;
-  gap: var(--sp-4);
+  overflow: hidden;
 }
-.login-brand {
+
+/* Painel esquerdo — mesmo gradiente da marca, com "bolhas" decorativas
+   flutuando atrás do texto, igual à referência que o usuário mandou. */
+.login-side {
+  position: relative;
+  flex: 0 0 44%;
+  overflow: hidden;
+  background: linear-gradient(160deg, var(--accent) 0%, var(--accent-hover) 100%);
+  color: #fff;
   display: flex;
   align-items: center;
-  gap: var(--sp-3);
-  margin-bottom: var(--sp-2);
+  padding: var(--sp-7, 40px);
 }
-.login-brand .logo {
-  width: 38px;
-  height: 38px;
+.login-side-blob {
+  position: absolute;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.10);
+  pointer-events: none;
+}
+.login-side-blob-1 { width: 260px; height: 260px; top: -80px; left: -90px; }
+.login-side-blob-2 { width: 200px; height: 200px; bottom: -70px; right: -60px; background: rgba(255, 255, 255, 0.08); }
+.login-side-blob-3 { width: 130px; height: 130px; bottom: 18%; left: -40px; background: rgba(255, 255, 255, 0.07); }
+
+.login-side-content {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+.login-side-logo {
+  width: 46px;
+  height: 46px;
   border-radius: var(--radius-sm);
-  background: var(--accent);
-  color: #fff;
+  background: rgba(255, 255, 255, 0.16);
+  border: 1px solid rgba(255, 255, 255, 0.35);
   display: flex;
   align-items: center;
   justify-content: center;
   font-weight: 800;
-  flex: none;
-}
-.login-brand .name {
   font-size: 15px;
-  font-weight: 700;
+  margin-bottom: var(--sp-2);
 }
-.login-brand .sub {
-  font-size: 11.5px;
+.login-side-content h1 {
+  font-size: 26px;
+  font-weight: 800;
+  margin: 0;
+}
+.login-side-headline {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.78);
+}
+.login-side-content p {
+  margin: var(--sp-2) 0 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.82);
+  max-width: 30ch;
+}
+
+/* Painel direito — o formulário em si. */
+.login-form {
+  flex: 1 1 56%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--sp-4);
+  padding: var(--sp-7, 40px);
+}
+.login-form h2 {
+  font-size: 22px;
+  font-weight: 800;
+  margin: 0;
+}
+.login-form-sub {
+  font-size: 12.5px;
   color: var(--ink-muted);
+  margin-top: calc(-1 * var(--sp-3));
+}
+.login-input-icon {
+  position: relative;
+}
+.login-input-icon .ico {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 14px;
+  opacity: 0.55;
+  pointer-events: none;
+}
+.login-input-icon input {
+  width: 100%;
+  padding-left: 34px;
 }
 .login-submit {
   width: 100%;
   justify-content: center;
-  padding: 9px 14px;
+  padding: 10px 14px;
+  background: linear-gradient(90deg, var(--accent), var(--accent-hover));
+  border: none;
 }
 .login-erro {
   background: var(--danger-soft);
@@ -762,14 +1148,49 @@ tfoot td {
   font-size: 10px;
   color: var(--ink-muted);
 }
+@media (max-width: 720px) {
+  .login-card { flex-direction: column; min-height: 0; max-width: 420px; }
+  .login-side { flex: none; padding: var(--sp-6); }
+  .login-side-content p { max-width: none; }
+}
+/* Número da atualização — discreto em toda tela (login e interna), só para
+   identificar a versão instalada se precisar comparar com uma mais nova. */
+.app-version {
+  opacity: 0.7;
+  font-variant-numeric: tabular-nums;
+}
 
-/* Cartão de quem está logado, no pé da barra lateral */
+/* Cartão de quem está logado — o GATILHO do menu de ações, na barra fixa do
+   rodapé (.app-bottom-bar, layout.css). Clicar em qualquer parte (avatar,
+   nome, papel) abre o menu com Trocar senha/Sair/Encerrar — sem esses botões
+   disputarem espaço com as informações na barra. */
 .user-box {
-  border-top: 1px solid var(--border);
-  padding: var(--sp-3) var(--sp-2) var(--sp-2);
   display: flex;
-  flex-direction: column;
-  gap: var(--sp-2);
+  align-items: center;
+  gap: 6px;
+  padding: 2px var(--sp-2);
+  border: none;
+  border-radius: var(--radius);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color .15s ease;
+}
+.user-box:hover,
+.user-box[aria-expanded="true"] {
+  background: rgba(255, 255, 255, 0.08);
+}
+.user-box-chevron {
+  width: 13px;
+  height: 13px;
+  flex: none;
+  color: var(--ink-muted);
+  transition: transform .15s ease;
+}
+.user-box[aria-expanded="true"] .user-box-chevron {
+  transform: rotate(180deg);
 }
 .user-box .who {
   display: flex;
@@ -777,44 +1198,82 @@ tfoot td {
   gap: var(--sp-2);
   min-width: 0;
 }
+/* Sem cor própria: o cartão vive na barra grafite, onde --accent-soft já é
+   um branco translúcido e o texto acompanha o resto do menu (branco). */
 .user-box .avatar {
-  width: 28px;
-  height: 28px;
+  width: 20px;
+  height: 20px;
   border-radius: 50%;
   background: var(--accent-soft);
-  color: var(--accent);
+  color: var(--ink-primary);
   display: flex;
   align-items: center;
   justify-content: center;
   font-weight: 800;
-  font-size: 11px;
+  font-size: 9px;
   flex: none;
 }
+/* Nome e papel LADO A LADO (não empilhados): a barra do rodapé é uma faixa
+   fina, duas linhas de texto não caberiam nela. */
 .user-box .ident {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
   min-width: 0;
 }
 .user-box .nome {
-  font-size: 12px;
+  font-size: 11.5px;
   font-weight: 700;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .user-box .papel {
-  font-size: 10px;
+  font-size: 9.5px;
   color: var(--ink-muted);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.user-actions {
-  display: flex;
-  gap: var(--sp-1);
+/* Menu de ações (Trocar senha/Sair/Encerrar) — some por padrão; abre para
+   CIMA a partir do gatilho (.user-box), ancorado em .app-bottom-bar, porque
+   não há espaço abaixo (é o rodapé da tela). Largura pelo conteúdo e
+   alinhado à esquerda, junto do gatilho. Aberto via classe `.open` (ver
+   wireUserMenu em app.js) — clique fora, Esc ou escolher uma ação fecham. */
+.user-menu {
+  display: none;
+  flex-direction: column;
+  gap: 2px;
+  position: absolute;
+  left: var(--sp-4);
+  bottom: 100%;
+  min-width: 180px;
+  margin-bottom: var(--sp-2);
+  padding: var(--sp-1);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  z-index: 60;
 }
-.user-actions button {
-  flex: 1;
-  justify-content: center;
-  font-size: 11px;
+.user-menu.open {
+  display: flex;
+}
+.user-menu-item {
+  width: 100%;
+  padding: var(--sp-2) var(--sp-2);
+  border: none;
+  border-radius: calc(var(--radius) - 2px);
+  background: transparent;
+  color: var(--ink-primary);
+  font-size: 12.5px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color .15s ease;
+}
+.user-menu-item:hover {
+  background: rgba(255, 255, 255, 0.08);
 }
 
 /* Modal mais largo — matriz de permissões e itens de requisição não cabem
@@ -905,6 +1364,30 @@ tfoot td {
   color: var(--danger);
 }
 
+/* Status da Ordem de Orçamento (Compras > Orçamentos) — 5 cores fixas pedidas
+   pelo usuário, sem reaproveitar .pill-pendente/.pill-aprovado de cima porque
+   o significado de cor ali é outro (aprovado = azul de destaque, não verde). */
+.pill-ord-pendente {
+  background: #eceef0;
+  color: #5b6470;
+}
+.pill-ord-solicitado {
+  background: var(--warning-soft);
+  color: var(--warning);
+}
+.pill-ord-enviado_cliente {
+  background: #ede4f7;
+  color: #6a3fa0;
+}
+.pill-ord-aprovado {
+  background: var(--success-soft);
+  color: var(--success);
+}
+.pill-ord-declinado {
+  background: #fbe3cf;
+  color: #a4501a;
+}
+
 /* Andamento do pedido: solicitação, aprovação e entrega, cada um com autor
    e data/hora — é a coluna que responde "quem pediu, quem liberou, quando". */
 .req-track {
@@ -939,4 +1422,595 @@ tfoot td {
   color: var(--ink-muted);
   text-align: center;
   padding: var(--sp-4);
+}
+
+/* Caixa de busca acima de um <select> longo (ver js/components/filtroSelect.js).
+   Levemente recuada e menor que o campo que filtra: é uma ferramenta de apoio
+   à lista, não mais um dado a preencher no formulário. */
+.filtro-select {
+  font-family: inherit;
+  font-size: 12px;
+  padding: 6px 9px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-sunken);
+  color: var(--ink-primary);
+  width: 100%;
+}
+.filtro-select::placeholder {
+  color: var(--ink-muted);
+}
+.filtro-select:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+  background: var(--surface);
+}
+
+/* Baixa em Massa: linha cuja quantidade passou do saldo. O destaque aparece
+   enquanto se digita — com dezenas de linhas na tela, um toast genérico no
+   fim não diria QUAL delas está errada. */
+.linha-excedida td {
+  background: var(--danger-soft);
+}
+.linha-excedida .bm-qtd {
+  border-color: var(--danger);
+  color: var(--danger);
+  font-weight: 700;
+}
+/* Mesma caixa de resumo do rodapé do modal, em tom de erro */
+.info-box.info-box-erro {
+  background: var(--danger-soft);
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+/* Resumo do lote (Entrada/Baixa em Massa). Com o filtro ativo os itens já
+   escolhidos saem da tabela — esta lista é o único lugar onde o pedido
+   inteiro continua visível antes de registrar. */
+.info-box.info-box-lote {
+  text-align: left;
+}
+.lote-lista {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  max-height: 132px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.lote-lista li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  padding: 2px 0;
+  border-top: 1px solid var(--border);
+}
+.lote-tirar {
+  margin-left: auto;
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: var(--ink-muted);
+  font-size: 12px;
+  line-height: 1;
+  padding: 2px 4px;
+  border-radius: var(--radius-sm);
+}
+.lote-tirar:hover {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+/* Tela de módulo ainda sem conteúdo (Cadastro de Empresas, Gestão SOS,
+   Gestão de Prazos). Existe para o menu já ter a estrutura final enquanto
+   cada área é construída — e para quem clica saber que não é erro. */
+.modulo-vazio {
+  padding: var(--sp-6) var(--sp-5);
+  text-align: center;
+  max-width: 560px;
+  margin: var(--sp-5) auto 0;
+}
+.modulo-vazio-ico {
+  font-size: 34px;
+  line-height: 1;
+  margin-bottom: var(--sp-3);
+  opacity: 0.85;
+}
+.modulo-vazio h2 {
+  font-size: 15px;
+  color: var(--ink-primary);
+  margin-bottom: var(--sp-2);
+}
+.modulo-vazio p {
+  font-size: 12.5px;
+  color: var(--ink-secondary);
+}
+
+/* Bolinha da cor de identificação do tipo de serviço (Gestão de Prazos). A cor
+   é escolhida pelo usuário no cadastro, então vem inline no style — aqui fica
+   só a forma. Nunca é a ÚNICA informação numa linha: o nome do serviço está
+   sempre ao lado, e a situação do vencimento é dita por extenso na pílula. */
+.dot-cor {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  margin-right: 7px;
+  vertical-align: baseline;
+  flex: none;
+}
+
+/* ============ Fornecedores e Prestadores de Serviços ============ */
+
+/* O cadastro de empresa tem três blocos (dados, contato, especialidades) e a
+   grade de chips precisa de largura para não virar uma coluna de um item só. */
+.modal-largo {
+  max-width: 720px;
+}
+
+/* Importar em Lote (Serviços): tabela de prévia com até 8 colunas (# +
+   colunas coladas + Situação) — precisa de bem mais largura que o
+   modal-largo padrão, senão força rolagem horizontal mesmo com poucas
+   colunas marcadas. Especificidade dupla (.modal.modal-import-lote) pra
+   ganhar de .modal-largo independente da ordem no arquivo. */
+.modal.modal-import-lote {
+  max-width: min(1120px, 96vw);
+}
+.imp-resumo-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  flex-wrap: wrap;
+}
+/* Pendências agrupadas por texto colado (ex.: "Alencar" aparecendo em 6
+   linhas) — resolver uma vez aqui aplica a todas de uma vez, em vez de abrir
+   6 selects iguais na tabela abaixo. */
+.imp-pendencias-lote {
+  border: 1px solid var(--danger);
+  border-radius: var(--radius-sm);
+  background: var(--danger-soft);
+  padding: var(--sp-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+.imp-pendencias-lote-titulo {
+  font-weight: 700;
+  color: var(--danger);
+  font-size: 12.5px;
+}
+.imp-pendencias-lote-item {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+  font-size: 12.5px;
+}
+.imp-pendencias-lote-item select {
+  min-width: 220px;
+}
+/* Linha com pendência: fundo avermelhado sutil pra saltar aos olhos rolando
+   a prévia inteira, sem depender só da cor da pill na última coluna. */
+tr.imp-row-pendente {
+  background: color-mix(in srgb, var(--danger-soft) 70%, transparent);
+}
+tr.imp-row-pendente:hover {
+  background: color-mix(in srgb, var(--danger-soft) 100%, transparent);
+}
+
+.field-row-3 {
+  display: grid;
+  grid-template-columns: 1fr 2fr 0.8fr;
+  gap: var(--sp-3);
+}
+
+/* Três colunas IGUAIS (diferente de .field-row-3, que é 1fr/2fr/0.8fr de
+   propósito para outros formulários) — para filtros lado a lado tipo
+   Mês/Ano/Parceiro. select/input dentro de um grid item não esticam sozinhos
+   (tamanho intrínseco do controle, não da célula), por isso o width:100%
+   explícito aqui. */
+.field-row-eq3 {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--sp-3);
+}
+.field-row-eq3 select,
+.field-row-eq3 input {
+  width: 100%;
+}
+
+/* Texto de apoio abaixo de um rótulo. NÃO confundir com .help, que é o badge
+   circular de interrogação. */
+.field-hint {
+  font-size: 11.5px;
+  color: var(--ink-secondary);
+  margin: -2px 0 2px;
+}
+
+/* Valor não editável dentro de um .field (ex.: condomínio da ordem de
+   orçamento, só leitura no modal de detalhe) — mesma caixa visual de um
+   input, sem borda de foco nem cursor de edição. */
+.field-static {
+  min-height: 34px;
+  display: flex;
+  align-items: center;
+  padding: 0 2px;
+  font-weight: 600;
+  color: var(--ink-primary);
+}
+
+/* Área de arrastar-e-soltar o PDF/imagem da proposta (Compras > Orçamentos),
+   uma por linha da tabela de propostas — pequena, cabe dentro de uma célula. */
+.anexo-dropzone {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 110px;
+  padding: 6px 8px;
+  border: 1.5px dashed var(--border-strong);
+  border-radius: var(--radius, 6px);
+  font-size: 11.5px;
+  color: var(--ink-secondary);
+  cursor: pointer;
+  text-align: center;
+}
+.anexo-dropzone:hover {
+  border-color: var(--accent-hover);
+  color: var(--accent-hover);
+}
+.anexo-dropzone.is-dragover {
+  border-color: var(--accent-hover);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.anexo-presente {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.anexo-presente a {
+  cursor: pointer;
+}
+
+/* Contagem dentro de uma aba do .segmented (quantos nichos o setor tem) */
+.seg-count {
+  display: inline-block;
+  margin-left: 5px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--surface-sunken);
+  color: var(--ink-secondary);
+  font-size: 10px;
+  font-weight: 800;
+}
+.segmented button.active .seg-count {
+  background: rgba(255, 255, 255, 0.22);
+  color: #fff;
+}
+/* Cinco abas (Todos + 4 setores) não caberiam numa linha em janela estreita —
+   e a barra lateral já encolhe antes do conteúdo, então aqui é melhor quebrar
+   do que cortar. */
+.segmented {
+  flex-wrap: wrap;
+}
+
+.chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+/* Especialidade só de LEITURA (linha da tabela, cartão do catálogo) */
+.chip-esp {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent-hover);
+  font-size: 10.5px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+/* Especialidade CLICÁVEL (seleção no cadastro da empresa). O estado marcado
+   não é só a cor: o ✓ entra no rótulo, para quem não distingue as cores. */
+.chip-toggle {
+  padding: 5px 11px;
+  border-radius: 999px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  color: var(--ink-secondary);
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color .12s ease, border-color .12s ease, color .12s ease;
+}
+.chip-toggle:hover {
+  border-color: var(--accent);
+  color: var(--ink-primary);
+}
+.chip-toggle.on {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.chip-toggle.on::before {
+  content: "✓ ";
+  font-weight: 800;
+}
+/* × interno de um chip ativo (ex.: colunas configuráveis da importação em
+   lote) — remove SÓ essa coluna, sem desligar o chip inteiro no clique
+   normal (esse clique reordena, ver ativarOuReordenar em servicosImportar.js). */
+.chip-toggle-x {
+  display: inline-block;
+  margin-left: 5px;
+  opacity: .75;
+}
+.chip-toggle-x:hover {
+  opacity: 1;
+}
+
+/* Lista rolável de condomínios (Carteira de um gerente) — troca a grade de
+   chips por uma lista alfabética compacta, porque com centenas de
+   condomínios a grade quebrava em dezenas de linhas e não sobrava espaço
+   pra filtrar rápido. */
+.carteira-lista {
+  max-height: 46vh;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+.carteira-item {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: 7px var(--sp-3);
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  font-size: 12.5px;
+  color: var(--ink-secondary);
+}
+.carteira-item:last-child {
+  border-bottom: none;
+}
+.carteira-item:hover {
+  background: var(--accent-soft);
+}
+.carteira-item input[type="checkbox"] {
+  flex: none;
+  width: 15px;
+  height: 15px;
+  cursor: pointer;
+}
+.carteira-item.on {
+  color: var(--ink-primary);
+  font-weight: 600;
+  background: var(--accent-soft);
+}
+/* Dashboard de Fechamento — campos editáveis dentro da tabela de gerentes
+   (Carteira, Eficácia, %, A+P). Borda tracejada avisa "isto é editável" sem
+   parecer um formulário separado da tabela; .is-override marca o que foi
+   digitado à mão nesta sessão (distinto do valor calculado). */
+.df-campo {
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-sm);
+  padding: 2px 5px;
+  font-size: 12px;
+  background: var(--surface);
+  color: var(--ink-primary);
+}
+.df-campo.is-override {
+  border-style: solid;
+  border-color: var(--warning);
+  background: color-mix(in srgb, var(--warning) 12%, var(--surface));
+}
+
+.carteira-lista-vazio {
+  padding: var(--sp-4);
+  text-align: center;
+  color: var(--ink-muted);
+  font-size: 12px;
+}
+
+.esp-grupo {
+  margin-bottom: var(--sp-3);
+}
+.esp-grupo-titulo {
+  font-size: 10.5px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ink-muted);
+  margin-bottom: 5px;
+}
+
+/* ---- Catálogo de empresas (tela de leitura, agrupada por segmento) ---- */
+/* Lista inteira rola dentro de um contêiner de altura fixa — mesmo critério
+   de .table-scroll (a lista cresce pra dentro dele, nunca empurra o rodapé
+   da janela pra fora da tela). */
+#catResultado {
+  max-height: 68vh;
+  overflow-y: auto;
+}
+/* Cada SETOR (a barra "de tópico") ganha sua própria cor — mesma forma de
+   etiqueta que .section-title (degradê, texto branco maiúsculo), só que a
+   cor vem inline por setor (ver corSetor() em catalogoEmpresas.js), pra
+   distinguir um segmento do outro ao rolar uma lista longa. */
+.cat-setor-titulo {
+  color: var(--ink-on-accent);
+  padding: 6px 11px;
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin: var(--sp-6) 0 var(--sp-3);
+}
+.cat-setor-titulo:first-child {
+  margin-top: 0;
+}
+.cat-setor {
+  padding: var(--sp-2) 0;
+}
+.cat-esp {
+  padding: var(--sp-3) var(--sp-5);
+  border-bottom: 1px solid var(--border);
+}
+.cat-esp:last-child {
+  border-bottom: 0;
+}
+.cat-esp-cab {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-2);
+}
+.cat-esp-cab b {
+  font-size: 13px;
+  color: var(--ink-primary);
+}
+/* Os cartões das empresas do segmento: largura mínima generosa porque o
+   conteúdo útil é o contato, que não pode quebrar em duas linhas por aperto. */
+.cat-empresas {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: var(--sp-2);
+}
+.cat-empresa {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-sunken);
+  padding: var(--sp-3);
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.cat-empresa-topo {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-2);
+}
+.cat-empresa-topo b {
+  font-size: 12.5px;
+  color: var(--ink-primary);
+}
+.cat-empresa-topo .muted {
+  font-size: 11px;
+  white-space: nowrap;
+}
+/* Caixinha de selecionar pra "Copiar contatos" — só isto entra na cópia,
+   nunca o catálogo inteiro. */
+.cat-empresa-select {
+  display: inline-flex;
+  align-self: center;
+}
+.cat-empresa-select input {
+  cursor: pointer;
+}
+.cat-contatos {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 11.5px;
+}
+.cat-contato {
+  color: var(--ink-secondary);
+}
+.cat-vazio {
+  font-size: 11.5px;
+  padding: 2px 0 4px;
+}
+
+/* Sim/Não da ficha da empresa. Dois rádios lado a lado em vez de um checkbox:
+   "é parceira?" é uma PERGUNTA com duas respostas, e um checkbox desmarcado
+   não distingue "respondi Não" de "não respondi". */
+.radio-row {
+  display: flex;
+  gap: var(--sp-4);
+  align-items: center;
+}
+.radio-opt {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink-primary);
+  cursor: pointer;
+}
+.radio-opt input[type="radio"] {
+  accent-color: var(--accent);
+  cursor: pointer;
+  margin: 0;
+}
+
+/* ---- Gestão SOS > Parceiros ---- */
+/* Cartões maiores que os do Catálogo: aqui o telefone é o conteúdo principal,
+   não um detalhe do cartão. */
+.parceiros-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: var(--sp-3);
+}
+.parceiro-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: var(--sp-4);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.parceiro-nome {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--ink-primary);
+}
+.parceiro-local {
+  font-size: 11.5px;
+  margin-top: -4px;
+}
+.parceiro-tel {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--accent);
+}
+.parceiro-tel.muted {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-muted);
+}
+.parceiro-emails {
+  font-size: 11.5px;
+  color: var(--ink-secondary);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.parceiro-obs {
+  font-size: 11.5px;
+  color: var(--ink-secondary);
+  border-top: 1px solid var(--border);
+  padding-top: 6px;
+  margin-top: 2px;
+}
+.imp-select {
+  max-width: 220px;
+  font-size: 11.5px;
+  padding: 4px 6px;
+}
+.carteira-card {
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.carteira-card:hover, .carteira-card:focus-visible {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 20%, transparent);
+  outline: none;
 }

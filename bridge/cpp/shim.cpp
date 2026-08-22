@@ -55,6 +55,77 @@ UserInput toUserInput(const UserDto& d) {
   return u;
 }
 
+Condominio toCondominio(const CondominioDto& d) {
+  Condominio c;
+  c.id = std::string(d.id);
+  c.nome = std::string(d.nome);
+  c.nomeFantasia = std::string(d.nome_fantasia);
+  c.cnpj = std::string(d.cnpj);
+  c.codigo = std::string(d.codigo);
+  c.endereco = std::string(d.endereco);
+  c.numero = std::string(d.numero);
+  c.complemento = std::string(d.complemento);
+  c.bairro = std::string(d.bairro);
+  c.cidade = std::string(d.cidade);
+  c.estado = std::string(d.estado);
+  c.cep = std::string(d.cep);
+  c.localizacao = std::string(d.localizacao);
+  c.sindico = std::string(d.sindico);
+  c.telefone = std::string(d.telefone);
+  c.email = std::string(d.email);
+  c.observacoes = std::string(d.observacoes);
+  c.ativo = d.ativo;
+  c.deltaSindica = d.delta_sindica;
+  c.createdAt = std::string(d.created_at);
+  return c;
+}
+
+TipoServico toTipoServico(const TipoServicoDto& d) {
+  TipoServico t;
+  t.id = std::string(d.id);
+  t.nome = std::string(d.nome);
+  t.prazoDias = d.prazo_dias;
+  t.cor = std::string(d.cor);
+  t.createdAt = std::string(d.created_at);
+  return t;
+}
+
+json condominioToJson(const Condominio& c) {
+  json j;
+  j["id"] = c.id;
+  j["nome"] = c.nome;
+  j["nomeFantasia"] = c.nomeFantasia;
+  j["cnpj"] = c.cnpj;
+  j["codigo"] = c.codigo;
+  j["endereco"] = c.endereco;
+  j["numero"] = c.numero;
+  j["complemento"] = c.complemento;
+  j["bairro"] = c.bairro;
+  j["cidade"] = c.cidade;
+  j["estado"] = c.estado;
+  j["cep"] = c.cep;
+  j["localizacao"] = c.localizacao;
+  j["localizacaoLabel"] = localizacaoLabel(c.localizacao);
+  j["sindico"] = c.sindico;
+  j["telefone"] = c.telefone;
+  j["email"] = c.email;
+  j["observacoes"] = c.observacoes;
+  j["ativo"] = c.ativo;
+  j["deltaSindica"] = c.deltaSindica;
+  j["createdAt"] = c.createdAt;
+  return j;
+}
+
+json tipoServicoToJson(const TipoServico& t) {
+  json j;
+  j["id"] = t.id;
+  j["nome"] = t.nome;
+  j["prazoDias"] = t.prazoDias;
+  j["cor"] = t.cor;
+  j["createdAt"] = t.createdAt;
+  return j;
+}
+
 Department toDepartment(const DepartmentDto& d) {
   Department dep;
   dep.id = std::string(d.id);
@@ -75,6 +146,9 @@ json productToJson(const Product& p) {
   j["qty"] = p.qty;
   j["avgCost"] = p.avgCost;
   j["createdAt"] = p.createdAt;
+  j["sku"] = p.sku;
+  j["imagePath"] = p.imagePath;
+  j["thumbnailPath"] = p.thumbnailPath;
   return j;
 }
 
@@ -106,6 +180,7 @@ json movementToJson(const Movement& m) {
   j["resultingQty"] = m.resultingQty;
   j["resultingAvgCost"] = m.resultingAvgCost;
   j["createdAt"] = m.createdAt;
+  j["newAvgCost"] = m.newAvgCost;
   return j;
 }
 
@@ -128,6 +203,8 @@ void Session::change_own_password(rust::Str current_password, rust::Str new_pass
 }
 
 void Session::login_as_service(rust::Str label) { api_.loginAsService(std::string(label)); }
+
+void Session::assert_pode_editar_logo_fl() { api_.assertPodeEditarLogoFl(); }
 
 // ---------------------------------------------------------------- usuários
 
@@ -169,6 +246,10 @@ rust::String Session::create_request(rust::Str payload) {
   return rust::String(api_.createRequest(std::string(payload)));
 }
 
+rust::String Session::update_request_items(rust::Str id, rust::Str payload, rust::Str now_iso) {
+  return rust::String(api_.updateRequestItems(std::string(id), std::string(payload), std::string(now_iso)));
+}
+
 rust::String Session::approve_request(rust::Str id, rust::Str note, rust::Str now_iso) {
   return rust::String(api_.approveRequest(std::string(id), std::string(note), std::string(now_iso)));
 }
@@ -188,6 +269,26 @@ rust::String Session::deliver_request(rust::Str id, rust::Str now_iso, rust::Str
 
 rust::String Session::stock_availability_json() { return rust::String(api_.stockAvailabilityJson()); }
 
+// --------------------------------------------------- janela de requisições
+
+rust::String Session::request_window_status_json() {
+  return rust::String(api_.requestWindowStatusJson());
+}
+
+rust::String Session::list_request_windows_json() {
+  return rust::String(api_.listRequestWindowsJson());
+}
+
+rust::String Session::create_request_window(rust::Str payload) {
+  return rust::String(api_.createRequestWindow(std::string(payload)));
+}
+
+rust::String Session::close_request_window_now(rust::Str id) {
+  return rust::String(api_.closeRequestWindowNow(std::string(id)));
+}
+
+void Session::delete_request_window(rust::Str id) { api_.deleteRequestWindow(std::string(id)); }
+
 // ---------------------------------------------------------------- produtos
 
 rust::String Session::list_products_json() {
@@ -202,6 +303,15 @@ rust::String Session::create_product(ProductDto p) {
 
 rust::String Session::update_product(ProductDto p) {
   return rust::String(productToJson(api_.updateProduct(toProduct(p))).dump());
+}
+
+rust::String Session::set_product_image(rust::Str product_id, rust::Str image_path, rust::Str thumbnail_path) {
+  auto p = api_.setProductImage(std::string(product_id), std::string(image_path), std::string(thumbnail_path));
+  return rust::String(productToJson(p).dump());
+}
+
+rust::String Session::clear_product_image(rust::Str product_id) {
+  return rust::String(productToJson(api_.clearProductImage(std::string(product_id))).dump());
 }
 
 void Session::delete_product(rust::Str id) { api_.deleteProduct(std::string(id)); }
@@ -241,9 +351,10 @@ rust::String Session::apply_saida(rust::Str movement_id, rust::Str product_id, d
 }
 
 rust::String Session::apply_correcao(rust::Str movement_id, rust::Str product_id, double qty_real,
-                                      rust::Str motivo, rust::Str date, rust::Str created_at) {
+                                      rust::Str motivo, rust::Str date, rust::Str created_at,
+                                      double new_avg_cost) {
   auto m = api_.applyCorrecao(std::string(movement_id), std::string(product_id), qty_real,
-                              std::string(motivo), std::string(date), std::string(created_at));
+                              std::string(motivo), std::string(date), std::string(created_at), new_avg_cost);
   return rust::String(movementToJson(m).dump());
 }
 
@@ -280,6 +391,248 @@ int Session::import_dept_cost_history(rust::Str payload) {
 rust::String Session::backup_json() { return rust::String(api_.backupJson()); }
 
 void Session::restore_from_json(rust::Str payload) { api_.restoreFromJson(std::string(payload)); }
+
+// ------------------------------------------------------ gestão de prazos
+
+rust::String Session::list_condominios_json() {
+  json arr = json::array();
+  for (auto& c : api_.listCondominios()) arr.push_back(condominioToJson(c));
+  return rust::String(arr.dump());
+}
+
+rust::String Session::create_condominio(CondominioDto c) {
+  return rust::String(condominioToJson(api_.createCondominio(toCondominio(c))).dump());
+}
+
+rust::String Session::update_condominio(CondominioDto c) {
+  return rust::String(condominioToJson(api_.updateCondominio(toCondominio(c))).dump());
+}
+
+void Session::delete_condominio(rust::Str id) { api_.deleteCondominio(std::string(id)); }
+
+rust::String Session::list_tipos_servico_json() {
+  json arr = json::array();
+  for (auto& t : api_.listTiposServico()) arr.push_back(tipoServicoToJson(t));
+  return rust::String(arr.dump());
+}
+
+rust::String Session::create_tipo_servico(TipoServicoDto t) {
+  return rust::String(tipoServicoToJson(api_.createTipoServico(toTipoServico(t))).dump());
+}
+
+rust::String Session::update_tipo_servico(TipoServicoDto t) {
+  return rust::String(tipoServicoToJson(api_.updateTipoServico(toTipoServico(t))).dump());
+}
+
+void Session::delete_tipo_servico(rust::Str id) { api_.deleteTipoServico(std::string(id)); }
+
+rust::String Session::list_servicos_condominio_json(rust::Str now_iso) {
+  return rust::String(api_.listServicosCondominioJson(std::string(now_iso)));
+}
+
+rust::String Session::create_servico_condominio(rust::Str payload) {
+  return rust::String(api_.createServicoCondominio(std::string(payload)));
+}
+
+rust::String Session::update_servico_condominio(rust::Str payload) {
+  return rust::String(api_.updateServicoCondominio(std::string(payload)));
+}
+
+void Session::delete_servico_condominio(rust::Str id) { api_.deleteServicoCondominio(std::string(id)); }
+
+rust::String Session::renovar_servico(rust::Str payload) {
+  return rust::String(api_.renovarServico(std::string(payload)));
+}
+
+rust::String Session::list_renovacoes_json(rust::Str servico_condominio_filter) {
+  return rust::String(api_.listRenovacoesJson(std::string(servico_condominio_filter)));
+}
+
+// ----------------------------- fornecedores e prestadores de serviços
+
+rust::String Session::list_setorizacao_json() { return rust::String(api_.listSetorizacaoJson()); }
+
+rust::String Session::create_especialidade(rust::Str payload) {
+  return rust::String(api_.createEspecialidade(std::string(payload)));
+}
+
+rust::String Session::update_especialidade(rust::Str payload) {
+  return rust::String(api_.updateEspecialidade(std::string(payload)));
+}
+
+void Session::delete_especialidade(rust::Str id) { api_.deleteEspecialidade(std::string(id)); }
+
+rust::String Session::list_empresas_json() { return rust::String(api_.listEmpresasJson()); }
+
+rust::String Session::list_parceiros_json() { return rust::String(api_.listParceirosJson()); }
+
+rust::String Session::create_empresa(rust::Str payload) {
+  return rust::String(api_.createEmpresa(std::string(payload)));
+}
+
+rust::String Session::update_empresa(rust::Str payload) {
+  return rust::String(api_.updateEmpresa(std::string(payload)));
+}
+
+void Session::delete_empresa(rust::Str id) { api_.deleteEmpresa(std::string(id)); }
+
+rust::String Session::list_gerentes_json() { return rust::String(api_.listGerentesJson()); }
+
+rust::String Session::create_gerente(rust::Str payload) {
+  return rust::String(api_.createGerente(std::string(payload)));
+}
+
+rust::String Session::update_gerente(rust::Str payload) {
+  return rust::String(api_.updateGerente(std::string(payload)));
+}
+
+void Session::delete_gerente(rust::Str id) { api_.deleteGerente(std::string(id)); }
+
+rust::String Session::list_servicos_json() { return rust::String(api_.listServicosJson()); }
+
+rust::String Session::create_servico(rust::Str payload) {
+  return rust::String(api_.createServico(std::string(payload)));
+}
+
+rust::String Session::update_servico(rust::Str payload) {
+  return rust::String(api_.updateServico(std::string(payload)));
+}
+
+void Session::delete_servico(rust::Str id) { api_.deleteServico(std::string(id)); }
+
+rust::String Session::list_fechamentos_json() { return rust::String(api_.listFechamentosJson()); }
+
+rust::String Session::fechar_mes(rust::Str payload) {
+  return rust::String(api_.fecharMes(std::string(payload)));
+}
+
+void Session::reabrir_fechamento(rust::Str id) { api_.reabrirFechamento(std::string(id)); }
+
+rust::String Session::get_sos_config_json() { return rust::String(api_.getSosConfigJson()); }
+
+void Session::set_sos_config(rust::Str payload) { api_.setSosConfig(std::string(payload)); }
+
+rust::String Session::list_delta_sindicos_json() { return rust::String(api_.listDeltaSindicosJson()); }
+
+rust::String Session::montar_dashboard(rust::Str payload) {
+  return rust::String(api_.montarDashboard(std::string(payload)));
+}
+
+rust::String Session::salvar_dashboard(rust::Str payload) {
+  return rust::String(api_.salvarDashboard(std::string(payload)));
+}
+
+rust::String Session::list_dashboards_json() { return rust::String(api_.listDashboardsJson()); }
+
+rust::String Session::list_suprimentos_json() { return rust::String(api_.listSuprimentosJson()); }
+
+rust::String Session::create_suprimento(rust::Str payload) {
+  return rust::String(api_.createSuprimento(std::string(payload)));
+}
+
+rust::String Session::update_suprimento(rust::Str payload) {
+  return rust::String(api_.updateSuprimento(std::string(payload)));
+}
+
+void Session::delete_suprimento(rust::Str id) { api_.deleteSuprimento(std::string(id)); }
+
+rust::String Session::list_aquisicoes_json() { return rust::String(api_.listAquisicoesJson()); }
+
+rust::String Session::create_aquisicao(rust::Str payload) {
+  return rust::String(api_.createAquisicao(std::string(payload)));
+}
+
+rust::String Session::update_aquisicao(rust::Str payload) {
+  return rust::String(api_.updateAquisicao(std::string(payload)));
+}
+
+void Session::delete_aquisicao(rust::Str id) { api_.deleteAquisicao(std::string(id)); }
+
+rust::String Session::set_aquisicao_anexo(rust::Str aquisicao_id, rust::Str anexo_path, rust::Str anexo_tipo) {
+  return rust::String(api_.setAquisicaoAnexo(std::string(aquisicao_id), std::string(anexo_path), std::string(anexo_tipo)));
+}
+
+rust::String Session::clear_aquisicao_anexo(rust::Str aquisicao_id) {
+  return rust::String(api_.clearAquisicaoAnexo(std::string(aquisicao_id)));
+}
+
+rust::String Session::list_ordens_orcamento_json(rust::Str now_iso) {
+  return rust::String(api_.listOrdensOrcamentoJson(std::string(now_iso)));
+}
+
+rust::String Session::create_ordem_orcamento(rust::Str payload) {
+  return rust::String(api_.createOrdemOrcamento(std::string(payload)));
+}
+
+rust::String Session::update_ordem_orcamento_info(rust::Str payload) {
+  return rust::String(api_.updateOrdemOrcamentoInfo(std::string(payload)));
+}
+
+void Session::delete_ordem_orcamento(rust::Str id) { api_.deleteOrdemOrcamento(std::string(id)); }
+
+rust::String Session::solicitar_orcamento_para_empresas(rust::Str payload, rust::Str now_iso) {
+  return rust::String(api_.solicitarOrcamentoParaEmpresas(std::string(payload), std::string(now_iso)));
+}
+
+rust::String Session::reenviar_solicitacao_proposta(rust::Str proposta_id, rust::Str now_iso) {
+  return rust::String(api_.reenviarSolicitacaoProposta(std::string(proposta_id), std::string(now_iso)));
+}
+
+rust::String Session::set_proposta_valor(rust::Str proposta_id, double valor) {
+  return rust::String(api_.setPropostaValor(std::string(proposta_id), valor));
+}
+
+rust::String Session::set_proposta_anexo(rust::Str proposta_id, rust::Str anexo_path, rust::Str anexo_tipo) {
+  return rust::String(api_.setPropostaAnexo(std::string(proposta_id), std::string(anexo_path), std::string(anexo_tipo)));
+}
+
+rust::String Session::clear_proposta_anexo(rust::Str proposta_id) {
+  return rust::String(api_.clearPropostaAnexo(std::string(proposta_id)));
+}
+
+rust::String Session::marcar_proposta_recomendada(rust::Str ordem_id, rust::Str proposta_id) {
+  return rust::String(api_.marcarPropostaRecomendada(std::string(ordem_id), std::string(proposta_id)));
+}
+
+rust::String Session::desmarcar_proposta_recomendada(rust::Str ordem_id) {
+  return rust::String(api_.desmarcarPropostaRecomendada(std::string(ordem_id)));
+}
+
+rust::String Session::enviar_orcamento_para_cliente(rust::Str payload, rust::Str now_iso) {
+  return rust::String(api_.enviarOrcamentoParaCliente(std::string(payload), std::string(now_iso)));
+}
+
+rust::String Session::aprovar_proposta_orcamento(rust::Str ordem_id, rust::Str proposta_id, rust::Str now_iso) {
+  return rust::String(api_.aprovarPropostaOrcamento(std::string(ordem_id), std::string(proposta_id), std::string(now_iso)));
+}
+
+rust::String Session::reativar_ordem_orcamento(rust::Str ordem_id, rust::Str now_iso) {
+  return rust::String(api_.reativarOrdemOrcamento(std::string(ordem_id), std::string(now_iso)));
+}
+
+rust::String Session::get_email_config_json() { return rust::String(api_.getEmailConfigJson()); }
+
+void Session::set_email_config(rust::Str payload) { api_.setEmailConfig(std::string(payload)); }
+
+rust::String Session::get_email_config_internal_json() {
+  return rust::String(api_.getEmailConfigInternalJson());
+}
+
+rust::String Session::list_pagamentos_json() { return rust::String(api_.listPagamentosJson()); }
+
+rust::String Session::create_pagamento(rust::Str payload) {
+  return rust::String(api_.createPagamento(std::string(payload)));
+}
+
+rust::String Session::update_pagamento(rust::Str payload) {
+  return rust::String(api_.updatePagamento(std::string(payload)));
+}
+
+void Session::delete_pagamento(rust::Str id) { api_.deletePagamento(std::string(id)); }
+
+rust::String Session::marcar_parcela(rust::Str payload) {
+  return rust::String(api_.marcarParcela(std::string(payload)));
+}
 
 std::unique_ptr<Session> open_session(rust::Str db_path) {
   return std::make_unique<Session>(std::string(db_path));

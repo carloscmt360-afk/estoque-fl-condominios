@@ -8,7 +8,14 @@ name = "bridge"
 path = "src/lib.rs"
 
 [dependencies]
+base64 = "0.23.1"
 cxx = "1"
+image = { version = "0.25.10", default-features = false, features = ["jpeg", "png", "webp"] }
+webp = { version = "0.3.1", features = ["image"] }
+# SMTP síncrono (sem runtime async — o resto da ponte já é bloqueante, ver
+# bridge/src/mailer.rs) com TLS via rustls (não depende de OpenSSL instalado
+# no runner do Windows, diferente de native-tls).
+lettre = { version = "0.11", default-features = false, features = ["smtp-transport", "builder", "rustls-tls", "hostname"] }
 
 [build-dependencies]
 cxx-build = "1"

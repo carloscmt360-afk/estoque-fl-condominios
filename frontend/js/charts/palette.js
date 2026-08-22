@@ -4,8 +4,17 @@
 import { escapeHtml, fmtBRL } from '../format.js';
 
 export const VIZ = {
-  s1: '#1B3A5C', s2: '#6C8CA8',
-  prior: '#6C8CA8', cur: '#1B3A5C',
+  // s1/s2: só usados pelo comparativo mensal Y vs Y-1 (groupedBars.js +
+  // legendas em dashboard.js/retrospect.js). Azul-marinho (ano de
+  // referência) contra laranja (ano anterior): além de pedido, é o par de
+  // cores mais seguro para quem não distingue vermelho de verde — a
+  // diferença sobrevive em qualquer tipo de daltonismo.
+  //
+  // s2Ink é o MESMO laranja escurecido, só para os rótulos de valor em cima
+  // das barras: a 8px, #D97757 sobre branco fica com contraste baixo demais
+  // para texto; a barra, sendo uma área grande e cheia, não tem esse
+  // problema e fica no tom pedido.
+  s1: '#1B3A5C', s2: '#D97757', s2Ink: '#A6472A',
   abc: { A: '#1B3A5C', B: '#2E6BA6', C: '#6C8CA8' },
   grid: '#E1E4E8', axis: '#C6CCD2', muted: '#6B7280', ink: '#2B2F33',
   surface: '#FFFFFF', deemph: '#AEC2D2',
@@ -73,8 +82,17 @@ export function barPath(x, y, w, h, r) {
 
 export function txt(x, y, s, o) {
   o = o || {};
+  // `halo: true` desenha um contorno branco ATRÁS das letras
+  // (paint-order=stroke pinta o traço primeiro, o preenchimento por cima).
+  // Serve para rótulo que pode cair sobre uma barra: um valor de 8px é mais
+  // largo que a barra estreita que ele rotula, então invade a barra vizinha —
+  // e texto escuro sobre barra escura some. Com o contorno, o rótulo continua
+  // legível sobre qualquer fundo, sem precisar afastá-lo do que ele nomeia.
+  const halo = o.halo
+    ? ' stroke="#FFFFFF" stroke-width="3" stroke-linejoin="round" paint-order="stroke"'
+    : '';
   return `<text x="${x}" y="${y}" fill="${o.fill || VIZ.muted}" font-size="${o.size || 11}" ` +
-    `font-weight="${o.weight || 400}" text-anchor="${o.anchor || 'start'}" ` +
+    `font-weight="${o.weight || 400}" text-anchor="${o.anchor || 'start'}"${halo} ` +
     `${o.tabular === false ? '' : 'style="font-variant-numeric:tabular-nums"'}>${escapeHtml(s)}</text>`;
 }
 export function emptyChart(host, msg) {

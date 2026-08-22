@@ -31,7 +31,15 @@ fn main() {
         .include(&third_party_dir)
         .include(&sqlite_dir)
         .file(cpp_dir.join("shim.cpp"));
-    for src in [
+
+    // A lista é explícita (e não um glob) para que entrar um arquivo novo em
+    // core-cpp/src seja uma decisão consciente. O preço disso é esquecer de
+    // acrescentar um: como o núcleo vira uma biblioteca ESTÁTICA, a falta só
+    // aparece no LINK do binário final — e, no MSVC, muitas vezes só no CI,
+    // depois de dez minutos de build (foi o que aconteceu com dates_engine.cpp).
+    // A conferência abaixo transforma esse erro tardio e obscuro num erro de
+    // build imediato e explícito.
+    const CORE_SOURCES: &[&str] = &[
         "models.cpp",
         "db.cpp",
         "time_utils.cpp",
@@ -41,10 +49,35 @@ fn main() {
         "retrospect_engine.cpp",
         "auth_engine.cpp",
         "request_engine.cpp",
+        "dates_engine.cpp",
+        "companies_engine.cpp",
+        "managers_engine.cpp",
+        "commissions_engine.cpp",
+        "purchases_engine.cpp",
+        "suprimentos_engine.cpp",
         "portable_paths.cpp",
         "api.cpp",
-    ] {
-        bridge_build.file(core_cpp.join("src").join(src));
+    ];
+
+    let src_dir = core_cpp.join("src");
+    let mut nao_listados: Vec<String> = std::fs::read_dir(&src_dir)
+        .expect("não foi possível ler core-cpp/src")
+        .filter_map(|e| e.ok())
+        .filter_map(|e| e.file_name().into_string().ok())
+        .filter(|n| n.ends_with(".cpp") && !CORE_SOURCES.contains(&n.as_str()))
+        .collect();
+    if !nao_listados.is_empty() {
+        nao_listados.sort();
+        panic!(
+            "core-cpp/src tem arquivo(s) .cpp fora da lista CORE_SOURCES de bridge/build.rs: {}.\n\
+             Acrescente-o(s) ali — senão o símbolo some no link do executável final \
+             (LNK1120/undefined reference), e não aqui.",
+            nao_listados.join(", ")
+        );
+    }
+
+    for src in CORE_SOURCES {
+        bridge_build.file(src_dir.join(src));
     }
     // "-std=c++17" é sintaxe GCC/Clang; o MSVC (cl.exe) não reconhece essa
     // flag e a descarta silenciosamente via flag_if_supported, compilando em

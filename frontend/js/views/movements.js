@@ -1,8 +1,9 @@
 import { api } from '../api.js';
-import { fmtBRL, fmtNum, fmtDateTimeBR, escapeHtml } from '../format.js';
+import { fmtBRL, fmtNum, fmtDateTimeBR, escapeHtml, agoraLocalArquivo } from '../format.js';
 import { openModal, closeModal } from '../components/modal.js';
 import { toast } from '../components/toast.js';
 import { can } from '../session.js';
+import { enableRowSelection } from '../components/tableTools.js';
 
 let movements = [];
 let products = [];
@@ -48,6 +49,7 @@ function wireControls() {
   document.getElementById('btnExportarTimelineCSV').addEventListener('click', exportarCSV);
 
   document.getElementById('btnSalvarEdicaoMov').addEventListener('click', salvarEdicao);
+  enableRowSelection(document.getElementById('timelineTbody'));
   document.getElementById('btnExcluirMov').addEventListener('click', excluirLancamento);
   ['edtMovQtd', 'edtMovPreco', 'edtMovQtdReal', 'edtMovDepartamento'].forEach((id) =>
     document.getElementById(id).addEventListener('input', atualizarInfoEdicao));
@@ -187,7 +189,7 @@ function filtrar() {
     const termos = busca.split(/\s+/);
     list = list.filter((m) => {
       const p = getProduct(m.productId);
-      const alvo = fold([p ? p.name : '', m.supplier, m.nf, m.recipient, m.encarregado, m.requester, m.obs]
+      const alvo = fold([p ? p.sku : '', p ? p.name : '', m.supplier, m.nf, m.recipient, m.encarregado, m.requester, m.obs]
         .filter(Boolean).join(' '));
       return termos.every((t) => alvo.includes(t));
     });
@@ -238,7 +240,7 @@ function renderTabela(list) {
   const rodape = document.getElementById('timelineRodape');
 
   if (!list.length) {
-    tbody.innerHTML = `<tr class="empty-row"><td colspan="8">${movements.length === 0
+    tbody.innerHTML = `<tr class="empty-row"><td colspan="9">${movements.length === 0
       ? 'Nenhuma movimentação registrada ainda.'
       : 'Nenhuma movimentação encontrada com esses filtros.'}</td></tr>`;
     rodape.textContent = '';
@@ -256,6 +258,7 @@ function renderTabela(list) {
     return `<tr>
       <td>${fmtDateTimeBR(m.date)}</td>
       <td><span class="pill ${t.pill}">${t.label}</span></td>
+      <td>${escapeHtml(p ? p.sku : '') || '<span class="muted">—</span>'}</td>
       <td>${escapeHtml(p ? p.name : '(produto excluído)')}</td>
       <td class="num">${sinal}${fmtNum(m.qty)} ${escapeHtml(unit)}</td>
       <td>${detalhesDe(m)}</td>
@@ -284,12 +287,13 @@ function exportarCSV() {
   const list = filtrar();
   if (!list.length) { toast('Não há lançamentos filtrados para exportar.', 'error'); return; }
 
-  const cabecalho = ['Data', 'Tipo', 'Produto', 'Unidade', 'Quantidade', 'Preço unitário', 'Valor',
+  const cabecalho = ['Data', 'Tipo', 'SKU', 'Produto', 'Unidade', 'Quantidade', 'Preço unitário', 'Valor',
     'Fornecedor', 'NF', 'Departamento', 'Encarregado', 'Solicitante', 'Observação', 'Saldo após'];
   const linhas = list.map((m) => {
     const p = getProduct(m.productId);
     return [
-      fmtDateTimeBR(m.date), (TIPOS[m.type] || TIPOS.ajuste).label, p ? p.name : '(produto excluído)',
+      fmtDateTimeBR(m.date), (TIPOS[m.type] || TIPOS.ajuste).label, p ? p.sku : '',
+      p ? p.name : '(produto excluído)',
       p ? p.unit : '', m.qty, m.unitPrice, valorDe(m),
       m.supplier || '', m.nf || '', m.recipient || '', m.encarregado || '', m.requester || '',
       m.obs || '', m.resultingQty,
@@ -303,7 +307,7 @@ function exportarCSV() {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `movimentacoes_${new Date().toISOString().slice(0, 10)}.csv`;
+  a.download = `movimentacoes_${agoraLocalArquivo()}.csv`;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);

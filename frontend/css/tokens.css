@@ -40,8 +40,7 @@
 
   /* Paleta categórica dos gráficos — deriva da paleta institucional acima */
   --chart-s1: #1b3a5c;
-  --chart-s2: #6c8ca8;
-  --chart-prior: #6c8ca8;
+  --chart-s2: #d97757; /* laranja — só o comparativo mensal Y vs Y-1 */
   --chart-abc-a: #1b3a5c;
   --chart-abc-b: #2e6ba6;
   --chart-abc-c: #6c8ca8;

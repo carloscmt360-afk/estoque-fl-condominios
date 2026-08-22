@@ -2,6 +2,8 @@
 #include "doctest.h"
 #include "estoque/inventory_engine.hpp"
 
+#include <algorithm>
+
 using namespace estoque;
 
 namespace {
@@ -14,6 +16,7 @@ Product makeProduct(const std::string& id, const std::string& name) {
   p.name = name;
   p.unit = "Unidade";
   p.minStock = 0;
+  p.category = "Papelaria";  // createProduct exige uma das seis categorias válidas
   p.createdAt = "2026-01-01T00:00:00.000Z";
   return p;
 }
@@ -469,4 +472,272 @@ TEST_CASE("listMovements devolve a linha do tempo em ordem cronológica, não de
   REQUIRE(all.size() == 2);
   CHECK(all[0].id == "m2");  // lançado depois, mas datado antes
   CHECK(all[1].id == "m1");
+}
+
+TEST_CASE("applySaida além do saldo disponível lança e não altera nada") {
+  auto db = freshDb();
+  createProduct(db, makeProduct("p1", "Papel A4"));
+  createDepartment(db, makeDept("d1", "PASTAS"));
+  applyEntrada(db, "m1", "p1", 5, 20.0, "F", "NF", "2026-06-01T00:00:00.000Z", "", "2026-06-01T00:00:00.000Z");
+
+  CHECK_THROWS_AS(
+      applySaida(db, "m2", "p1", 9, "d1", "2026-06-05T00:00:00.000Z", "", "", "2026-06-05T00:00:00.000Z"),
+      std::invalid_argument);
+
+  CHECK(productQty(db, "p1") == doctest::Approx(5.0));  // rollback: saída não ficou gravada
+  CHECK_FALSE(findMovement(db, "m2").has_value());
+}
+
+TEST_CASE("applyCorrecao com newAvgCost corrige o custo médio sem mexer no saldo") {
+  auto db = freshDb();
+  createProduct(db, makeProduct("p1", "Papel A4"));
+  applyEntrada(db, "m1", "p1", 10, 20.0, "F", "NF", "2026-06-01T00:00:00.000Z", "", "2026-06-01T00:00:00.000Z");
+
+  auto ajuste = applyCorrecao(db, "m2", "p1", /*qtyReal*/ 10, "correção de custo médio",
+                              "2026-06-10T00:00:00.000Z", "2026-06-10T00:00:00.000Z", /*newAvgCost*/ 35.0);
+
+  CHECK(ajuste.qty == doctest::Approx(0.0));  // saldo não muda
+
+  auto p = findProduct(db, "p1");
+  REQUIRE(p.has_value());
+  CHECK(p->qty == doctest::Approx(10.0));
+  CHECK(p->avgCost == doctest::Approx(35.0));
+}
+
+TEST_CASE("applyCorrecao sem newAvgCost preserva o comportamento antigo (custo não muda)") {
+  auto db = freshDb();
+  createProduct(db, makeProduct("p1", "Papel A4"));
+  applyEntrada(db, "m1", "p1", 10, 20.0, "F", "NF", "2026-06-01T00:00:00.000Z", "", "2026-06-01T00:00:00.000Z");
+
+  applyCorrecao(db, "m2", "p1", 8, "contagem", "2026-06-10T00:00:00.000Z", "2026-06-10T00:00:00.000Z");
+
+  auto p = findProduct(db, "p1");
+  REQUIRE(p.has_value());
+  CHECK(p->avgCost == doctest::Approx(20.0));
+}
+
+TEST_CASE("repairNegativeBalances zera saldo negativo herdado e é idempotente") {
+  auto db = freshDb();
+  createProduct(db, makeProduct("p1", "Papel A4"));
+  createProduct(db, makeProduct("p2", "Caneta"));
+  // Simula dado legado com saldo negativo: escreve direto, contornando a
+  // trava (ela só existe a partir de agora — dados antigos já ficaram assim).
+  db.execute(
+      "INSERT INTO movements (id, type, product_id, qty, unit_price, date, resulting_qty, resulting_avg_cost, "
+      "created_at) VALUES ('legado', 'saida', 'p1', 4, 10.0, '2026-05-01T00:00:00.000Z', -4, 10.0, "
+      "'2026-05-01T00:00:00.000Z')");
+  db.execute("UPDATE products SET qty = -4, avg_cost = 10.0 WHERE id = 'p1'");
+
+  auto fixed = repairNegativeBalances(db, "2026-08-12T12:00:00.000Z");
+  REQUIRE(fixed.size() == 1);
+  CHECK(fixed[0] == "p1");
+  CHECK(productQty(db, "p1") == doctest::Approx(0.0));
+  CHECK(productQty(db, "p2") == doctest::Approx(0.0));  // nunca esteve negativo, não mexe
+
+  auto again = repairNegativeBalances(db, "2026-08-12T12:00:00.000Z");
+  CHECK(again.empty());  // já rodou uma vez, não repete
+}
+
+TEST_CASE("reconcileAvgCost corrige avg_cost divergente do razão (dado vindo de backup) e preserva o offset de saldo") {
+  auto db = freshDb();
+  createProduct(db, makeProduct("p1", "Saco 4 furos"));
+  applyEntrada(db, "m1", "p1", 25, 4.60, "F", "NF", "2026-06-01T00:00:00.000Z", "", "2026-06-01T00:00:00.000Z");
+
+  // Simula exatamente o que Api::restoreFromJson faz: grava products.avg_cost
+  // e movements.unit_price/resulting_avg_cost DIRETO, sem passar por
+  // recomputeProduct — como um backup cuja planilha de origem trouxe um
+  // avg_cost (19,90) que não bate com o preço da própria entrada (4,60).
+  db.execute("UPDATE products SET avg_cost = 19.90 WHERE id = 'p1'");
+  db.execute("UPDATE movements SET resulting_avg_cost = 19.90 WHERE id = 'm1'");
+
+  // p2 tem histórico de compra real (avg_cost pelo razão = 10.0), MAS além
+  // disso um avg_cost corrompido (mesmo cenário de p1) E um saldo com offset
+  // herdado LEGÍTIMO (mesmo cenário do comentário de recomputeProduct: saída
+  // sem entrada correspondente na planilha de origem) — reconcileAvgCost
+  // precisa corrigir o custo SEM "corrigir" o saldo junto.
+  createProduct(db, makeProduct("p2", "Item legado com saída sem entrada"));
+  applyEntrada(db, "m2", "p2", 10, 10.0, "F", "NF", "2026-06-01T00:00:00.000Z", "", "2026-06-01T00:00:00.000Z");
+  db.execute("UPDATE products SET qty = 7, avg_cost = 99.0 WHERE id = 'p2'");  // 7 = 10 (razão) - 3 (offset herdado)
+
+  auto p3 = createProduct(db, makeProduct("p3", "Produto novo, nunca movimentado"));
+  (void)p3;  // avg_cost = 0 e razão = 0: nada a reconciliar, não pode virar "corrigido"
+
+  auto fixed = reconcileAvgCost(db);
+  CHECK(std::find(fixed.begin(), fixed.end(), "p1") != fixed.end());
+  CHECK(std::find(fixed.begin(), fixed.end(), "p2") != fixed.end());
+  CHECK(std::find(fixed.begin(), fixed.end(), "p3") == fixed.end());
+
+  auto p1Depois = findProduct(db, "p1");
+  REQUIRE(p1Depois.has_value());
+  CHECK(p1Depois->avgCost == doctest::Approx(4.60));  // volta a bater com a entrada real
+  CHECK(p1Depois->qty == doctest::Approx(25.0));       // saldo não tinha divergência — não muda
+
+  auto p2Depois = findProduct(db, "p2");
+  REQUIRE(p2Depois.has_value());
+  CHECK(p2Depois->avgCost == doctest::Approx(10.0));  // custo reconciliado com o razão
+  CHECK(p2Depois->qty == doctest::Approx(7.0));       // offset de saldo herdado PRESERVADO, não "corrigido" para 10
+
+  auto again = reconcileAvgCost(db);
+  CHECK(again.empty());  // já reconciliado, idempotente
+}
+
+// ------------------------------------------------------------------- SKU
+
+TEST_CASE("createProduct atribui SKU sequencial no formato CMT######") {
+  auto db = freshDb();
+  auto a = createProduct(db, makeProduct("p1", "Papel A4"));
+  auto b = createProduct(db, makeProduct("p2", "Caneta"));
+  auto c = createProduct(db, makeProduct("p3", "Grampeador"));
+  CHECK(a.sku == "CMT000001");
+  CHECK(b.sku == "CMT000002");
+  CHECK(c.sku == "CMT000003");
+}
+
+TEST_CASE("SKU de produto excluído nunca é reaproveitado") {
+  auto db = freshDb();
+  createProduct(db, makeProduct("p1", "Papel A4"));  // CMT000001
+  auto b = createProduct(db, makeProduct("p2", "Caneta"));  // CMT000002
+  CHECK(b.sku == "CMT000002");
+
+  deleteProduct(db, "p2");
+  auto c = createProduct(db, makeProduct("p3", "Grampeador"));
+  CHECK(c.sku == "CMT000003");  // não volta a CMT000002
+}
+
+TEST_CASE("updateProduct nunca altera o SKU") {
+  auto db = freshDb();
+  auto created = createProduct(db, makeProduct("p1", "Papel A4"));
+  Product edit = created;
+  edit.name = "Papel A4 Reciclado";
+  edit.sku = "CMT999999";  // tentativa de forçar outro SKU: deve ser ignorada
+  auto updated = updateProduct(db, edit);
+  CHECK(updated.sku == created.sku);
+  CHECK(updated.name == "Papel A4 Reciclado");
+}
+
+TEST_CASE("SKU duplicado é recusado pelo índice único") {
+  auto db = freshDb();
+  createProduct(db, makeProduct("p1", "Papel A4"));  // CMT000001
+  CHECK_THROWS_AS(
+      db.prepare("INSERT INTO products (id, name, unit, category, created_at, sku) "
+                 "VALUES ('p2', 'Outro', 'Unidade', 'Papelaria', '2026-01-01T00:00:00.000Z', 'CMT000001')")
+          .step(),
+      SqlError);
+}
+
+TEST_CASE("backfillMissingSkus preenche em ordem de criação sem tocar em quem já tem") {
+  auto db = freshDb();
+  createProduct(db, makeProduct("p1", "Papel A4"));  // CMT000001
+
+  // Simula produtos legados sem SKU (INSERT direto, contornando createProduct).
+  db.execute(
+      "INSERT INTO products (id, name, unit, category, created_at) "
+      "VALUES ('legado1', 'Zebra', 'Unidade', 'Papelaria', '2025-01-01T00:00:00.000Z')");
+  db.execute(
+      "INSERT INTO products (id, name, unit, category, created_at) "
+      "VALUES ('legado2', 'Abacate', 'Unidade', 'Papelaria', '2025-06-01T00:00:00.000Z')");
+
+  backfillMissingSkus(db);
+
+  CHECK(findProduct(db, "p1")->sku == "CMT000001");  // já tinha, não mudou
+  CHECK(findProduct(db, "legado1")->sku == "CMT000002");  // mais antigo primeiro
+  CHECK(findProduct(db, "legado2")->sku == "CMT000003");
+
+  auto again = createProduct(db, makeProduct("p2", "Novo"));
+  CHECK(again.sku == "CMT000004");  // contador continua de onde parou
+}
+
+// --------------------------------------------------------------- Categoria
+
+TEST_CASE("createProduct/updateProduct recusam categoria fora das seis válidas") {
+  auto db = freshDb();
+  Product p = makeProduct("p1", "Papel A4");
+  p.category = "Jardinagem";
+  CHECK_THROWS_AS(createProduct(db, p), std::invalid_argument);
+
+  p.category = "";
+  CHECK_THROWS_AS(createProduct(db, p), std::invalid_argument);
+
+  p.category = "Não Classificado";
+  CHECK_THROWS_AS(createProduct(db, p), std::invalid_argument);
+
+  auto created = createProduct(db, makeProduct("p2", "Caneta"));  // categoria válida
+  Product edit = created;
+  edit.category = "Jardinagem";
+  CHECK_THROWS_AS(updateProduct(db, edit), std::invalid_argument);
+}
+
+TEST_CASE("classifyLegacyCategories reclassifica por palavra-chave e marca o resto como Não Classificado") {
+  auto db = freshDb();
+  createProduct(db, makeProduct("p1", "Papel A4"));  // já válido (Papelaria) — não deve mexer
+
+  db.execute(
+      "INSERT INTO products (id, name, unit, category, created_at) "
+      "VALUES ('mouse1', 'Mouse sem fio', 'Unidade', '', '2026-01-01T00:00:00.000Z')");
+  db.execute(
+      "INSERT INTO products (id, name, unit, category, created_at) "
+      "VALUES ('urna1', 'Urna de votação', 'Unidade', NULL, '2026-01-01T00:00:00.000Z')");
+  db.execute(
+      "INSERT INTO products (id, name, unit, category, created_at) "
+      "VALUES ('legado1', 'Regador de jardim', 'Unidade', 'Jardinagem', '2026-01-01T00:00:00.000Z')");
+  db.execute(
+      "INSERT INTO products (id, name, unit, category, created_at) "
+      "VALUES ('grafica1', 'Cartão de Visita Premium', 'Unidade', 'gráfica', '2026-01-01T00:00:00.000Z')");
+
+  int n = classifyLegacyCategories(db);
+  CHECK(n == 4);  // mouse1, urna1, legado1, grafica1 — p1 já era válido
+
+  CHECK(findProduct(db, "p1")->category == "Papelaria");
+  CHECK(findProduct(db, "mouse1")->category == "Informática");
+  CHECK(findProduct(db, "urna1")->category == "Assembleia");
+  CHECK(findProduct(db, "legado1")->category == "Não Classificado");  // nada bate — fica pra revisão
+  CHECK(findProduct(db, "grafica1")->category == "Gráfica");  // categoria antiga já batia (case-insensitive)
+
+  int again = classifyLegacyCategories(db);
+  CHECK(again == 0);  // já rodou, não repete
+}
+
+// ------------------------------------------------------------------ Foto
+
+TEST_CASE("setProductImage grava os caminhos sem mexer em mais nada do produto") {
+  auto db = freshDb();
+  auto created = createProduct(db, makeProduct("p1", "Papel A4"));
+  applyEntrada(db, "m1", "p1", 10, 20.0, "F", "NF", "2026-06-01T00:00:00.000Z", "", "2026-06-01T00:00:00.000Z");
+
+  auto updated = setProductImage(db, "p1", "imagens/produtos/CMT000001/foto.webp",
+                                 "imagens/produtos/CMT000001/thumb.webp");
+  CHECK(updated.imagePath == "imagens/produtos/CMT000001/foto.webp");
+  CHECK(updated.thumbnailPath == "imagens/produtos/CMT000001/thumb.webp");
+  // nada mais do produto muda
+  CHECK(updated.sku == created.sku);
+  CHECK(updated.name == created.name);
+  CHECK(updated.qty == doctest::Approx(10.0));
+  CHECK(updated.avgCost == doctest::Approx(20.0));
+}
+
+TEST_CASE("clearProductImage volta o produto para sem foto") {
+  auto db = freshDb();
+  createProduct(db, makeProduct("p1", "Papel A4"));
+  setProductImage(db, "p1", "imagens/produtos/CMT000001/foto.webp", "imagens/produtos/CMT000001/thumb.webp");
+
+  auto cleared = clearProductImage(db, "p1");
+  CHECK(cleared.imagePath.empty());
+  CHECK(cleared.thumbnailPath.empty());
+}
+
+TEST_CASE("setProductImage/clearProductImage lançam NotFoundError para produto inexistente") {
+  auto db = freshDb();
+  CHECK_THROWS_AS(setProductImage(db, "inexistente", "x", "y"), NotFoundError);
+  CHECK_THROWS_AS(clearProductImage(db, "inexistente"), NotFoundError);
+}
+
+TEST_CASE("produto sem foto tem imagePath/thumbnailPath vazios por padrão") {
+  auto db = freshDb();
+  auto p = createProduct(db, makeProduct("p1", "Papel A4"));
+  CHECK(p.imagePath.empty());
+  CHECK(p.thumbnailPath.empty());
+  auto found = findProduct(db, "p1");
+  REQUIRE(found.has_value());
+  CHECK(found->imagePath.empty());
+  CHECK(found->thumbnailPath.empty());
 }
