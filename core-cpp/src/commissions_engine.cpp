@@ -398,7 +398,10 @@ DashboardFechamento montarDashboard(Database& db, const DashboardEntrada& entrad
     if (s.dataReferencia == entrada.mesReferencia && s.pago) doMes.push_back(s);
   }
 
-  for (const auto& s : doMes) out.arrecadado += s.venda;
+  // Arrecadado é a COMISSÃO que a FL recebe sobre a venda (venda ×
+  // porcentagem do serviço) — não o valor bruto vendido. É esse total que se
+  // reparte entre FL/Gerentes/Suprimentos logo abaixo, nunca a venda em si.
+  for (const auto& s : doMes) out.arrecadado += comissaoDe(s);
   // FL e o "liberado para comissão" (a fatia dos Gerentes) são sempre o
   // rateio de Configurações sobre o arrecadado do mês — nunca um campo que
   // o formulário de fechamento preenche à mão (mesmo critério da divisão de
@@ -575,6 +578,77 @@ DashboardSalvo salvarDashboard(Database& db, const DashboardSalvo& input) {
   st.step();
 
   return *findDashboard(db, input.id);
+}
+
+namespace {
+
+constexpr const char* kPagamentoCols =
+    "id, mes_referencia, dados_json, observacoes, fechado, gerado_em, fechado_em, created_at";
+
+PagamentoSalvo rowToPagamento(Statement& st) {
+  PagamentoSalvo p;
+  p.id = st.columnText(0);
+  p.mesReferencia = st.columnText(1);
+  p.dadosJson = st.columnText(2);
+  p.observacoes = textOrEmpty(st, 3);
+  p.fechado = st.columnDouble(4) != 0;
+  p.geradoEm = st.columnText(5);
+  p.fechadoEm = textOrEmpty(st, 6);
+  p.createdAt = st.columnText(7);
+  return p;
+}
+
+}  // namespace
+
+std::vector<PagamentoSalvo> listPagamentosSos(Database& db) {
+  std::vector<PagamentoSalvo> out;
+  auto st = db.prepare(std::string("SELECT ") + kPagamentoCols +
+                       " FROM sos_pagamentos ORDER BY mes_referencia DESC, gerado_em DESC");
+  while (st.step()) out.push_back(rowToPagamento(st));
+  return out;
+}
+
+std::optional<PagamentoSalvo> findPagamentoSos(Database& db, const std::string& id) {
+  auto st = db.prepare(std::string("SELECT ") + kPagamentoCols + " FROM sos_pagamentos WHERE id=?");
+  st.bind(1, id);
+  if (!st.step()) return std::nullopt;
+  return rowToPagamento(st);
+}
+
+std::optional<PagamentoSalvo> findPagamentoSosPorMes(Database& db, const std::string& mesReferencia) {
+  auto st = db.prepare(std::string("SELECT ") + kPagamentoCols +
+                       " FROM sos_pagamentos WHERE mes_referencia=?");
+  st.bind(1, mesReferencia);
+  if (!st.step()) return std::nullopt;
+  return rowToPagamento(st);
+}
+
+PagamentoSalvo salvarPagamentoSos(Database& db, const PagamentoSalvo& input) {
+  if (!isValidMesReferencia(input.mesReferencia)) {
+    throw std::invalid_argument("data de referência inválida (use mês/ano)");
+  }
+  if (trim(input.dadosJson).empty()) throw std::invalid_argument("pagamento vazio");
+
+  bool existe = findPagamentoSos(db, input.id).has_value();
+  if (existe) {
+    auto st = db.prepare(
+        "UPDATE sos_pagamentos SET mes_referencia=?, dados_json=?, observacoes=?, fechado=?, "
+        "gerado_em=?, fechado_em=? WHERE id=?");
+    st.bind(1, input.mesReferencia).bind(2, input.dadosJson).bind(3, input.observacoes);
+    st.bind(4, input.fechado ? 1 : 0).bind(5, input.geradoEm).bind(6, input.fechadoEm);
+    st.bind(7, input.id);
+    st.step();
+  } else {
+    auto st = db.prepare(
+        "INSERT INTO sos_pagamentos (id, mes_referencia, dados_json, observacoes, fechado, "
+        "gerado_em, fechado_em, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+    st.bind(1, input.id).bind(2, input.mesReferencia).bind(3, input.dadosJson);
+    st.bind(4, input.observacoes).bind(5, input.fechado ? 1 : 0).bind(6, input.geradoEm);
+    st.bind(7, input.fechadoEm).bind(8, input.createdAt);
+    st.step();
+  }
+
+  return *findPagamentoSos(db, input.id);
 }
 
 double eficaciaDe(double producao, int condominiosNaCarteira, double metaPorCondominio) {

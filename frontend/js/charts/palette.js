@@ -18,7 +18,47 @@ export const VIZ = {
   abc: { A: '#1B3A5C', B: '#2E6BA6', C: '#6C8CA8' },
   grid: '#E1E4E8', axis: '#C6CCD2', muted: '#6B7280', ink: '#2B2F33',
   surface: '#FFFFFF', deemph: '#AEC2D2',
+  // Paleta categórica (identidade — um gerente/parceiro/nicho é uma barra
+  // diferente da outra) — 8 tons em ordem fixa, validados (skill de
+  // dataviz: CVD ΔE ≥ 8, contraste ≥ 3:1) para nunca virarem "a mesma cor".
+  // Nunca ciclar a ordem nem reatribuir por valor — a cor segue a
+  // ENTIDADE, não o ranking dela.
+  categorical: ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300', '#4a3aa7', '#e34948'],
+  // Azul sequencial (magnitude/tempo) — usado nos retrospectos mês a mês,
+  // onde o mês ATUAL precisa estar sempre em evidência: os outros meses
+  // usam o passo mais claro, o mês corrente usa o mais escuro.
+  sequential: { fraco: '#9ec5f4', medio: '#3987e5', forte: '#0d366b' },
 };
+
+// Clareia um hex misturando com branco — usado pra montar o degradê de cada
+// barra (claro → a cor de base) sem precisar de uma segunda cor por série.
+export function lighten(hex, pct) {
+  const h = hex.replace('#', '');
+  const r = parseInt(h.slice(0, 2), 16), g = parseInt(h.slice(2, 4), 16), b = parseInt(h.slice(4, 6), 16);
+  const mix = (c) => Math.round(c + (255 - c) * pct);
+  return `#${[mix(r), mix(g), mix(b)].map((v) => v.toString(16).padStart(2, '0')).join('')}`;
+}
+
+// Gera os <linearGradient> (um por cor distinta) e devolve como referenciar
+// cada um via fill="url(#id)" — todo gráfico de barra usa gradiente, nunca
+// cor chapada (pedido explícito: "todas as cores devem ter efeito
+// gradiente"). `horizontal` decide a direção do degradê (barra deitada vs
+// em pé).
+let gradSeq = 0;
+export function gradientDefs(colors, horizontal) {
+  const map = new Map();
+  let defs = '';
+  colors.forEach((hex) => {
+    if (map.has(hex)) return;
+    const id = `vizgrad${gradSeq++}`;
+    map.set(hex, id);
+    const x2 = horizontal ? '1' : '0', y2 = horizontal ? '0' : '1';
+    defs += `<linearGradient id="${id}" x1="0" y1="0" x2="${x2}" y2="${y2}">` +
+      `<stop offset="0%" stop-color="${lighten(hex, 0.55)}"/>` +
+      `<stop offset="100%" stop-color="${hex}"/></linearGradient>`;
+  });
+  return { defsHTML: defs ? `<defs>${defs}</defs>` : '', urlFor: (hex) => `url(#${map.get(hex)})` };
+}
 
 export function hostW(el, fallback) {
   const w = el.getBoundingClientRect().width;

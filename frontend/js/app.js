@@ -31,6 +31,8 @@ import { initServicos, reload as reloadServicos } from './views/servicos.js';
 import { initFechamento, reload as reloadFechamento } from './views/fechamento.js';
 import { initHistoricoFechamentos, reload as reloadHistoricoFechamentos } from './views/historicoFechamentos.js';
 import { initDashboardFechamento, reload as reloadDashboardFechamento } from './views/dashboardFechamento.js';
+import { initProgramarPagamento, reload as reloadProgramarPagamento } from './views/programarPagamento.js';
+import { initHistoricoPagamentos, reload as reloadHistoricoPagamentos } from './views/historicoPagamentos.js';
 import { initSosConfig, reload as reloadSosConfig } from './views/sosConfig.js';
 
 // Catálogo de telas e a permissão que cada uma exige. É daqui que sai o menu:
@@ -91,6 +93,10 @@ const ICO_HISTORICO_FECHAMENTOS = '<svg viewBox="0 0 20 20" fill="none" stroke="
 const ICO_CONFIG_SOS = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="10" r="2.6"/><path d="M10 2.5v2M10 15.5v2M2.5 10h2M15.5 10h2M4.7 4.7l1.4 1.4M13.9 13.9l1.4 1.4M15.3 4.7l-1.4 1.4M6.1 13.9l-1.4 1.4"/></svg>';
 // Dashboard de Fechamento: barras de gráfico — é a apresentação financeira do mês, não o "fechar/travar" (ICO_FECHAMENTO, que é um cadeado).
 const ICO_DASHBOARD_FECHAMENTO = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 16V9M10 16V4M16 16v-6"/></svg>';
+// Programar Pagamento: cifrão — autorizar quem recebe quanto.
+const ICO_PROGRAMAR_PAGAMENTO = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3v14M13.5 6.5c0-1.4-1.6-2.5-3.5-2.5s-3.5 1-3.5 2.5S8 8.5 10 9s3.5 1.1 3.5 2.5S11.9 14 10 14s-3.5-1.1-3.5-2.5"/></svg>';
+// Histórico de pagamentos: mesmo relógio de ICO_HISTORICO_FECHAMENTOS — mesma ideia de "registro permanente do passado".
+const ICO_HISTORICO_PAGAMENTOS = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="10" r="7"/><path d="M10 6v4l3 2"/></svg>';
 
 /* MÓDULOS do sistema — o primeiro nível do menu.
 
@@ -184,6 +190,10 @@ const MODULOS = [
         visivel: () => can('gestao_sos_servicos', 'read') },
       { id: 'deltaSindicos', label: 'Delta Síndicos', ico: ICO_DELTA_SINDICOS,
         visivel: () => can('delta_sindicos', 'read') },
+      { id: 'programarPagamento', label: 'Programar pagamento', ico: ICO_PROGRAMAR_PAGAMENTO,
+        visivel: () => can('gestao_sos_servicos', 'read') },
+      { id: 'historicoPagamentos', label: 'Histórico de pagamentos', ico: ICO_HISTORICO_PAGAMENTOS,
+        visivel: () => can('gestao_sos_servicos', 'read') },
       { id: 'configuracoesSos', label: 'Configurações', ico: ICO_CONFIG_SOS,
         visivel: () => can('gestao_sos_servicos', 'read') },
       { id: 'parceiros', label: 'Parceiros', ico: ICO_PARCEIROS,
@@ -282,6 +292,8 @@ async function switchView(view, opts) {
       else if (view === 'fechamento') await initFechamento();
       else if (view === 'historicoFechamentos') await initHistoricoFechamentos();
       else if (view === 'dashboardFechamento') await initDashboardFechamento();
+      else if (view === 'programarPagamento') await initProgramarPagamento();
+      else if (view === 'historicoPagamentos') await initHistoricoPagamentos();
       else if (view === 'configuracoesSos') await initSosConfig();
       else if (view === 'importExport') initImportExport();
     } else {
@@ -312,6 +324,8 @@ async function switchView(view, opts) {
       else if (view === 'fechamento') await reloadFechamento();
       else if (view === 'historicoFechamentos') await reloadHistoricoFechamentos();
       else if (view === 'dashboardFechamento') await reloadDashboardFechamento();
+      else if (view === 'programarPagamento') await reloadProgramarPagamento();
+      else if (view === 'historicoPagamentos') await reloadHistoricoPagamentos();
       else if (view === 'configuracoesSos') await reloadSosConfig();
       else if (view === 'importExport') initImportExport();
     }

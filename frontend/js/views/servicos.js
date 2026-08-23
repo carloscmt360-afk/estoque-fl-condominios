@@ -1,5 +1,5 @@
 import { api, errorText } from '../api.js';
-import { escapeHtml, uid, nowIso, fmtBRL } from '../format.js';
+import { escapeHtml, uid, nowIso, fmtBRL, paraBusca } from '../format.js';
 import { openModal, closeModal } from '../components/modal.js';
 import { toast } from '../components/toast.js';
 import { can } from '../session.js';
@@ -79,6 +79,15 @@ export async function initServicos() {
       document.getElementById(id).addEventListener('input', atualizaComissaoPrevista));
     document.getElementById('btnImprimirServicos').addEventListener('click', abrirFiltroRelatorio);
     document.getElementById('btnGerarRelatorioServicos').addEventListener('click', gerarRelatorio);
+    document.getElementById('impSrvRelBuscaParceiro').addEventListener('input', renderChipsRelatorio);
+    document.getElementById('impSrvRelMarcarTodos').addEventListener('click', () => {
+      parceiros.forEach((p) => relParceirosSelecionados.add(p.id));
+      renderChipsRelatorio();
+    });
+    document.getElementById('impSrvRelLimparTodos').addEventListener('click', () => {
+      relParceirosSelecionados.clear();
+      renderChipsRelatorio();
+    });
     document.getElementById('srvSelecionarTodos').addEventListener('change', onSelecionarTodos);
     document.getElementById('btnPctLote').addEventListener('click', abrirPctLote);
     document.getElementById('btnConfirmarPctLote').addEventListener('click', confirmarPctLote);
@@ -558,35 +567,80 @@ async function deleteServico(id) {
 }
 
 // Relatório impresso: filtro PRÓPRIO, separado do filtro de mês único da
-// tela — o pedido foi imprimir "os valores de um parceiro específico e de
-// alguns meses" (um intervalo, não um mês só).
+// tela — o pedido foi imprimir "os valores de um ou mais parceiros e de
+// alguns meses" (um intervalo, não um mês só). Parceiro agora é multi-
+// seleção por chip (mesmo padrão de Setorização/Cadastro de empresas) —
+// nenhum marcado equivale a "todos".
+let relParceirosSelecionados = new Set();
+let relBuscaParceiro = '';
+
 function abrirFiltroRelatorio() {
-  const sel = document.getElementById('impSrvRelParceiro');
-  sel.innerHTML = '<option value="">Todos</option>' + [...parceiros]
+  relParceirosSelecionados = new Set();
+  relBuscaParceiro = '';
+  document.getElementById('impSrvRelBuscaParceiro').value = '';
+  const selGerRel = document.getElementById('impSrvRelGerente');
+  selGerRel.innerHTML = '<option value="">Todos</option>' + [...gerentes]
     .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'))
-    .map((p) => `<option value="${p.id}">${escapeHtml(p.nome)}</option>`).join('');
+    .map((g) => `<option value="${g.id}">${escapeHtml(g.nome)}</option>`).join('');
   document.getElementById('impSrvRelDe').value = '';
   document.getElementById('impSrvRelAte').value = '';
+  document.getElementById('impSrvRelSoComPct').checked = false;
+  renderChipsRelatorio();
   openModal('modalImprimirServicos');
 }
 
+function renderChipsRelatorio() {
+  relBuscaParceiro = document.getElementById('impSrvRelBuscaParceiro').value;
+  const termo = paraBusca(relBuscaParceiro).trim();
+  const host = document.getElementById('impSrvRelParceiros');
+  const sorted = [...parceiros]
+    .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'))
+    .filter((p) => !termo || paraBusca(p.nome).includes(termo));
+
+  if (!sorted.length) {
+    host.innerHTML = '<span class="muted">Nenhum parceiro encontrado.</span>';
+    return;
+  }
+  host.innerHTML = sorted.map((p) => `
+    <button type="button" class="chip-toggle ${relParceirosSelecionados.has(p.id) ? 'on' : ''}"
+            data-parceiro="${p.id}" aria-pressed="${relParceirosSelecionados.has(p.id)}">
+      ${escapeHtml(p.nome)}
+    </button>`).join('');
+  host.querySelectorAll('[data-parceiro]').forEach((btn) => btn.addEventListener('click', () => {
+    const id = btn.dataset.parceiro;
+    if (relParceirosSelecionados.has(id)) relParceirosSelecionados.delete(id);
+    else relParceirosSelecionados.add(id);
+    btn.classList.toggle('on', relParceirosSelecionados.has(id));
+    btn.setAttribute('aria-pressed', relParceirosSelecionados.has(id));
+  }));
+}
+
 function gerarRelatorio() {
-  const parceiroId = document.getElementById('impSrvRelParceiro').value;
+  const gerenteId = document.getElementById('impSrvRelGerente').value;
   const de = document.getElementById('impSrvRelDe').value;
   const ate = document.getElementById('impSrvRelAte').value;
+  const soComPct = document.getElementById('impSrvRelSoComPct').checked;
   if (de && ate && de > ate) { toast('O mês "de" não pode ser depois do "até".', 'error'); return; }
 
   // "YYYY-MM" compara certo como string — não precisa converter pra data.
   const lista = servicos.filter((s) => {
-    if (parceiroId && s.parceiroId !== parceiroId) return false;
+    if (gerenteId && s.gerenteId !== gerenteId) return false;
+    if (relParceirosSelecionados.size && !relParceirosSelecionados.has(s.parceiroId)) return false;
     if (de && s.dataReferencia < de) return false;
     if (ate && s.dataReferencia > ate) return false;
+    if (soComPct && !(s.porcentagem > 0)) return false;
     return true;
   });
   if (!lista.length) { toast('Nenhum serviço encontrado com este filtro.', 'error'); return; }
 
-  const parceiroNome = parceiroId ? (parceiros.find((p) => p.id === parceiroId) || {}).nome : 'Todos os parceiros';
+  const gerenteNome = gerenteId ? (gerentes.find((g) => g.id === gerenteId) || {}).nome : '';
+  const parceiroNome = relParceirosSelecionados.size
+    ? [...relParceirosSelecionados].map((id) => (parceiros.find((p) => p.id === id) || {}).nome)
+        .filter(Boolean).sort((a, b) => a.localeCompare(b, 'pt-BR')).join(', ')
+    : 'Todos os parceiros';
   const periodo = de || ate ? `${de ? mesAnoLabel(de) : 'início'} a ${ate ? mesAnoLabel(ate) : 'hoje'}` : 'todos os meses';
-  printDocument(buildServicosDoc(lista, `${parceiroNome} · ${periodo}`));
+  const pctLabel = soComPct ? ' · só com comissão' : '';
+  const titulo = (gerenteNome ? `${gerenteNome} · ` : '') + `${parceiroNome} · ${periodo}${pctLabel}`;
+  printDocument(buildServicosDoc(lista, titulo));
   closeModal('modalImprimirServicos');
 }

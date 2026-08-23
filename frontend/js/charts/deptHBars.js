@@ -1,12 +1,27 @@
-import { VIZ, hostW, txt, barPath, measureText, truncToWidth, emptyChart, tipAttr } from './palette.js';
+import { VIZ, hostW, txt, barPath, measureText, truncToWidth, emptyChart, tipAttr, gradientDefs } from './palette.js';
 import { fmtBRL, escapeHtml } from '../format.js';
 
-/* Barras horizontais, série única — substitui a pizza de N fatias do
-   relatório em planilha (ilegível acima de ~6 categorias). */
+/* Barras horizontais — substitui a pizza de N fatias do relatório em
+   planilha (ilegível acima de ~6 categorias).
+
+   Cor de cada barra, em ordem de prioridade: `row.color` explícito > modo
+   "timeline" (série única no tempo — todas as barras na mesma cor, exceto a
+   marcada `row.atual`, que usa o tom mais forte, sempre em evidência) >
+   categórica (cada barra recebe o próximo tom fixo da paleta — identidade,
+   nunca por valor/ranking). Todas em degradê (claro → a cor), nunca cor
+   chapada. */
 export function drawBarrasH(host, rows, opts) {
   opts = opts || {};
   if (!rows.length) return emptyChart(host, opts.empty || 'Sem dados no período.');
   host.innerHTML = barrasHSVG(rows, hostW(host), opts);
+}
+
+function corDaLinha(r, i, opts) {
+  if (r.color) return r.color;
+  if (opts.mode === 'timeline') {
+    return r.atual ? VIZ.sequential.forte : (opts.color || VIZ.sequential.medio);
+  }
+  return opts.color || VIZ.categorical[i % VIZ.categorical.length];
 }
 
 /* Mesmo desenho, mas como string — usada pelos relatórios impressos, que
@@ -23,15 +38,21 @@ export function barrasHSVG(rows, W, opts) {
   const pw = Math.max(30, W - mL - mR);
   const maxV = Math.max(...rows.map((r) => r.value)) || 1;
 
-  let g = '';
+  const cores = rows.map((r, i) => corDaLinha(r, i, opts));
+  const grad = gradientDefs(cores, true);
+
+  let g = grad.defsHTML;
   rows.forEach((r, i) => {
     const y = mT + i * rowH;
     const w = (r.value / maxV) * pw;
-    g += txt(mL - 8, y + rowH / 2 + 3.5, truncToWidth(r.label, mL - 12, 11.5), { anchor: 'end', size: 11.5, fill: VIZ.ink, tabular: false });
-    g += `<path d="${barPath(mL, y + (rowH - barH) / 2, w, barH, 4)}" fill="${opts.color || VIZ.s1}"></path>`;
+    const destacar = opts.mode === 'timeline' && r.atual;
+    g += txt(mL - 8, y + rowH / 2 + 3.5, truncToWidth(r.label, mL - 12, 11.5),
+      { anchor: 'end', size: 11.5, weight: destacar ? 700 : 400, fill: VIZ.ink, tabular: false });
+    g += `<path d="${barPath(mL, y + (rowH - barH) / 2, w, barH, 4)}" fill="${grad.urlFor(cores[i])}"></path>`;
     g += txt(mL + w + 7, y + rowH / 2 + 3.5, fmtV(r.value), { size: 11, weight: 700, fill: VIZ.ink });
     if (opts.interactive !== false) {
-      const tip = `<b>${escapeHtml(r.label)}</b><br>${escapeHtml(opts.tipLabel || 'Valor')}: ${fmtBRL(r.value)}${r.tipExtra || ''}`;
+      const tip = `<b>${escapeHtml(r.label)}</b>${destacar ? ' (mês atual)' : ''}<br>` +
+        `${escapeHtml(opts.tipLabel || 'Valor')}: ${fmtBRL(r.value)}${r.tipExtra || ''}`;
       g += `<g class="band" tabindex="0" data-tip="${tipAttr(tip)}">
         <rect class="bandbg" x="0" y="${y}" width="${W}" height="${rowH}" fill="transparent"></rect></g>`;
     }

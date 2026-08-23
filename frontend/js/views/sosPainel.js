@@ -1,6 +1,7 @@
 import { api, errorText } from '../api.js';
 import { fmtBRL, fmtNum, fmtPct, escapeHtml } from '../format.js';
 import { drawBarrasH } from '../charts/deptHBars.js';
+import { emptyChart } from '../charts/palette.js';
 import { toast } from '../components/toast.js';
 import { printDocument, buildSosPainelDoc } from '../print.js';
 
@@ -12,8 +13,13 @@ const MESES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Ag
 const MESES_ABR = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
 
 let servicos = [];
+let gerentes = [];
+let parceiros = [];
 let ano = new Date().getFullYear();
 let mes = ''; // '' = ano inteiro; senão "01".."12"
+let retroGerenteId = '';
+let retroParceiroId = '';
+let retroEspecialidadeId = '';
 let wired = false;
 
 export async function initSosPainel() {
@@ -28,19 +34,54 @@ export async function initSosPainel() {
       render();
     });
     document.getElementById('btnImprimirPainelSos').addEventListener('click', imprimir);
+    document.getElementById('painelSosRetroGerente').addEventListener('change', (e) => {
+      retroGerenteId = e.target.value;
+      renderRetrospectos();
+    });
+    document.getElementById('painelSosRetroParceiro').addEventListener('change', (e) => {
+      retroParceiroId = e.target.value;
+      renderRetrospectos();
+    });
+    document.getElementById('painelSosRetroEspecialidade').addEventListener('change', (e) => {
+      retroEspecialidadeId = e.target.value;
+      renderRetrospectos();
+    });
   }
   await reload();
 }
 
 export async function reload() {
   try {
-    servicos = await api.listServicos();
+    [servicos, gerentes, parceiros] = await Promise.all([
+      api.listServicos(), api.listGerentes(), api.listParceiros(),
+    ]);
   } catch (e) {
     toast('Erro ao carregar os serviços: ' + errorText(e), 'error');
-    servicos = [];
+    servicos = []; gerentes = []; parceiros = [];
   }
   populaFiltros();
   render();
+}
+
+// Uma especialidade pode vir de mais de um parceiro cadastrado — a lista do
+// seletor é deduplicada por id (mesmo critério de "por categoria" descrito
+// na documentação do Painel: um parceiro com mais de uma especialidade soma
+// o mesmo serviço em cada uma delas).
+function especialidadesDisponiveis() {
+  const porId = new Map();
+  for (const p of parceiros) {
+    for (const e of p.especialidades || []) if (!porId.has(e.id)) porId.set(e.id, e.nome);
+  }
+  return [...porId.entries()].map(([id, nome]) => ({ id, nome }))
+    .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+}
+
+function popularSelectRetro(id, opcoes, valorAtual) {
+  const sel = document.getElementById(id);
+  sel.innerHTML = '<option value="">Selecione…</option>' +
+    opcoes.map((o) => `<option value="${o.id}">${escapeHtml(o.nome)}</option>`).join('');
+  if (opcoes.some((o) => o.id === valorAtual)) sel.value = valorAtual;
+  return sel.value;
 }
 
 function populaFiltros() {
@@ -60,6 +101,13 @@ function populaFiltros() {
     selMes.innerHTML = '<option value="">Ano inteiro</option>' +
       MESES.map((n, i) => `<option value="${String(i + 1).padStart(2, '0')}">${n}</option>`).join('');
   }
+
+  retroGerenteId = popularSelectRetro('painelSosRetroGerente',
+    [...gerentes].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR')), retroGerenteId);
+  retroParceiroId = popularSelectRetro('painelSosRetroParceiro',
+    [...parceiros].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR')), retroParceiroId);
+  retroEspecialidadeId = popularSelectRetro('painelSosRetroEspecialidade',
+    especialidadesDisponiveis(), retroEspecialidadeId);
 }
 
 /* Serviços do ano/mês selecionados. Um serviço fechado continua contando —
@@ -102,11 +150,17 @@ function renderEvolucao() {
     const [y, m] = String(s.dataReferencia).split('-');
     if (Number(y) === ano && m) porMes[Number(m) - 1] += s.comissao;
   }
-  const rows = MESES_ABR.map((label, i) => ({ label, value: porMes[i] }));
+  // mesAtualIdx marca o mês corrente SÓ quando o ano escolhido é o ano
+  // corrente — não faz sentido "destacar dezembro" num ano já encerrado.
+  const hoje = new Date();
+  const mesAtualIdx = hoje.getFullYear() === ano ? hoje.getMonth() : -1;
+  const rows = MESES_ABR.map((label, i) => ({ label, value: porMes[i], atual: i === mesAtualIdx }));
   document.getElementById('painelSosEvolucaoSub').textContent =
     `Comissão por mês de referência em ${ano} — soma ${fmtBRL(porMes.reduce((a, b) => a + b, 0))}.`;
-  drawBarrasH(document.getElementById('chartPainelSosEvolucao'), rows.filter((r) => r.value > 0),
-    { tipLabel: 'Comissão', aria: 'Evolução mensal de comissão', empty: `Nenhum serviço lançado em ${ano}.` });
+  // O mês atual sempre aparece (mesmo com valor 0) para continuar em
+  // evidência; os outros meses vazios continuam escondidos, como antes.
+  drawBarrasH(document.getElementById('chartPainelSosEvolucao'), rows.filter((r) => r.value > 0 || r.atual),
+    { tipLabel: 'Comissão', mode: 'timeline', aria: 'Evolução mensal de comissão', empty: `Nenhum serviço lançado em ${ano}.` });
 }
 
 function renderRankings(lista) {
@@ -118,11 +172,66 @@ function renderRankings(lista) {
     { tipLabel: 'Venda', aria: 'Ranking por condomínio', empty: 'Nenhum serviço no período.' });
 }
 
+// ---- retrospecto anual (mês a mês, um ano inteiro) por gerente/parceiro/
+// especialidade — diferente das rankings acima (top 8 do período filtrado),
+// aqui é UMA entidade escolhida contra os 12 meses do ano do topo da tela,
+// pra enxergar sazonalidade e comparar contra o mês corrente.
+function comissaoMensal(filtroFn) {
+  const porMes = new Array(12).fill(0);
+  for (const s of servicos) {
+    const [y, m] = String(s.dataReferencia).split('-');
+    if (Number(y) === ano && m && filtroFn(s)) porMes[Number(m) - 1] += s.comissao;
+  }
+  return porMes;
+}
+
+function linhasRetrospecto(porMes, mesAtualIdx) {
+  return MESES_ABR.map((label, i) => ({ label, value: porMes[i], atual: i === mesAtualIdx }));
+}
+
+function renderRetrospectos() {
+  const hoje = new Date();
+  const mesAtualIdx = hoje.getFullYear() === ano ? hoje.getMonth() : -1;
+
+  const hostGerente = document.getElementById('chartPainelSosRetroGerente');
+  if (!retroGerenteId) {
+    emptyChart(hostGerente, 'Selecione um gerente.');
+  } else {
+    const porMes = comissaoMensal((s) => s.gerenteId === retroGerenteId);
+    drawBarrasH(hostGerente, linhasRetrospecto(porMes, mesAtualIdx),
+      { tipLabel: 'Comissão', mode: 'timeline', aria: 'Retrospecto anual por gerente' });
+  }
+
+  const hostParceiro = document.getElementById('chartPainelSosRetroParceiro');
+  if (!retroParceiroId) {
+    emptyChart(hostParceiro, 'Selecione um parceiro.');
+  } else {
+    const porMes = comissaoMensal((s) => s.parceiroId === retroParceiroId);
+    drawBarrasH(hostParceiro, linhasRetrospecto(porMes, mesAtualIdx),
+      { tipLabel: 'Comissão', mode: 'timeline', aria: 'Retrospecto anual por parceiro' });
+  }
+
+  const hostEspecialidade = document.getElementById('chartPainelSosRetroEspecialidade');
+  if (!retroEspecialidadeId) {
+    emptyChart(hostEspecialidade, 'Selecione uma especialidade.');
+  } else {
+    // Mesmo critério do "Por categoria" do Painel: um parceiro com mais de
+    // uma especialidade soma o mesmo serviço em cada uma delas.
+    const porMes = comissaoMensal((s) => {
+      const p = parceiros.find((x) => x.id === s.parceiroId);
+      return !!(p && (p.especialidades || []).some((e) => e.id === retroEspecialidadeId));
+    });
+    drawBarrasH(hostEspecialidade, linhasRetrospecto(porMes, mesAtualIdx),
+      { tipLabel: 'Comissão', mode: 'timeline', aria: 'Retrospecto anual por especialidade' });
+  }
+}
+
 function render() {
   const lista = servicosNoFiltro();
   renderStats(lista);
   renderEvolucao();
   renderRankings(lista);
+  renderRetrospectos();
 }
 
 function filtroLabel() {

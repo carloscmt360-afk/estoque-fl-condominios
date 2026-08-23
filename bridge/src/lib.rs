@@ -361,6 +361,9 @@ pub mod ffi {
         fn montar_dashboard(self: Pin<&mut Session>, payload: &str) -> Result<String>;
         fn salvar_dashboard(self: Pin<&mut Session>, payload: &str) -> Result<String>;
         fn list_dashboards_json(self: Pin<&mut Session>) -> Result<String>;
+        fn montar_pagamento_sos(self: Pin<&mut Session>, payload: &str) -> Result<String>;
+        fn salvar_pagamento_sos(self: Pin<&mut Session>, payload: &str) -> Result<String>;
+        fn list_pagamentos_sos_json(self: Pin<&mut Session>) -> Result<String>;
 
         // ---- gestão sos: suprimentos ----
         fn list_suprimentos_json(self: Pin<&mut Session>) -> Result<String>;

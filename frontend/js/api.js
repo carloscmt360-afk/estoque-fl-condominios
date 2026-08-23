@@ -217,6 +217,17 @@ export const api = {
     JSON.parse(await call('salvar_dashboard', { payload: JSON.stringify(snap) })),
   listDashboards: async () => JSON.parse(await call('list_dashboards')),
 
+  // ---- gestão sos: pagamentos (Programar Pagamento / Histórico) ----
+  // Se o mês já tem pagamento salvo, montarPagamentoSos devolve ELE (modo
+  // edição) em vez de uma proposta nova — nunca gera duas propostas
+  // divergentes pro mesmo mês. salvarPagamentoSos fecha OU corrige o mesmo
+  // registro (nunca duplica).
+  montarPagamentoSos: async (mesReferencia) =>
+    JSON.parse(await call('montar_pagamento_sos', { payload: JSON.stringify({ mesReferencia }) })),
+  salvarPagamentoSos: async (pagamento) =>
+    JSON.parse(await call('salvar_pagamento_sos', { payload: JSON.stringify(pagamento) })),
+  listPagamentosSos: async () => JSON.parse(await call('list_pagamentos_sos')),
+
   // ---- gestão sos: suprimentos ----
   listSuprimentos: async () => JSON.parse(await call('list_suprimentos')),
   createSuprimento: async (suprimento) =>

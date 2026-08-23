@@ -834,6 +834,21 @@ pub fn list_dashboards(state: State<AppState>) -> Result<String, String> {
 }
 
 #[tauri::command]
+pub fn montar_pagamento_sos(state: State<AppState>, payload: String) -> Result<String, String> {
+    with_session(&state, |s| s.montar_pagamento_sos(&payload))
+}
+
+#[tauri::command]
+pub fn salvar_pagamento_sos(state: State<AppState>, payload: String) -> Result<String, String> {
+    with_session(&state, |s| s.salvar_pagamento_sos(&payload))
+}
+
+#[tauri::command]
+pub fn list_pagamentos_sos(state: State<AppState>) -> Result<String, String> {
+    with_session(&state, |s| s.list_pagamentos_sos_json())
+}
+
+#[tauri::command]
 pub fn list_suprimentos(state: State<AppState>) -> Result<String, String> {
     with_session(&state, |s| s.list_suprimentos_json())
 }

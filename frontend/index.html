@@ -243,6 +243,29 @@
           <div class="card-body"><div class="chart-host" id="chartPainelSosCondominio"></div></div>
         </div>
       </div>
+
+      <div class="section-title">Retrospecto anual <span class="muted" style="font-weight:400;">mês a mês
+        no ano selecionado acima — o mês atual (se o ano for o corrente) sempre em destaque</span></div>
+      <div class="charts-grid">
+        <div class="card chart-card">
+          <div class="card-head"><div><h3>Retrospecto por Gerente</h3>
+            <div class="sub">Comissão mês a mês de um gerente no ano selecionado.</div></div>
+            <select id="painelSosRetroGerente" style="max-width:220px;"></select></div>
+          <div class="card-body"><div class="chart-host" id="chartPainelSosRetroGerente"></div></div>
+        </div>
+        <div class="card chart-card">
+          <div class="card-head"><div><h3>Retrospecto por Parceiro</h3>
+            <div class="sub">Comissão mês a mês de um parceiro no ano selecionado.</div></div>
+            <select id="painelSosRetroParceiro" style="max-width:220px;"></select></div>
+          <div class="card-body"><div class="chart-host" id="chartPainelSosRetroParceiro"></div></div>
+        </div>
+        <div class="card chart-card">
+          <div class="card-head"><div><h3>Retrospecto por Especialidade</h3>
+            <div class="sub">Comissão mês a mês de um nicho no ano selecionado — qual traz mais dinheiro.</div></div>
+            <select id="painelSosRetroEspecialidade" style="max-width:220px;"></select></div>
+          <div class="card-body"><div class="chart-host" id="chartPainelSosRetroEspecialidade"></div></div>
+        </div>
+      </div>
     </section>
 
     <!-- ================== GESTÃO SOS: GERENTES ================== -->
@@ -335,15 +358,21 @@
         <div><h1>Delta Síndicos</h1>
           <div class="sub">Planilha de vendas e comissões dos síndicos — puxada automaticamente de Serviços</div></div>
       </div>
-      <div class="panel" style="margin-bottom:var(--sp-4);">
-        <h3 style="margin-top:0;">Condomínios atendidos pela Delta</h3>
-        <p class="muted" style="margin-top:-8px;">Marque abaixo quais condomínios têm a Delta como síndica — todo
-          serviço pago lançado neles entra sozinho na planilha abaixo, sem precisar lançar nada aqui.</p>
-        <div class="toolbar">
-          <input type="text" id="dsBuscaCondominios" placeholder="Buscar condomínio..." style="min-width:260px;" />
-          <span class="muted" id="deltaContagem">nenhum condomínio marcado</span>
+      <div class="panel panel--accent-top" style="margin-bottom:var(--sp-4);">
+        <div class="panel-simple-head">
+          <h3>Condomínios atendidos pela Delta</h3>
+          <p class="muted">Marque abaixo quais condomínios têm a Delta como síndica — todo
+            serviço pago lançado neles entra sozinho na planilha abaixo, sem precisar lançar nada aqui.</p>
+          <div class="toolbar">
+            <input type="text" id="dsBuscaCondominios" placeholder="Buscar condomínio..." style="min-width:260px;" />
+            <span class="muted" id="deltaContagem">nenhum condomínio marcado</span>
+            <span class="spacer"></span>
+            <span class="muted" id="deltaTravaStatus">🔒 Lista travada</span>
+            <button class="btn-outline" id="btnDeltaDestravar">🔓 Destravar para editar</button>
+            <button class="btn-primary" id="btnDeltaSalvar" disabled>💾 Salvar e travar</button>
+          </div>
         </div>
-        <div class="carteira-lista" id="deltaCondominios"></div>
+        <div class="carteira-lista locked" id="deltaCondominios"></div>
       </div>
       <div class="toolbar">
         <input type="text" id="dsBusca" placeholder="Buscar por condomínio, síndico ou gerente..." style="min-width:260px;" />
@@ -567,6 +596,81 @@
       </div>
     </section>
 
+    <!-- ================== GESTÃO SOS: PROGRAMAR PAGAMENTO ==================
+         Monta a proposta de pagamento do mês (Gerentes/Suprimentos/Delta) a
+         partir do Dashboard de Fechamento JÁ SALVO daquele mês — nunca
+         recalcula a comissão do zero. Se o mês já tem pagamento fechado,
+         abre ELE (modo edição) em vez de montar uma proposta nova. -->
+    <section class="view" id="view-programarPagamento">
+      <div class="content-header">
+        <div><h1>Programar pagamento</h1>
+          <div class="sub">Autoriza quem recebe quanto no mês, a partir do Dashboard de Fechamento já salvo</div></div>
+      </div>
+
+      <div class="toolbar">
+        <div class="field" style="max-width:170px;"><label>Mês de referência</label>
+          <input type="month" id="ppMes" /></div>
+        <button class="btn-outline" id="btnPpBuscar">↻ Buscar mês</button>
+        <button class="btn-outline" id="btnPpImprimir" disabled>🖨 Imprimir lista de pagamentos</button>
+        <button class="btn-primary" id="btnPpFechar" disabled>🔒 Fechar lista de pagamentos</button>
+      </div>
+
+      <div class="panel modulo-vazio" id="ppVazio">
+        <div class="modulo-vazio-ico">💳</div>
+        <h2>Escolha um mês e clique em "Buscar mês"</h2>
+        <p>É preciso ter um <b>Dashboard de Fechamento</b> já salvo para este mês — a proposta de pagamento é
+          montada a partir dele, nunca recalculada do zero.</p>
+      </div>
+
+      <div id="ppConteudo" style="display:none;">
+        <div class="info-box" id="ppStatusFechado" style="display:none;margin-bottom:var(--sp-4);"></div>
+        <div class="stat-grid" id="ppStatGrid"></div>
+
+        <div class="section-title">Quem recebe <span class="muted" style="font-weight:400;">clique em
+          "Autorizar"/"Desautorizar" em cada linha</span></div>
+        <div class="panel">
+          <div class="table-scroll">
+            <table>
+              <thead><tr>
+                <th>Nome</th><th>Tipo</th><th>Chave PIX</th><th class="num">Valor</th><th>Status</th><th>Ações</th>
+              </tr></thead>
+              <tbody id="ppLinhasTbody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="panel" style="margin-top:var(--sp-4);">
+          <div class="field"><label>Observações</label>
+            <textarea id="ppObservacoes" rows="2"></textarea></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================== GESTÃO SOS: HISTÓRICO DE PAGAMENTOS ================== -->
+    <section class="view" id="view-historicoPagamentos">
+      <div class="content-header">
+        <div><h1>Histórico de pagamentos</h1>
+          <div class="sub">Meses com pagamento fechado — editável, ao contrário dos outros históricos do sistema</div></div>
+      </div>
+      <div class="toolbar">
+        <input type="text" id="hpBusca" placeholder="Buscar por mês/ano ou observações..." style="min-width:260px;" />
+      </div>
+      <div class="panel">
+        <div class="panel-head">
+          <h2>Pagamentos (<span id="histPagamentosTotal">0</span><span id="histPagamentosFiltrados"></span>)</h2>
+        </div>
+        <div class="table-scroll">
+          <table>
+            <thead><tr>
+              <th>Mês</th><th class="num">Gerentes</th><th class="num">Suprimentos</th>
+              <th class="num">Delta</th><th>Fechado em</th><th>Observações</th><th>Ações</th>
+            </tr></thead>
+            <tbody id="historicoPagamentosTbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
     <!-- ================== GESTÃO SOS: CONFIGURAÇÕES ================== -->
     <section class="view" id="view-configuracoesSos">
       <div class="content-header">
@@ -616,6 +720,14 @@
           <div class="field"><label>Gerente (%)</label><input type="number" id="cfgDeltaGerente" min="0" max="100" step="0.1" /></div>
         </div>
         <div id="cfgSomaDelta" class="pill" style="margin-top:var(--sp-2);"></div>
+
+        <div class="section-title" style="margin-top:var(--sp-4);">Dados de pagamento da Delta</div>
+        <div class="field-hint">Usados em Programar pagamento — a Delta recebe como uma entidade só, não um
+          pagamento por síndico.</div>
+        <div class="field-row-eq3">
+          <div class="field"><label>Nome do titular</label><input type="text" id="cfgDeltaTitular" placeholder="Delta" /></div>
+          <div class="field"><label>Chave PIX</label><input type="text" id="cfgDeltaChavePix" /></div>
+        </div>
 
         <div class="section-title" style="margin-top:var(--sp-4);">Meta de produção</div>
         <div class="field" style="max-width:280px;">
@@ -1936,13 +2048,27 @@
   <div class="modal-head"><h3>Imprimir relatório de Serviços</h3>
     <button class="btn-ghost" data-close="modalImprimirServicos">✕</button></div>
   <div class="modal-body">
-    <div class="field"><label>Parceiro</label><select id="impSrvRelParceiro"></select>
-      <div class="field-hint">Deixe em "Todos" para incluir qualquer parceiro (ou nenhum).</div></div>
+    <div class="field"><label>Gerente</label><select id="impSrvRelGerente"></select>
+      <div class="field-hint">Para tirar o relatório individual de um gerente. Deixe em "Todos" pra incluir qualquer um (ou nenhum).</div></div>
+    <div class="field">
+      <label>Parceiros</label>
+      <div class="field-hint">Marque quantos quiser. Nenhum marcado = inclui todos.</div>
+      <div class="toolbar" style="margin:6px 0;">
+        <input type="text" id="impSrvRelBuscaParceiro" placeholder="Buscar parceiro..." style="min-width:220px;" />
+        <button type="button" class="btn-outline btn-sm" id="impSrvRelMarcarTodos">Marcar todos</button>
+        <button type="button" class="btn-outline btn-sm" id="impSrvRelLimparTodos">Limpar</button>
+      </div>
+      <div class="chip-row" id="impSrvRelParceiros" style="max-height:200px;overflow-y:auto;"></div>
+    </div>
     <div class="field-row">
       <div class="field"><label>Mês de referência — de</label><input type="month" id="impSrvRelDe" /></div>
       <div class="field"><label>até</label><input type="month" id="impSrvRelAte" /></div>
     </div>
     <div class="field-hint">Deixe os dois em branco para incluir todos os meses.</div>
+    <label class="check-inline" style="margin-top:10px;">
+      <input type="checkbox" id="impSrvRelSoComPct">
+      Somente serviços com porcentagem maior que 0%
+    </label>
   </div>
   <div class="modal-foot"><button class="btn-outline" data-close="modalImprimirServicos">Cancelar</button>
     <button class="btn-primary" id="btnGerarRelatorioServicos">🖨 Gerar e imprimir</button></div>

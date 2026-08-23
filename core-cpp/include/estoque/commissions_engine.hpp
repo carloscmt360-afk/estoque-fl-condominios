@@ -255,6 +255,39 @@ std::vector<DashboardSalvo> listDashboards(Database& db);
 std::optional<DashboardSalvo> findDashboard(Database& db, const std::string& id);
 DashboardSalvo salvarDashboard(Database& db, const DashboardSalvo& input);
 
+// ---- Pagamentos (Programar pagamento / Histórico de pagamentos) ----
+//
+// A proposta de pagamento de um mês (quem recebe quanto — Gerentes,
+// Suprimentos, Delta — e as Chaves PIX) é montada em Api::montarPagamento a
+// partir do Dashboard de Fechamento JÁ SALVO daquele mês (histórico de
+// Dashboard de Fechamento) — nunca recalculada aqui: o dashboard salvo é o
+// retrato aprovado, e Pagamento só decide QUEM efetivamente recebe daquele
+// total. `dadosJson` guarda esse retrato (totais + lista de linhas com o
+// valor sugerido e se foi autorizado), do jeito que foi apresentado —
+// mesmo formato de DashboardSalvo::dadosJson.
+//
+// Diferente de Dashboard/Fechamento, aqui um mês tem UM registro só (índice
+// único em sos_pagamentos): salvarPagamento faz UPSERT por id — fechar de
+// novo ou corrigir depois regrava o mesmo registro, nunca duplica.
+struct PagamentoSalvo {
+  std::string id;
+  std::string mesReferencia;
+  std::string dadosJson;
+  std::string observacoes;
+  bool fechado = false;
+  std::string geradoEm;
+  std::string fechadoEm;  // vazio enquanto não fechado
+  std::string createdAt;
+};
+
+// Mais recente primeiro (mesmo critério de listDashboards).
+std::vector<PagamentoSalvo> listPagamentosSos(Database& db);
+std::optional<PagamentoSalvo> findPagamentoSos(Database& db, const std::string& id);
+std::optional<PagamentoSalvo> findPagamentoSosPorMes(Database& db, const std::string& mesReferencia);
+// INSERT se o id não existir ainda, UPDATE completo se existir — é o que
+// permite fechar e, depois, corrigir o mesmo registro (ver comentário acima).
+PagamentoSalvo salvarPagamentoSos(Database& db, const PagamentoSalvo& input);
+
 // ---- configurações (chave/valor simples) ----
 //
 // TODAS as porcentagens do fechamento moram aqui, e não no código: elas mudam
@@ -284,6 +317,12 @@ constexpr const char* kMetaPorCondominio = "meta_por_condominio";
 // Delta Síndicos é metade do "VALOR".
 constexpr const char* kDeltaSindica = "delta_sindica";
 constexpr const char* kDeltaGerente = "delta_gerente";
+// Dados bancários da própria Delta (empresa), pra Programar Pagamento — não
+// existe cadastro de síndico com PIX próprio (síndico é só nome de texto em
+// DeltaSindico::sindico), então o pagamento da fatia dela vai pra ela mesma,
+// como uma entidade só, não um por síndico.
+constexpr const char* kDeltaChavePix = "delta_chave_pix";
+constexpr const char* kDeltaTitular = "delta_titular";
 }  // namespace sos_config
 
 // Os padrões de fábrica (o acordo vigente quando o módulo nasceu). Só valem

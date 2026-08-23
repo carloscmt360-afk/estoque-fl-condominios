@@ -851,6 +851,32 @@ constexpr const char* kSchemaV26 = R"SQL(
 ALTER TABLE condominios ADD COLUMN delta_sindica INTEGER NOT NULL DEFAULT 0;
 )SQL";
 
+// `sos_pagamentos` guarda a lista de pagamentos (Gerentes/Suprimentos/Delta)
+// programada e depois fechada para um mês — mesmo princípio de retrato em
+// JSON de sos_dashboards_fechamento (v19), montada a partir do Dashboard de
+// Fechamento já salvo daquele mês.
+//
+// Diferente dos outros fechamentos do sistema (que nunca são alterados —
+// gerar de novo cria uma entrada nova), este é editável DEPOIS de fechado:
+// é comum precisar corrigir uma Chave PIX ou um valor autorizado depois do
+// fato, e criar uma segunda entrada pro mesmo mês só confundiria "qual
+// pagamento vale". Por isso um mês só tem UM registro (índice único
+// abaixo) e `atualizarPagamento` regrava esse mesmo registro.
+constexpr const char* kSchemaV27 = R"SQL(
+CREATE TABLE sos_pagamentos (
+  id TEXT PRIMARY KEY,
+  mes_referencia TEXT NOT NULL,
+  dados_json TEXT NOT NULL,
+  observacoes TEXT,
+  fechado INTEGER NOT NULL DEFAULT 0,
+  gerado_em TEXT NOT NULL,
+  fechado_em TEXT,
+  created_at TEXT NOT NULL
+);
+
+CREATE UNIQUE INDEX idx_sos_pagamentos_mes ON sos_pagamentos(mes_referencia);
+)SQL";
+
 }  // namespace
 
 Database::Database(const std::string& path) {
@@ -1019,6 +1045,10 @@ void Database::migrate() {
   if (version < 26) {
     execute(kSchemaV26);
     execute("PRAGMA user_version = 26;");
+  }
+  if (version < 27) {
+    execute(kSchemaV27);
+    execute("PRAGMA user_version = 27;");
   }
 }
 

@@ -172,6 +172,9 @@ class Session {
   rust::String montar_dashboard(rust::Str payload);
   rust::String salvar_dashboard(rust::Str payload);
   rust::String list_dashboards_json();
+  rust::String montar_pagamento_sos(rust::Str payload);
+  rust::String salvar_pagamento_sos(rust::Str payload);
+  rust::String list_pagamentos_sos_json();
 
   // ----------------------------------- gestão sos: suprimentos
   rust::String list_suprimentos_json();

@@ -1354,6 +1354,160 @@ std::string Api::listDashboardsJson() {
   return arr.dump();
 }
 
+// ------------------------------------------------- gestão sos: pagamentos
+
+namespace {
+
+json pagamentoSalvoToJson(const PagamentoSalvo& p) {
+  json j;
+  j["id"] = p.id;
+  j["mesReferencia"] = p.mesReferencia;
+  // Mesmo critério de dashboardSalvoToJson: volta como OBJETO, não string.
+  j["dados"] = p.dadosJson.empty() ? json::object() : json::parse(p.dadosJson, nullptr, false);
+  j["observacoes"] = p.observacoes;
+  j["fechado"] = p.fechado;
+  j["geradoEm"] = p.geradoEm;
+  j["fechadoEm"] = p.fechadoEm;
+  j["createdAt"] = p.createdAt;
+  return j;
+}
+
+}  // namespace
+
+std::string Api::montarPagamentoSos(const std::string& payload) {
+  require(features::kGestaoSosServicos, PermAction::Read);
+  json j = json::parse(payload);
+  std::string mes = jstr(j, "mesReferencia");
+
+  // Mês já tem pagamento salvo: devolve ELE (reabre pra editar/reautorizar),
+  // nunca uma proposta nova por cima — um mês só tem um registro (ver
+  // PagamentoSalvo em commissions_engine.hpp).
+  auto existente = estoque::findPagamentoSosPorMes(db_, mes);
+  if (existente) return pagamentoSalvoToJson(*existente).dump();
+
+  // Sem pagamento salvo: monta a PROPOSTA a partir do Dashboard de
+  // Fechamento já salvo daquele mês — nunca recalcula a comissão do zero,
+  // só decide quem recebe do total já aprovado ali.
+  std::optional<DashboardSalvo> dashSalvo;
+  for (const auto& d : estoque::listDashboards(db_)) {
+    if (d.mesReferencia == mes) { dashSalvo = d; break; }  // já vem mais recente primeiro
+  }
+  if (!dashSalvo) {
+    throw std::invalid_argument(
+        "Nenhum Dashboard de Fechamento salvo para este mês — feche o mês em "
+        "Dashboard de Fechamento antes de programar o pagamento.");
+  }
+  json dj = json::parse(dashSalvo->dadosJson, nullptr, false);
+  if (!dj.is_object()) throw std::invalid_argument("o dashboard salvo deste mês está corrompido");
+
+  double arrecadado = jnum(dj, "arrecadado");
+  double totalGerentes = jnum(dj, "gerenciaLiquido");
+  double totalDelta = 0;
+  json linhas = json::array();
+
+  if (dj.contains("gerentes") && dj["gerentes"].is_array()) {
+    for (auto& g : dj["gerentes"]) {
+      double comissao = jnum(g, "comissao");
+      totalDelta += jnum(g, "descontos");
+      std::string gid = jstr(g, "gerenteId");
+      std::string chavePix;
+      auto ger = estoque::findGerente(db_, gid);
+      if (ger) chavePix = ger->chavePix;
+      linhas.push_back({{"tipo", "gerente"}, {"pessoaId", gid}, {"nome", jstr(g, "gerenteNome")},
+                        {"chavePix", chavePix}, {"valor", comissao}, {"autorizado", true}});
+    }
+  }
+
+  // Suprimentos: o rateio de Configurações fala em "Encarregado"/"Assistente"
+  // (nomes históricos do acordo), a Suprimento::categoria fala em
+  // Gestor/Assistente/Auxiliar/Vistoriador Predial — Encarregado mapeia pra
+  // Gestor (o papel de chefia). Categoria sem NINGUÉM cadastrado hoje não
+  // vira linha nenhuma (não faz sentido propor pagamento pra ninguém); com
+  // mais de uma pessoa na mesma categoria, a fatia se divide em partes
+  // iguais entre elas.
+  double totalSuprimentos = 0;
+  if (dj.contains("distribuicaoCompras") && dj["distribuicaoCompras"].is_array()) {
+    auto suprimentos = estoque::listSuprimentos(db_);
+    for (auto& l : dj["distribuicaoCompras"]) {
+      std::string rotulo = jstr(l, "rotulo");
+      double valor = jnum(l, "valor");
+      totalSuprimentos += valor;
+      std::string categoria;
+      if (rotulo == "Encarregado") categoria = suprimento_categoria::kGestor;
+      else if (rotulo == "Assistente") categoria = suprimento_categoria::kAssistente;
+      if (categoria.empty()) continue;
+      std::vector<Suprimento> pessoas;
+      for (auto& s : suprimentos) {
+        if (s.categoria == categoria) pessoas.push_back(s);
+      }
+      if (pessoas.empty()) continue;
+      double cada = valor / static_cast<double>(pessoas.size());
+      for (auto& s : pessoas) {
+        linhas.push_back({{"tipo", "suprimento"}, {"pessoaId", s.id}, {"nome", s.nome},
+                          {"chavePix", s.chavePix}, {"valor", cada}, {"autorizado", true}});
+      }
+    }
+  }
+
+  // Delta: uma entidade só (não existe cadastro de síndico com PIX próprio —
+  // ver comentário de sos_config::kDeltaChavePix), recebendo o total dos
+  // descontos de Delta Síndicos do mês.
+  std::string deltaTitular = estoque::getConfig(db_, sos_config::kDeltaTitular, "");
+  linhas.push_back({{"tipo", "delta"}, {"pessoaId", ""},
+                    {"nome", deltaTitular.empty() ? "Delta" : deltaTitular},
+                    {"chavePix", estoque::getConfig(db_, sos_config::kDeltaChavePix, "")},
+                    {"valor", totalDelta}, {"autorizado", true}});
+
+  json dados;
+  dados["arrecadado"] = arrecadado;
+  dados["totalGerentes"] = totalGerentes;
+  dados["totalSuprimentos"] = totalSuprimentos;
+  dados["totalDelta"] = totalDelta;
+  dados["linhas"] = linhas;
+
+  json out;
+  out["id"] = "";
+  out["mesReferencia"] = mes;
+  out["dados"] = dados;
+  out["observacoes"] = "";
+  out["fechado"] = false;
+  out["geradoEm"] = "";
+  out["fechadoEm"] = "";
+  out["createdAt"] = "";
+  return out.dump();
+}
+
+std::string Api::salvarPagamentoSos(const std::string& payload) {
+  require(features::kGestaoSosServicos, PermAction::Update);
+  json j = json::parse(payload);
+  PagamentoSalvo p;
+  p.id = jstr(j, "id");
+  if (p.id.empty()) throw std::invalid_argument("id do pagamento é obrigatório");
+  p.mesReferencia = jstr(j, "mesReferencia");
+  // `dados` chega como objeto e é serializado aqui — mesmo critério de
+  // Api::salvarDashboard.
+  p.dadosJson = j.contains("dados") ? j["dados"].dump() : "";
+  p.observacoes = jstr(j, "observacoes");
+  p.fechado = jbool(j, "fechado", false);
+  p.geradoEm = jstr(j, "geradoEm", time_utils::systemNowIso());
+  // fechadoEm marca quando foi fechado PELA PRIMEIRA VEZ — uma edição
+  // posterior manda o mesmo valor de volta (preservado), então só cai no
+  // "agora" quando ainda chega vazio (o caso do primeiro fechar, cuja
+  // proposta em montarPagamentoSos sempre traz fechadoEm vazio).
+  p.fechadoEm = jstr(j, "fechadoEm", "");
+  if (p.fechado && p.fechadoEm.empty()) p.fechadoEm = time_utils::systemNowIso();
+  if (!p.fechado) p.fechadoEm = "";
+  p.createdAt = jstr(j, "createdAt", time_utils::systemNowIso());
+  return pagamentoSalvoToJson(estoque::salvarPagamentoSos(db_, p)).dump();
+}
+
+std::string Api::listPagamentosSosJson() {
+  require(features::kGestaoSosServicos, PermAction::Read);
+  json arr = json::array();
+  for (const auto& p : estoque::listPagamentosSos(db_)) arr.push_back(pagamentoSalvoToJson(p));
+  return arr.dump();
+}
+
 // --------------------------------------------- gestão sos: suprimentos
 
 namespace {
@@ -1548,6 +1702,10 @@ std::string Api::getSosConfigJson() {
       configOuPadrao(db_, sos_config::kMetaPorCondominio, sos_config_padrao::kMetaPorCondominio);
   j["deltaSindica"] = configOuPadrao(db_, sos_config::kDeltaSindica, sos_config_padrao::kDeltaSindica);
   j["deltaGerente"] = configOuPadrao(db_, sos_config::kDeltaGerente, sos_config_padrao::kDeltaGerente);
+  // Dados bancários da Delta (texto, sem padrão numérico) — usados em
+  // Programar Pagamento.
+  j["deltaChavePix"] = estoque::getConfig(db_, sos_config::kDeltaChavePix, "");
+  j["deltaTitular"] = estoque::getConfig(db_, sos_config::kDeltaTitular, "");
   return j.dump();
 }
 
@@ -1574,6 +1732,12 @@ void Api::setSosConfig(const std::string& payload) {
   gravarSePresente(sos_config::kMetaPorCondominio, "metaPorCondominio", sos_config_padrao::kMetaPorCondominio);
   gravarSePresente(sos_config::kDeltaSindica, "deltaSindica", sos_config_padrao::kDeltaSindica);
   gravarSePresente(sos_config::kDeltaGerente, "deltaGerente", sos_config_padrao::kDeltaGerente);
+  if (j.contains("deltaChavePix")) {
+    estoque::setConfig(db_, sos_config::kDeltaChavePix, jstr(j, "deltaChavePix", ""));
+  }
+  if (j.contains("deltaTitular")) {
+    estoque::setConfig(db_, sos_config::kDeltaTitular, jstr(j, "deltaTitular", ""));
+  }
 }
 
 // --------------------------------------------------------------- compras

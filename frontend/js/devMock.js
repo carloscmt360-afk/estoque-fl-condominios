@@ -129,13 +129,14 @@ export async function installDevMock() {
     sosServicos: [],
     sosFechamentos: [],
     sosDashboards: [],
+    sosPagamentos: [],
     appLogo: null,
     // Padrões de fábrica iguais aos de sos_config_padrao (commissions_engine.hpp)
     // — o mock reflete o que o C++ devolveria numa base nova, sem nada salvo.
     sosConfig: {
       porcentagemPadrao: '0', rateioFl: '55', rateioGerentes: '30', rateioSuprimentos: '15',
       suprimentosEncarregado: '78', suprimentosAssistente: '22', metaPorCondominio: '120',
-      deltaSindica: '15', deltaGerente: '15',
+      deltaSindica: '15', deltaGerente: '15', deltaChavePix: '', deltaTitular: '',
     },
     sosProximoNumero: 1,
     comprasAquisicoes: [],
@@ -515,7 +516,9 @@ export async function installDevMock() {
     // commissions_engine.cpp: venda sem pagamento confirmado não gera
     // comissão pra ninguém.
     const doMes = state.sosServicos.filter((s) => s.dataReferencia === entrada.mesReferencia && s.pago);
-    for (const s of doMes) out.arrecadado += s.venda || 0;
+    // Arrecadado é a COMISSÃO (venda × porcentagem), não a venda bruta —
+    // mesmo critério de montarDashboard em commissions_engine.cpp.
+    for (const s of doMes) out.arrecadado += (s.venda || 0) * (s.porcentagem || 0) / 100;
     // FL e o "liberado para comissão" (fatia dos Gerentes) são sempre o
     // rateio de Configurações — mesmo critério do C++ real.
     out.flLucro = out.arrecadado * rateioFl / 100;
@@ -587,6 +590,66 @@ export async function installDevMock() {
 
     return out;
   }
+
+  // ---- gestão sos: pagamentos ----
+  // Reimplementação em JS de Api::montarPagamentoSos (api.cpp): monta a
+  // proposta a partir do Dashboard de Fechamento já salvo do mês — nunca
+  // recalcula a comissão do zero.
+  function montarPagamentoSosMock(mesReferencia) {
+    const existente = state.sosPagamentos.find((p) => p.mesReferencia === mesReferencia);
+    if (existente) return existente;
+
+    const salvos = state.sosDashboards.filter((d) => d.mesReferencia === mesReferencia)
+      .sort((a, b) => cmp(b.geradoEm, a.geradoEm));
+    if (!salvos.length) {
+      throw new Error('Nenhum Dashboard de Fechamento salvo para este mês — feche o mês em ' +
+        'Dashboard de Fechamento antes de programar o pagamento.');
+    }
+    const dash = salvos[0].dados;
+
+    const linhas = [];
+    for (const g of dash.gerentes || []) {
+      const gerente = state.gerentes.find((x) => x.id === g.gerenteId);
+      linhas.push({
+        tipo: 'gerente', pessoaId: g.gerenteId, nome: g.gerenteNome,
+        chavePix: gerente ? gerente.chavePix : '', valor: g.comissao || 0, autorizado: true,
+      });
+    }
+    const totalDelta = (dash.gerentes || []).reduce((s, g) => s + (g.descontos || 0), 0);
+
+    // "Encarregado" mapeia pra categoria Gestor, "Assistente" pra categoria
+    // Assistente (nomes históricos do rateio ≠ nome da categoria cadastrada
+    // — ver comentário em Api::montarPagamentoSos). Categoria sem ninguém
+    // cadastrado não vira linha; com mais de uma pessoa, divide em partes
+    // iguais.
+    const ROTULO_PARA_CATEGORIA = { Encarregado: 'gestor', Assistente: 'assistente' };
+    for (const l of dash.distribuicaoCompras || []) {
+      const categoria = ROTULO_PARA_CATEGORIA[l.rotulo];
+      if (!categoria) continue;
+      const pessoas = state.suprimentos.filter((s) => s.categoria === categoria);
+      if (!pessoas.length) continue;
+      const cada = (l.valor || 0) / pessoas.length;
+      for (const s of pessoas) {
+        linhas.push({ tipo: 'suprimento', pessoaId: s.id, nome: s.nome, chavePix: s.chavePix,
+          valor: cada, autorizado: true });
+      }
+    }
+
+    linhas.push({
+      tipo: 'delta', pessoaId: '', nome: state.sosConfig.deltaTitular || 'Delta',
+      chavePix: state.sosConfig.deltaChavePix || '', valor: totalDelta, autorizado: true,
+    });
+
+    return {
+      id: '', mesReferencia, fechado: false, observacoes: '', geradoEm: '', fechadoEm: '', createdAt: '',
+      dados: {
+        arrecadado: dash.arrecadado || 0, totalGerentes: dash.gerenciaLiquido || 0,
+        totalSuprimentos: (dash.distribuicaoCompras || []).reduce((s, l) => s + (l.valor || 0), 0),
+        totalDelta, linhas,
+      },
+    };
+  }
+
   // ---- gestão sos: suprimentos ----
   const CATEGORIAS_SUPRIMENTO = ['gestor', 'assistente', 'auxiliar', 'vistoriador_predial'];
   function exigirSuprimento(s) {
@@ -1398,6 +1461,34 @@ export async function installDevMock() {
       case 'list_dashboards':
         exigir('gestao_sos_servicos', 'read');
         return JSON.stringify([...state.sosDashboards]
+          .sort((a, b) => cmp(b.mesReferencia, a.mesReferencia) || cmp(b.geradoEm, a.geradoEm)));
+
+      // ---- gestão sos: pagamentos ----
+      case 'montar_pagamento_sos': {
+        exigir('gestao_sos_servicos', 'read');
+        const { mesReferencia } = JSON.parse(args.payload);
+        return JSON.stringify(montarPagamentoSosMock(mesReferencia));
+      }
+      case 'salvar_pagamento_sos': {
+        exigir('gestao_sos_servicos', 'update');
+        const p = JSON.parse(args.payload);
+        if (!p.id) throw new Error('id do pagamento é obrigatório');
+        if (!ehMesReferenciaValido(p.mesReferencia)) throw new Error('data de referência inválida (use mês/ano)');
+        if (!p.dados) throw new Error('pagamento vazio');
+        const agora = new Date().toISOString();
+        const i = state.sosPagamentos.findIndex((x) => x.id === p.id);
+        const fechadoEm = p.fechado ? (p.fechadoEm || agora) : '';
+        const snap = {
+          id: p.id, mesReferencia: p.mesReferencia, dados: p.dados,
+          observacoes: p.observacoes || '', fechado: !!p.fechado,
+          geradoEm: p.geradoEm || agora, fechadoEm, createdAt: p.createdAt || agora,
+        };
+        if (i >= 0) state.sosPagamentos[i] = snap; else state.sosPagamentos.push(snap);
+        return JSON.stringify(snap);
+      }
+      case 'list_pagamentos_sos':
+        exigir('gestao_sos_servicos', 'read');
+        return JSON.stringify([...state.sosPagamentos]
           .sort((a, b) => cmp(b.mesReferencia, a.mesReferencia) || cmp(b.geradoEm, a.geradoEm)));
 
       // ---- gestão sos: suprimentos ----

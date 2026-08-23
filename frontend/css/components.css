@@ -163,6 +163,31 @@ label {
   color: var(--ink-primary);
 }
 
+/* Painel com barra de destaque azul no topo — usado quando o painel precisa
+   se distinguir visualmente do content-header logo acima dele (que já tem
+   seu próprio fundo/linha), pra não virar duas linhas coladas uma na outra. */
+.panel--accent-top {
+  border-top: 3px solid transparent;
+  background:
+    linear-gradient(var(--surface), var(--surface)) padding-box,
+    linear-gradient(90deg, var(--accent), var(--accent-hover)) border-box;
+}
+/* Cabeçalho de painel com título + descrição empilhados (h3/p), em vez do
+   título único do .panel-head — com respiro por baixo antes da lista. */
+.panel-simple-head {
+  padding: var(--sp-4) var(--sp-4) var(--sp-3);
+  border-bottom: 1px solid var(--border);
+}
+.panel-simple-head h3 {
+  margin: 0 0 var(--sp-1);
+}
+.panel-simple-head > p.muted {
+  margin: 0 0 var(--sp-3);
+}
+.panel-simple-head .toolbar {
+  margin-bottom: 0;
+}
+
 /* Stat tile — neutro, no lugar dos cards de KPI coloridos do app anterior */
 .stat-grid {
   display: grid;
@@ -1815,6 +1840,19 @@ tr.imp-row-pendente:hover {
   text-align: center;
   color: var(--ink-muted);
   font-size: 12px;
+}
+
+/* Lista travada (ver Delta Síndicos): só leitura até clicar em "Destravar",
+   pra evitar clique sem querer trocando o condomínio marcado. */
+.carteira-lista.locked .carteira-item {
+  cursor: default;
+}
+.carteira-lista.locked .carteira-item:hover {
+  background: none;
+}
+.carteira-lista.locked .carteira-item input[type="checkbox"] {
+  cursor: default;
+  opacity: 0.6;
 }
 
 .esp-grupo {

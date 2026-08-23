@@ -17,6 +17,14 @@ let busca = '';
 let buscaCondominios = '';
 let wired = false;
 
+// Checklist trava por padrão (só leitura) pra evitar clique sem querer
+// trocando o condomínio marcado. "Destravar" libera edição; os cliques
+// enquanto destravada ficam só em `pendentes` (nada é salvo ainda) até
+// "Salvar e travar" gravar as mudanças de uma vez e travar de novo.
+let travado = true;
+let pendentes = new Map();
+let salvando = false;
+
 export async function initDeltaSindicos() {
   if (!wired) {
     wired = true;
@@ -33,6 +41,8 @@ export async function initDeltaSindicos() {
       buscaCondominios = e.target.value;
       renderChecklist();
     });
+    document.getElementById('btnDeltaDestravar').addEventListener('click', destravar);
+    document.getElementById('btnDeltaSalvar').addEventListener('click', salvarETravar);
   }
   await reload();
 }
@@ -46,6 +56,7 @@ export async function reload() {
     lancamentos = []; condominios = [];
   }
   render();
+  atualizaTravaUI();
   renderChecklist();
 }
 
@@ -104,8 +115,13 @@ function render() {
 
 // ---- checklist: quais condomínios a Delta atende como síndica ----
 
+function efetivo(c) {
+  return pendentes.has(c.id) ? pendentes.get(c.id) : !!c.deltaSindica;
+}
+
 function renderChecklist() {
   const host = document.getElementById('deltaCondominios');
+  host.classList.toggle('locked', travado);
   const termo = paraBusca(buscaCondominios).trim();
   const sorted = [...condominios]
     .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'))
@@ -123,9 +139,9 @@ function renderChecklist() {
   }
 
   host.innerHTML = sorted.map((c) => {
-    const marcado = !!c.deltaSindica;
+    const marcado = efetivo(c);
     return `<label class="carteira-item ${marcado ? 'on' : ''}">
-      <input type="checkbox" data-cond="${c.id}" ${marcado ? 'checked' : ''}>
+      <input type="checkbox" data-cond="${c.id}" ${marcado ? 'checked' : ''} ${travado ? 'disabled' : ''}>
       ${escapeHtml(c.nome)}
     </label>`;
   }).join('');
@@ -135,30 +151,65 @@ function renderChecklist() {
 }
 
 function atualizaContagemDelta() {
-  const n = condominios.filter((c) => c.deltaSindica).length;
+  const n = condominios.filter((c) => efetivo(c)).length;
   document.getElementById('deltaContagem').textContent =
     n === 0 ? 'nenhum condomínio marcado' : `${n} condomínio${n > 1 ? 's' : ''} marcado${n > 1 ? 's' : ''}`;
 }
 
-async function toggleDelta(chk) {
+function atualizaTravaUI() {
+  document.getElementById('deltaTravaStatus').textContent =
+    travado ? '🔒 Lista travada' : '🔓 Editando — clique em "Salvar e travar" ao terminar';
+  document.getElementById('btnDeltaDestravar').disabled = salvando;
+  document.getElementById('btnDeltaSalvar').disabled = travado || salvando;
+}
+
+// Enquanto destravada, o clique só fica pendente em memória — nada é
+// gravado até "Salvar e travar" (ver salvarETravar). Isso evita gravar uma
+// a uma a cada clique, o que tornaria fácil salvar um clique acidental.
+function toggleDelta(chk) {
+  if (travado) return;
   const id = chk.dataset.cond;
   const c = condominios.find((x) => x.id === id);
   if (!c) return;
-  const marcarComo = chk.checked;
-  chk.disabled = true;
+  pendentes.set(id, chk.checked);
+  chk.closest('.carteira-item').classList.toggle('on', chk.checked);
+  atualizaContagemDelta();
+}
+
+async function destravar() {
+  if (salvando) return;
+  await reload();
+  pendentes.clear();
+  travado = false;
+  atualizaTravaUI();
+  renderChecklist();
+}
+
+async function salvarETravar() {
+  if (travado || salvando) return;
+  salvando = true;
+  atualizaTravaUI();
   try {
-    // updateCondominio regrava o registro inteiro — leva todos os campos
-    // atuais, só trocando deltaSindica (mesmo critério de saveCarteira).
-    await api.updateCondominio({ ...c, deltaSindica: marcarComo });
-    c.deltaSindica = marcarComo;
-    chk.closest('.carteira-item').classList.toggle('on', marcarComo);
-    atualizaContagemDelta();
+    const mudancas = [...pendentes.entries()].filter(([id, val]) => {
+      const c = condominios.find((x) => x.id === id);
+      return c && !!c.deltaSindica !== val;
+    });
+    for (const [id, val] of mudancas) {
+      const c = condominios.find((x) => x.id === id);
+      // updateCondominio regrava o registro inteiro — leva todos os campos
+      // atuais, só trocando deltaSindica (mesmo critério de saveCarteira).
+      await api.updateCondominio({ ...c, deltaSindica: val });
+    }
+    pendentes.clear();
+    travado = true;
     await reload();
+    if (mudancas.length) toast('Condomínios da Delta atualizados.', 'success');
   } catch (e) {
-    chk.checked = !marcarComo;
-    toast('Erro: ' + errorText(e), 'error');
+    toast('Erro ao salvar: ' + errorText(e), 'error');
   } finally {
-    chk.disabled = false;
+    salvando = false;
+    atualizaTravaUI();
+    renderChecklist();
   }
 }
 

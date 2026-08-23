@@ -389,10 +389,11 @@ TEST_CASE("dashboard: reproduz as fórmulas SOMASES da planilha real") {
 
   auto dash = montarDashboard(c.db, entrada);
 
-  // arrecadado = Σ venda dos serviços do mês
-  CHECK(dash.arrecadado == doctest::Approx(2362.20 + 3939.89 + 251.82));
+  // arrecadado = Σ comissão (venda × porcentagem) dos serviços pagos do mês
+  // — não a venda bruta. Aqui todo serviço tem porcentagem 10%.
+  CHECK(dash.arrecadado == doctest::Approx((2362.20 + 3939.89 + 251.82) * 0.10));
   // liberado = arrecadado × percentual de comissão
-  CHECK(dash.liberadoParaComissao == doctest::Approx((2362.20 + 3939.89 + 251.82) * 0.45));
+  CHECK(dash.liberadoParaComissao == doctest::Approx((2362.20 + 3939.89 + 251.82) * 0.10 * 0.45));
 
   // Todos os gerentes cadastrados entram — inclusive o "Fulano" do cenário,
   // que não teve venda no mês (é o caso do ULISSES na planilha real).

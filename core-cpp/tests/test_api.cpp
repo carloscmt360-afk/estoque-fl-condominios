@@ -113,3 +113,99 @@ TEST_CASE("importa o backup REAL do usuário e reproduz os números do relatóri
   CHECK(r["deptMes"]["GERÊNCIA"].get<double>() == doctest::Approx(1172.63).epsilon(0.001));
   CHECK(r["deptMes"]["DP"].get<double>() == doctest::Approx(504.47).epsilon(0.001));
 }
+
+TEST_CASE("montarPagamentoSos monta a proposta do Dashboard salvo, com PIX de cada um") {
+  Api api(":memory:");
+  api.loginAsService("teste");
+
+  Condominio cond;
+  cond.id = "cond1";
+  cond.nome = "Edifício Sol";
+  cond.createdAt = "2026-08-01T00:00:00.000Z";
+  api.createCondominio(cond);
+
+  json gerente = {{"id", "ger1"}, {"nome", "RICARDO"}, {"chavePix", "ricardo@pix.com"},
+                  {"createdAt", "2026-01-01T00:00:00.000Z"}};
+  api.createGerente(gerente.dump());
+
+  // Um Gestor e dois Assistentes — pra conferir que "Encarregado" mapeia pra
+  // Gestor e que a fatia de "Assistente" se divide em duas partes iguais.
+  api.createSuprimento(json({{"id", "sup1"}, {"nome", "CARLOS"}, {"categoria", "gestor"},
+                             {"chavePix", "carlos@pix.com"}, {"createdAt", "2026-01-01T00:00:00.000Z"}})
+                           .dump());
+  api.createSuprimento(json({{"id", "sup2"}, {"nome", "ANA"}, {"categoria", "assistente"},
+                             {"chavePix", "ana@pix.com"}, {"createdAt", "2026-01-01T00:00:00.000Z"}})
+                           .dump());
+  api.createSuprimento(json({{"id", "sup3"}, {"nome", "BIA"}, {"categoria", "assistente"},
+                             {"chavePix", "bia@pix.com"}, {"createdAt", "2026-01-01T00:00:00.000Z"}})
+                           .dump());
+
+  api.setSosConfig(json({{"deltaChavePix", "delta@pix.com"}, {"deltaTitular", "Delta Ltda"}}).dump());
+
+  json servico = {{"id", "s1"}, {"condominioId", "cond1"}, {"gerenteId", "ger1"}, {"venda", 1000.0},
+                  {"porcentagem", 10.0}, {"dataReferencia", "2026-08"}, {"pago", true},
+                  {"dataPagamento", "2026-08-10"}, {"createdAt", "2026-08-01T00:00:00.000Z"}};
+  api.createServico(servico.dump());
+
+  // arrecadado = 1000 × 10% = 100 (comissão, não venda bruta — ver commissions_engine.cpp)
+  json dash = json::parse(api.montarDashboard(json({{"mesReferencia", "2026-08"}}).dump()));
+  CHECK(dash["arrecadado"].get<double>() == doctest::Approx(100.0));
+
+  json snap = {{"id", "dash1"}, {"mesReferencia", "2026-08"}, {"dados", dash},
+               {"geradoEm", "2026-08-20T00:00:00.000Z"}, {"createdAt", "2026-08-20T00:00:00.000Z"}};
+  api.salvarDashboard(snap.dump());
+
+  json prop = json::parse(api.montarPagamentoSos(json({{"mesReferencia", "2026-08"}}).dump()));
+  CHECK(prop["fechado"].get<bool>() == false);
+  auto& linhas = prop["dados"]["linhas"];
+
+  auto porNome = [&](const std::string& nome) {
+    for (auto& l : linhas) if (l["nome"] == nome) return l;
+    FAIL("linha nao encontrada: ", nome);
+    return linhas[0];
+  };
+  // gerente: recebe a própria comissão do dashboard, com a Chave PIX do cadastro
+  CHECK(porNome("RICARDO")["valor"].get<double>() == doctest::Approx(dash["gerentes"][0]["comissao"].get<double>()));
+  CHECK(porNome("RICARDO")["chavePix"] == "ricardo@pix.com");
+  CHECK(porNome("RICARDO")["tipo"] == "gerente");
+  // suprimentos: Gestor sozinho recebe o valor de "Encarregado" inteiro
+  double valorEncarregado = 0;
+  for (auto& l : dash["distribuicaoCompras"]) if (l["rotulo"] == "Encarregado") valorEncarregado = l["valor"];
+  CHECK(porNome("CARLOS")["valor"].get<double>() == doctest::Approx(valorEncarregado));
+  // dois Assistentes dividem a fatia de "Assistente" em partes iguais
+  double valorAssistente = 0;
+  for (auto& l : dash["distribuicaoCompras"]) if (l["rotulo"] == "Assistente") valorAssistente = l["valor"];
+  CHECK(porNome("ANA")["valor"].get<double>() == doctest::Approx(valorAssistente / 2.0));
+  CHECK(porNome("BIA")["valor"].get<double>() == doctest::Approx(valorAssistente / 2.0));
+  // Delta: entidade única, com o nome/PIX configurados e o total de descontos
+  CHECK(porNome("Delta Ltda")["chavePix"] == "delta@pix.com");
+  CHECK(porNome("Delta Ltda")["valor"].get<double>() == doctest::Approx(0.0));  // sem Delta Síndicos neste cenário
+
+  // Fecha o pagamento — grava um registro permanente pro mês.
+  json fechar = prop;
+  fechar["id"] = "pag1";
+  fechar["fechado"] = true;
+  fechar["geradoEm"] = "2026-08-21T00:00:00.000Z";
+  json fechado = json::parse(api.salvarPagamentoSos(fechar.dump()));
+  CHECK(fechado["fechado"].get<bool>() == true);
+  CHECK(!fechado["fechadoEm"].get<std::string>().empty());
+
+  // Pedir o pagamento do mesmo mês de novo devolve o registro FECHADO, não
+  // monta uma proposta nova por cima.
+  json reaberto = json::parse(api.montarPagamentoSos(json({{"mesReferencia", "2026-08"}}).dump()));
+  CHECK(reaberto["id"] == "pag1");
+  CHECK(reaberto["fechado"].get<bool>() == true);
+
+  // listPagamentosSosJson lista o que foi fechado.
+  json lista = json::parse(api.listPagamentosSosJson());
+  REQUIRE(lista.size() == 1);
+  CHECK(lista[0]["mesReferencia"] == "2026-08");
+
+  // Editar depois de fechado REGRAVA o mesmo registro (não duplica).
+  json editado = fechado;
+  editado["observacoes"] = "PIX do Carlos corrigido depois";
+  api.salvarPagamentoSos(editado.dump());
+  json listaDepois = json::parse(api.listPagamentosSosJson());
+  CHECK(listaDepois.size() == 1);
+  CHECK(listaDepois[0]["observacoes"] == "PIX do Carlos corrigido depois");
+}

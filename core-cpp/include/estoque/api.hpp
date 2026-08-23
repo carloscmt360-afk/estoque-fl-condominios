@@ -239,6 +239,18 @@ class Api {
   std::string salvarDashboard(const std::string& payload);
   std::string listDashboardsJson();
 
+  // ------------------------------------------------- gestão sos: pagamentos
+  // Monta a PROPOSTA de pagamento do mês (não grava): pega o Dashboard de
+  // Fechamento já salvo daquele mês e resolve quem recebe (Gerentes,
+  // Suprimentos por categoria, Delta) com a Chave PIX de cada um. Se o mês
+  // já tem um pagamento salvo, devolve ELE (pra reabrir em modo edição), não
+  // uma proposta nova — payload: {"mesReferencia": "YYYY-MM"}.
+  std::string montarPagamentoSos(const std::string& payload);
+  // Fecha OU corrige a lista (mesmo registro do mês — nunca duplica, ver
+  // PagamentoSalvo em commissions_engine.hpp).
+  std::string salvarPagamentoSos(const std::string& payload);
+  std::string listPagamentosSosJson();
+
   // --------------------------------------------- gestão sos: suprimentos
   std::string listSuprimentosJson();
   std::string createSuprimento(const std::string& payload);

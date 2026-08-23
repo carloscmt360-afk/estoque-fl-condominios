@@ -59,6 +59,12 @@ export async function reload() {
     document.getElementById(id).value = fmt1(config[chave]);
     document.getElementById(id).disabled = !podeEditar;
   }
+  // Dados de pagamento da Delta — texto, não percentual, mas salvos junto
+  // no mesmo botão (mesmo painel).
+  document.getElementById('cfgDeltaTitular').value = config.deltaTitular || '';
+  document.getElementById('cfgDeltaTitular').disabled = !podeEditar;
+  document.getElementById('cfgDeltaChavePix').value = config.deltaChavePix || '';
+  document.getElementById('cfgDeltaChavePix').disabled = !podeEditar;
   document.getElementById('btnSalvarDashboardConfig').style.display = podeEditar ? '' : 'none';
   renderSomas();
 }
@@ -112,8 +118,10 @@ async function salvarDashboardConfig() {
     }
     payload[chave] = valor ? fmt1(num) : '0';
   }
+  payload.deltaTitular = document.getElementById('cfgDeltaTitular').value.trim();
+  payload.deltaChavePix = document.getElementById('cfgDeltaChavePix').value.trim();
   try {
     await api.setSosConfig(payload);
-    toast('Percentuais do Dashboard de Fechamento salvos.', 'success');
+    toast('Percentuais e dados de pagamento salvos.', 'success');
   } catch (e) { toast('Erro: ' + errorText(e), 'error'); }
 }

@@ -524,6 +524,16 @@ rust::String Session::salvar_dashboard(rust::Str payload) {
 
 rust::String Session::list_dashboards_json() { return rust::String(api_.listDashboardsJson()); }
 
+rust::String Session::montar_pagamento_sos(rust::Str payload) {
+  return rust::String(api_.montarPagamentoSos(std::string(payload)));
+}
+
+rust::String Session::salvar_pagamento_sos(rust::Str payload) {
+  return rust::String(api_.salvarPagamentoSos(std::string(payload)));
+}
+
+rust::String Session::list_pagamentos_sos_json() { return rust::String(api_.listPagamentosSosJson()); }
+
 rust::String Session::list_suprimentos_json() { return rust::String(api_.listSuprimentosJson()); }
 
 rust::String Session::create_suprimento(rust::Str payload) {

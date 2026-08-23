@@ -814,3 +814,30 @@ export function buildDashboardFechamentoDoc(dash, filtroTxt) {
     rodape('Retido = fatia da comissão perdida por eficácia abaixo de 100% da meta — nunca é paga a ninguém, fica com a FL.') +
     assinaturas();
 }
+
+// -------------------------------------------------- gestão sos: pagamentos
+
+const TIPO_PAGAMENTO_LABEL = { gerente: 'Gerente', suprimento: 'Suprimentos', delta: 'Delta' };
+
+// `linhas` já vem filtrada só com o que foi AUTORIZADO (ver
+// programarPagamento.js/historicoPagamentos.js) — o impresso nunca lista
+// quem não foi autorizado, mesmo que tivesse um valor sugerido.
+export function buildPagamentosDoc(linhas, mesLabel) {
+  const total = linhas.reduce((s, l) => s + l.valor, 0);
+  const corpo = linhas.map((l) => `<tr>
+      <td>${escapeHtml(l.nome)}</td>
+      <td>${TIPO_PAGAMENTO_LABEL[l.tipo] || escapeHtml(l.tipo)}</td>
+      <td>${l.chavePix ? escapeHtml(l.chavePix) : '—'}</td>
+      <td class="num">${fmtBRL(l.valor)}</td></tr>`).join('');
+
+  return head('Lista de Pagamentos', mesLabel, `${linhas.length} pagamento(s) autorizado(s)`) +
+    kpiGrid([
+      { k: 'Total autorizado', v: fmtBRL(total) },
+      { k: 'Pagamentos', v: fmtNum(linhas.length) },
+    ]) +
+    `<table><thead><tr><th>Nome</th><th>Tipo</th><th>Chave PIX</th><th class="num">Valor</th></tr></thead>
+      <tbody>${corpo}</tbody>
+      <tfoot><tr><td colspan="3">TOTAL</td><td class="num">${fmtBRL(total)}</td></tr></tfoot></table>` +
+    rodape('Lista apenas com os pagamentos autorizados em Programar pagamento — quem não foi autorizado não aparece aqui.') +
+    assinaturas();
+}
