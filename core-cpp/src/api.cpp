@@ -2045,21 +2045,18 @@ std::string Api::solicitarOrcamentoParaEmpresas(const std::string& payload, cons
     }
   }
 
-  // Só manda e-mail pras empresas que ENTRARAM agora — reabrir o modal e
-  // adicionar mais uma empresa não pode reenviar a solicitação pra quem já
-  // tinha sido chamado numa rodada anterior.
-  std::vector<std::string> jaAntes;
-  if (auto before = estoque::findOrdemOrcamento(db_, ordemId)) {
-    for (const auto& p : before->propostas) jaAntes.push_back(p.empresaId);
-  }
-
   auto updated = estoque::solicitarOrcamentoParaEmpresas(db_, ordemId, empresas, nowIso);
 
+  // Manda e-mail pra TODA empresa selecionada nesta chamada — inclusive quem
+  // já tinha sido chamada numa rodada anterior. Selecionar de novo é sempre
+  // um pedido explícito de reenvio (o usuário decide quantas vezes precisar,
+  // mesmo para quem já recebeu — ver solicitarOrcamentoParaEmpresas em
+  // purchases_engine.cpp, que atualiza o email_enviado_em em vez de ignorar).
   json emails = json::array();
   std::string corpo = composeSolicitacaoBody(updated);
-  for (const auto& p : updated.propostas) {
-    if (std::find(jaAntes.begin(), jaAntes.end(), p.empresaId) != jaAntes.end()) continue;
-    auto emp = findEmpresa(db_, p.empresaId);
+  for (const auto& e : empresas) {
+    if (e.empresaId.empty()) continue;
+    auto emp = findEmpresa(db_, e.empresaId);
     std::string to = emp ? emp->emails : "";
     if (to.empty()) continue;
     emails.push_back(emailParaJson(to, "Solicitação de orçamento — " + updated.condominioNome, corpo, {}));

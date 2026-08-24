@@ -551,17 +551,21 @@ function renderSolicEmpresasLista() {
   if (!categoriasOrdenadas.length) {
     lista.innerHTML = '<p class="muted">Nenhuma empresa encontrada.</p>';
   } else {
+    // Empresa já solicitada antes NUNCA vem pré-marcada nem travada — marcar
+    // de novo é sempre uma decisão explícita de reenviar (o usuário decide
+    // quantas vezes precisar, inclusive pra quem já recebeu ou já
+    // respondeu). Sem isso reabrir o modal reenviaria sem querer pra quem
+    // já tinha sido chamado antes, só porque a caixa apareceu marcada.
     lista.innerHTML = categoriasOrdenadas.map((cat) => `
       <div class="section-title">${escapeHtml(cat)}</div>
       ${grupos.get(cat).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR')).map((emp) => {
         const jaTem = jaSolicitadas.has(emp.id);
-        const marcado = jaTem || empresasSolicSelecionadas.has(emp.id);
+        const marcado = empresasSolicSelecionadas.has(emp.id);
         return `<label style="display:flex;align-items:center;gap:8px;padding:5px 2px;">
-          <input type="checkbox" style="width:auto;" data-empresa-check="${emp.id}"
-            ${marcado ? 'checked' : ''} ${jaTem ? 'disabled' : ''} />
+          <input type="checkbox" style="width:auto;" data-empresa-check="${emp.id}" ${marcado ? 'checked' : ''} />
           <span>${escapeHtml(emp.nome)}</span>
           ${emp.parceira ? '<span class="pill pill-accent">Parceira</span>' : ''}
-          ${jaTem ? '<span class="muted">(já solicitado)</span>' : ''}
+          ${jaTem ? '<span class="muted">(já solicitada — marque para reenviar)</span>' : ''}
         </label>`;
       }).join('')}
     `).join('');

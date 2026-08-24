@@ -1719,27 +1719,32 @@ export async function installDevMock() {
         const empresas = Array.isArray(p.empresas) ? p.empresas : [];
         if (!empresas.length) throw new Error('selecione ao menos uma empresa');
 
-        // Não duplica quem já está na ordem — permite chamar de novo pra
-        // adicionar só as empresas novas de uma seleção maior.
-        const jaAntes = ordem.propostas.map((x) => x.empresaId);
-        const novas = [];
+        // Não duplica a LINHA de quem já está na ordem, mas REENVIA pra ela
+        // (atualiza emailEnviadoEm e manda o e-mail de novo) — selecionar de
+        // novo é sempre um pedido explícito de reenvio, quantas vezes o
+        // usuário achar necessário, mesmo pra quem já recebeu ou respondeu.
+        const chamadas = [];
         for (const e of empresas) {
-          if (!e.empresaId || jaAntes.includes(e.empresaId)) continue;
+          if (!e.empresaId) continue;
           const empresa = state.empresas.find((x) => x.id === e.empresaId);
           if (!empresa) throw new Error('empresa não encontrada: ' + e.empresaId);
-          const proposta = {
-            id: ordem.id + '-' + empresa.id, ordemId: ordem.id, empresaId: empresa.id,
-            empresaNome: empresa.nome, valor: -1, anexoPath: '', anexoTipo: '',
-            emailEnviadoEm: agora, recomendada: false, createdAt: agora,
-          };
-          ordem.propostas.push(proposta);
-          novas.push(empresa);
+          const existente = ordem.propostas.find((x) => x.empresaId === e.empresaId);
+          if (existente) {
+            existente.emailEnviadoEm = agora;
+          } else {
+            ordem.propostas.push({
+              id: ordem.id + '-' + empresa.id, ordemId: ordem.id, empresaId: empresa.id,
+              empresaNome: empresa.nome, valor: -1, anexoPath: '', anexoTipo: '',
+              emailEnviadoEm: agora, recomendada: false, createdAt: agora,
+            });
+          }
+          chamadas.push(empresa);
         }
         if (!ordem.dataSolicitacao) ordem.dataSolicitacao = agora;
         ordem.status = 'solicitado';
 
         const falhas = [];
-        for (const empresa of novas) {
+        for (const empresa of chamadas) {
           const to = String(empresa.emails || '').trim();
           if (!to) continue;
           const erro = enviarEmailMock(to, 'Solicitação de orçamento — ' + ordem.condominioNome,

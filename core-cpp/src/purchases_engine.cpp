@@ -406,11 +406,20 @@ OrdemOrcamento solicitarOrcamentoParaEmpresas(Database& db, const std::string& o
   Transaction tx(db);
   for (const auto& e : empresas) {
     if (trim(e.empresaId).empty()) continue;
-    // Já solicitada nesta ordem? Não duplica — permite chamar de novo pra
-    // adicionar só as empresas novas de uma seleção maior.
-    bool jaExiste = std::any_of(ordem->propostas.begin(), ordem->propostas.end(),
-                                [&](const PropostaOrcamento& p) { return p.empresaId == e.empresaId; });
-    if (jaExiste) continue;
+    // Já solicitada nesta ordem? Não duplica a linha da proposta, mas
+    // REENVIA (mesmo critério de reenviarSolicitacaoProposta): o usuário
+    // decide quantas vezes chamar a mesma empresa de novo, inclusive quem já
+    // respondeu ou já recebeu antes — selecionar de novo é sempre um pedido
+    // explícito de reenvio, nunca "fica esquecida porque já foi chamada".
+    auto existente = std::find_if(ordem->propostas.begin(), ordem->propostas.end(),
+                                  [&](const PropostaOrcamento& p) { return p.empresaId == e.empresaId; });
+    if (existente != ordem->propostas.end()) {
+      db.prepare("UPDATE compras_propostas_orcamento SET email_enviado_em=? WHERE id=?")
+          .bind(1, nowIso)
+          .bind(2, existente->id)
+          .step();
+      continue;
+    }
     auto empresa = findEmpresa(db, e.empresaId);
     if (!empresa) throw NotFoundError("empresa não encontrada: " + e.empresaId);
 

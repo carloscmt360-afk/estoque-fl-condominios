@@ -2,6 +2,8 @@
 #include "doctest.h"
 #include "estoque/purchases_engine.hpp"
 
+#include <algorithm>
+
 #include "estoque/companies_engine.hpp"
 #include "estoque/dates_engine.hpp"
 
@@ -158,11 +160,18 @@ TEST_CASE("solicitarOrcamentoParaEmpresas: cria uma proposta por empresa, avanç
   CHECK(depois.propostas[0].valor < 0);  // sem resposta ainda
 
   // Chamar de novo com uma empresa repetida + uma nova: não duplica a
-  // repetida, e dataSolicitacao (a janela dos 25 dias) não muda.
+  // repetida (continua 3 propostas, não 4), mas REENVIA pra ela — atualiza
+  // emailEnviadoEm em vez de ignorar, porque selecionar de novo é sempre um
+  // pedido explícito de reenvio — e dataSolicitacao (a janela dos 25 dias)
+  // não muda.
   constexpr const char* kDepois = "2026-08-20T12:00:00.000Z";
   auto maisTarde = solicitarOrcamentoParaEmpresas(c.db, "ord1", {{"forn2", "Barata & Cia"}, {"forn1", "Material Forte Ltda"}}, kDepois);
   CHECK(maisTarde.propostas.size() == 3);
   CHECK(maisTarde.dataSolicitacao == kNow);  // não reiniciou
+  auto repetida = std::find_if(maisTarde.propostas.begin(), maisTarde.propostas.end(),
+                               [](const PropostaOrcamento& p) { return p.empresaId == "forn2"; });
+  REQUIRE(repetida != maisTarde.propostas.end());
+  CHECK(repetida->emailEnviadoEm == kDepois);  // reenviada de verdade, não ignorada
 
   CHECK_THROWS_AS(solicitarOrcamentoParaEmpresas(c.db, "ord1", {}, kNow), std::invalid_argument);
   CHECK_THROWS_AS(solicitarOrcamentoParaEmpresas(c.db, "ord1", {{"fantasma", "X"}}, kNow), NotFoundError);

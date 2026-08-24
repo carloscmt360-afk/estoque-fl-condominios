@@ -780,11 +780,15 @@ export function buildDashboardFechamentoDoc(dash, filtroTxt) {
       <td class="num"><b>${moedaSimples(dash.gerenciaLiquido)}</b></td>
       <td class="num"><b>${moedaSimples(dash.retido)}</b></td></tr></tfoot></table>`;
 
+  // Mesmo critério dos Gerentes acima: parceira sem nenhum recebido no mês
+  // não soma nada ao relatório — só interessa entrar aqui quem tem dado de
+  // produtividade de verdade. A tela de trabalho continua mostrando todas.
+  const empresasComRecebido = dash.empresas.filter((e) => Math.abs(e.recebidos) > 0.004);
   const empresasTabela = `<div class="pr-sec">Empresas parceiras</div>
     <table><thead><tr><th>Empresa</th><th class="num">Recebidos</th></tr></thead>
-    <tbody>${dash.empresas.length ? dash.empresas.map((e) => `<tr>
+    <tbody>${empresasComRecebido.length ? empresasComRecebido.map((e) => `<tr>
         <td>${escapeHtml(e.empresaNome)}</td><td class="num">${moedaSimples(e.recebidos)}</td></tr>`).join('')
-      : '<tr><td colspan="2">Nenhuma parceira cadastrada.</td></tr>'}</tbody></table>`;
+      : `<tr><td colspan="2">${dash.empresas.length ? 'Nenhuma parceira com movimento neste mês.' : 'Nenhuma parceira cadastrada.'}</td></tr>`}</tbody></table>`;
 
   const deltaTabela = dash.deltaSindicos.length ? `<div class="pr-sec">Delta Síndicos do mês</div>
     <table><thead><tr><th>Condomínio</th><th>Síndico</th><th>Gerente</th>

@@ -147,12 +147,15 @@ struct EmpresaSolicitada {
   std::string empresaId;
   std::string empresaNome;
 };
-// "Solicitar para empresas": cria uma proposta por empresa (ignora quem já
-// está na lista — chamável de novo para adicionar mais empresas depois sem
-// duplicar), marca emailEnviadoEm=nowIso em cada uma, e avança
-// ordem.status para 'solicitado' (nunca volta um status mais avançado para
-// trás). dataSolicitacao só é gravada da PRIMEIRA vez — chamadas
-// posteriores (adicionar mais empresas) não reiniciam a janela dos 25 dias.
+// "Solicitar para empresas": cria uma proposta por empresa nova; quem já
+// está na lista não duplica a linha, mas é REENVIADA (email_enviado_em
+// atualizado, e a Api manda o e-mail de novo) — chamar de novo com uma
+// empresa repetida é sempre um pedido explícito de reenvio, quantas vezes o
+// usuário achar necessário, mesmo pra quem já respondeu ou já recebeu.
+// Avança ordem.status para 'solicitado' (nunca volta um status mais avançado
+// para trás). dataSolicitacao só é gravada da PRIMEIRA vez — chamadas
+// posteriores (adicionar mais empresas ou reenviar) não reiniciam a janela
+// dos 25 dias.
 OrdemOrcamento solicitarOrcamentoParaEmpresas(Database& db, const std::string& ordemId,
                                               const std::vector<EmpresaSolicitada>& empresas,
                                               const std::string& nowIso);
