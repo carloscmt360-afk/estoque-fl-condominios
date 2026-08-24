@@ -320,7 +320,7 @@ TEST_CASE("dashboard: reproduz as fórmulas SOMASES da planilha real") {
   Cenario c;
 
   // Um segundo condomínio, só pra ter DOIS condomínios distintos e provar
-  // que Produzido segue a CARTEIRA (condomínio), não o gerenteId gravado no
+  // que Recebido segue a CARTEIRA (condomínio), não o gerenteId gravado no
   // serviço — os dois divergem de propósito neste cenário.
   Condominio cond2;
   cond2.id = "cond2";
@@ -355,7 +355,7 @@ TEST_CASE("dashboard: reproduz as fórmulas SOMASES da planilha real") {
   createGerente(c.db, ricardo);
 
   // Serviços do mês: RICARDO recebe 2.362,20 do parceiro (é o "arrecadado").
-  // gerenteId aqui é só quem LANÇOU/executou — Produzido ignora este campo
+  // gerenteId aqui é só quem LANÇOU/executou — Recebido ignora este campo
   // e olha o condomínio do serviço contra a carteira de cada gerente.
   auto s1 = c.servico("s1", 2362.20, 10);
   s1.gerenteId = "gRicardo";
@@ -431,11 +431,11 @@ TEST_CASE("dashboard: reproduz as fórmulas SOMASES da planilha real") {
   // gerência líquido = Σ comissão dos gerentes
   CHECK(dash.gerenciaLiquido == doctest::Approx(ric.comissao + tha.comissao));
 
-  // empresas: a parceira aparece com o total recebido dela no mês (s3 não
-  // tem parceiroId, então não entra aqui)
+  // empresas: a parceira aparece com a COMISSÃO (não a venda bruta) dos
+  // serviços dela no mês (s3 não tem parceiroId, então não entra aqui)
   REQUIRE(dash.empresas.size() == 1);
   CHECK(dash.empresas[0].empresaNome == "BioPrag");
-  CHECK(dash.empresas[0].recebidos == doctest::Approx(2362.20 + 3939.89));
+  CHECK(dash.empresas[0].recebidos == doctest::Approx((2362.20 + 3939.89) * 0.10));
 
   // o painel do Delta Síndicos traz o lançamento do mês
   CHECK(dash.deltaSindicos.size() == 1);
@@ -525,6 +525,38 @@ TEST_CASE("eficaciaDe: fórmula da meta por condomínio") {
   CHECK(eficaciaDe(600, 10, 120) == doctest::Approx(50.0));
 }
 
+TEST_CASE("dashboard: eficácia é medida pelo recebido (comissão), não pela venda bruta") {
+  // Um serviço com porcentagem baixa pode ter uma venda enorme e ainda assim
+  // gerar pouca comissão — usar a venda bruta contra a meta (que é um alvo em
+  // R$ de COMISSÃO por condomínio) inflava a "produção" e nunca deixava a
+  // eficácia cair abaixo de 100%, mesmo quando o gerente está bem abaixo da
+  // meta de verdade.
+  Cenario c;
+  Gerente g;
+  g.id = "g1";
+  g.nome = "BAIXA PORCENTAGEM";
+  g.createdAt = kNow;
+  g.condominioIds = {"cond1"};
+  createGerente(c.db, g);
+
+  // venda 6.000, porcentagem 1% -> recebido (comissão) = 60. Meta por
+  // condomínio padrão = 120, carteira = 1 condomínio -> meta = 120.
+  auto s = c.servico("s1", 6000, 1);
+  createServico(c.db, s);
+
+  DashboardEntrada entrada;
+  entrada.mesReferencia = "2026-08";
+  auto dash = montarDashboard(c.db, entrada);
+
+  auto it = std::find_if(dash.gerentes.begin(), dash.gerentes.end(),
+                         [](const DashboardGerenteLinha& l) { return l.gerenteNome == "BAIXA PORCENTAGEM"; });
+  REQUIRE(it != dash.gerentes.end());
+  CHECK(it->recebido == doctest::Approx(60.0));
+  // Se a eficácia fosse calculada contra a venda bruta (6.000 >> 120), daria
+  // 100%. Contra o recebido (60, metade da meta de 120), é 50%.
+  CHECK(it->eficacia == doctest::Approx(50.0));
+}
+
 TEST_CASE("dashboard: gerente sem override usa porcentagem/eficácia de Configurações") {
   Cenario c;
   Gerente g;
@@ -550,7 +582,7 @@ TEST_CASE("dashboard: gerente sem override usa porcentagem/eficácia de Configur
                          [](const DashboardGerenteLinha& l) { return l.gerenteNome == "SEM OVERRIDE"; });
   REQUIRE(it != dash.gerentes.end());
   CHECK(it->porcentagem == doctest::Approx(40.0));
-  // 1200 produzidos (venda bruta) ÷ 1 condomínio na carteira == meta exata -> 100%.
+  // recebido 120 (comissão: 1200 × 10%) ÷ 1 condomínio na carteira == meta exata -> 100%.
   CHECK(it->eficacia == doctest::Approx(100.0));
   // recebido = 1200 × 10% (comissão do serviço) = 120; comissão = recebido × 40%.
   CHECK(it->comissao == doctest::Approx(1200 * 0.10 * 0.40));

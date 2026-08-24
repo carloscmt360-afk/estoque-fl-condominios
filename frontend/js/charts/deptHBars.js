@@ -1,4 +1,4 @@
-import { VIZ, hostW, txt, barPath, measureText, truncToWidth, emptyChart, tipAttr, gradientDefs } from './palette.js';
+import { VIZ, hostW, txt, barPath, measureText, truncToWidth, emptyChart, tipAttr, gradientDefs, rankBlue } from './palette.js';
 import { fmtBRL, escapeHtml } from '../format.js';
 
 /* Barras horizontais — substitui a pizza de N fatias do relatório em
@@ -7,21 +7,21 @@ import { fmtBRL, escapeHtml } from '../format.js';
    Cor de cada barra, em ordem de prioridade: `row.color` explícito > modo
    "timeline" (série única no tempo — todas as barras na mesma cor, exceto a
    marcada `row.atual`, que usa o tom mais forte, sempre em evidência) >
-   categórica (cada barra recebe o próximo tom fixo da paleta — identidade,
-   nunca por valor/ranking). Todas em degradê (claro → a cor), nunca cor
-   chapada. */
+   ranking (degradê de azul do mais escuro, maior valor, ao mais claro, menor
+   valor — pedido explícito: todo gráfico em tons de azul). Todas em degradê
+   (claro → a cor), nunca cor chapada. */
 export function drawBarrasH(host, rows, opts) {
   opts = opts || {};
   if (!rows.length) return emptyChart(host, opts.empty || 'Sem dados no período.');
   host.innerHTML = barrasHSVG(rows, hostW(host), opts);
 }
 
-function corDaLinha(r, i, opts) {
+function corDaLinha(r, i, n, opts) {
   if (r.color) return r.color;
   if (opts.mode === 'timeline') {
     return r.atual ? VIZ.sequential.forte : (opts.color || VIZ.sequential.medio);
   }
-  return opts.color || VIZ.categorical[i % VIZ.categorical.length];
+  return opts.color || rankBlue(i, n);
 }
 
 /* Mesmo desenho, mas como string — usada pelos relatórios impressos, que
@@ -38,7 +38,7 @@ export function barrasHSVG(rows, W, opts) {
   const pw = Math.max(30, W - mL - mR);
   const maxV = Math.max(...rows.map((r) => r.value)) || 1;
 
-  const cores = rows.map((r, i) => corDaLinha(r, i, opts));
+  const cores = rows.map((r, i) => corDaLinha(r, i, rows.length, opts));
   const grad = gradientDefs(cores, true);
 
   let g = grad.defsHTML;

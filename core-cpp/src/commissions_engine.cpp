@@ -444,29 +444,22 @@ DashboardFechamento montarDashboard(Database& db, const DashboardEntrada& entrad
     linha.gerenteId = g.id;
     linha.gerenteNome = g.nome;
 
-    // Produção bruta (venda) dos serviços dos condomínios NA CARTEIRA do
-    // gerente (portfólio), não dos serviços que trazem o gerenteId dele no
-    // registro — os dois divergem sempre que quem lançou o serviço marcou
-    // outro gerente responsável pela execução, mas o condomínio pertence à
-    // carteira deste. Só entram serviços com porcentagem > 0. Não é mais
-    // exibida como coluna própria (sumiu da tela) — sobrevive só como base
-    // da fórmula de eficácia (produção contra a meta), que continua em
-    // venda bruta, não em comissão.
-    //
     // Recebido é a fatia do ARRECADADO (a comissão que a FL já cobrou em
-    // cada serviço, não a venda bruta) que veio da carteira deste gerente —
-    // é o que faz a soma de "Recebido" de todos os gerentes bater com o
-    // "Arrecadado" do topo da tela (esclarecido pelo usuário: produzido em
-    // venda bruta não tinha nenhuma relação com o valor realmente
-    // arrecadado no mês).
-    double producaoBruta = 0;
+    // cada serviço, não a venda bruta) que veio dos condomínios NA CARTEIRA
+    // deste gerente (portfólio), não dos serviços que trazem o gerenteId dele
+    // no registro — os dois divergem sempre que quem lançou o serviço marcou
+    // outro gerente responsável pela execução, mas o condomínio pertence à
+    // carteira deste. Só entram serviços com porcentagem > 0. É o que faz a
+    // soma de "Recebido" de todos os gerentes bater com o "Arrecadado" do
+    // topo da tela (esclarecido pelo usuário: produzido em venda bruta não
+    // tinha nenhuma relação com o valor realmente arrecadado no mês), e
+    // também a base da fórmula de eficácia logo abaixo — usar venda bruta ali
+    // inflaria a "produção" de um serviço com porcentagem baixa e nunca
+    // deixaria a eficácia cair abaixo de 100%.
     for (const auto& s : doMes) {
       bool naCarteira = std::find(g.condominioIds.begin(), g.condominioIds.end(), s.condominioId) !=
                         g.condominioIds.end();
-      if (naCarteira && s.porcentagem > 0) {
-        producaoBruta += s.venda;
-        linha.recebido += comissaoDe(s);
-      }
+      if (naCarteira && s.porcentagem > 0) linha.recebido += comissaoDe(s);
     }
     for (const auto& d : out.deltaSindicos) {
       if (d.gerenteId == g.id) linha.descontos += comissaoDeltaDe(d);
@@ -501,7 +494,7 @@ DashboardFechamento montarDashboard(Database& db, const DashboardEntrada& entrad
       linha.eficacia = it->eficacia;
     } else {
       linha.porcentagem = rateioGerentesPadrao;
-      linha.eficacia = eficaciaDe(producaoBruta, linha.carteira, metaPorCondominio);
+      linha.eficacia = eficaciaDe(linha.recebido, linha.carteira, metaPorCondominio);
     }
 
     // Recebido × % do gerente — o bruto antes de aplicar a eficácia.
@@ -528,13 +521,16 @@ DashboardFechamento montarDashboard(Database& db, const DashboardEntrada& entrad
 
   // ---- painel de empresas (parceiras) ----
   // Mesma regra do painel de gerentes: a lista inteira de parceiras, com
-  // zero para quem não teve venda no mês.
+  // zero para quem não teve venda no mês. "Recebidos" é a comissão que a FL
+  // arrecadou dos serviços daquela parceira, não a venda bruta — mesmo
+  // critério do "Arrecadado"/"Recebido" dos gerentes (a soma de todas as
+  // parceiras com parceiroId preenchido bate com uma fatia do arrecadado).
   for (const auto& e : listParceiros(db)) {
     DashboardEmpresaLinha linha;
     linha.empresaId = e.id;
     linha.empresaNome = e.nome;
     for (const auto& s : doMes) {
-      if (s.parceiroId == e.id) linha.recebidos += s.venda;
+      if (s.parceiroId == e.id) linha.recebidos += comissaoDe(s);
     }
     out.empresas.push_back(linha);
   }

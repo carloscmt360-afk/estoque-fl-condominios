@@ -18,17 +18,29 @@ export const VIZ = {
   abc: { A: '#1B3A5C', B: '#2E6BA6', C: '#6C8CA8' },
   grid: '#E1E4E8', axis: '#C6CCD2', muted: '#6B7280', ink: '#2B2F33',
   surface: '#FFFFFF', deemph: '#AEC2D2',
-  // Paleta categórica (identidade — um gerente/parceiro/nicho é uma barra
-  // diferente da outra) — 8 tons em ordem fixa, validados (skill de
-  // dataviz: CVD ΔE ≥ 8, contraste ≥ 3:1) para nunca virarem "a mesma cor".
-  // Nunca ciclar a ordem nem reatribuir por valor — a cor segue a
-  // ENTIDADE, não o ranking dela.
-  categorical: ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300', '#4a3aa7', '#e34948'],
   // Azul sequencial (magnitude/tempo) — usado nos retrospectos mês a mês,
   // onde o mês ATUAL precisa estar sempre em evidência: os outros meses
   // usam o passo mais claro, o mês corrente usa o mais escuro.
   sequential: { fraco: '#9ec5f4', medio: '#3987e5', forte: '#0d366b' },
 };
+
+function mixHex(a, b, t) {
+  const ha = a.replace('#', ''), hb = b.replace('#', '');
+  const mix = (x, y) => Math.round(x + (y - x) * t);
+  const chan = (h, i) => parseInt(h.slice(i, i + 2), 16);
+  return `#${[0, 2, 4].map((i) => mix(chan(ha, i), chan(hb, i)).toString(16).padStart(2, '0')).join('')}`;
+}
+
+// Cor de uma barra de RANKING (pedido explícito: todo gráfico é um degradê
+// de azul do mais escuro ao mais claro, nunca uma paleta multi-matiz por
+// identidade) — a barra de maior valor (i=0, ranking já vem ordenado
+// decrescente) usa o azul mais escuro, a de menor valor o mais claro.
+// Interpola entre os mesmos tons de VIZ.sequential, então ranking e timeline
+// na mesma tela ficam na mesma família de azul.
+export function rankBlue(i, n) {
+  const t = n > 1 ? i / (n - 1) : 0;
+  return mixHex(VIZ.sequential.forte, VIZ.sequential.fraco, t);
+}
 
 // Clareia um hex misturando com branco — usado pra montar o degradê de cada
 // barra (claro → a cor de base) sem precisar de uma segunda cor por série.

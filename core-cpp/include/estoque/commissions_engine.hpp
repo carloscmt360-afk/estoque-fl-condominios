@@ -161,9 +161,17 @@ std::vector<DeltaSindico> listDeltaSindicos(Database& db);
 //   gerente.carteira    = nº de condomínios na carteira do gerente
 //   gerente.meta        = metaPorCondominio × carteira
 //   gerente.descontos   = Σ comissão do Delta Síndicos daquele gerente no mês
+//   gerente.eficacia    = recebido do gerente (comissão, não venda bruta) ÷
+//                         carteira, contra metaPorCondominio — sem isso um
+//                         serviço de porcentagem baixa infla a "produção" com
+//                         venda bruta e nunca deixa a eficácia cair abaixo de
+//                         100%, mesmo quando o gerente está bem abaixo da meta
 //   gerente.comissao    = recebido × porcentagem × eficácia − descontos
 //   gerenciaLiquido     = Σ comissão dos gerentes
-//   empresa.recebidos   = Σ venda dos serviços daquele parceiro no mês
+//   empresa.recebidos   = Σ comissão (venda × porcentagem) dos serviços
+//                         daquele parceiro no mês — não a venda bruta (é o
+//                         quanto da FL veio de cada parceira, não o quanto a
+//                         parceira vendeu)
 struct DashboardGerenteEntrada {
   std::string gerenteId;
   double porcentagem = 0;  // a coluna "(%)" — 30% na planilha

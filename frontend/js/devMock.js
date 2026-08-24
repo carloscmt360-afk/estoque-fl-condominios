@@ -538,14 +538,13 @@ export async function installDevMock() {
     for (const g of state.gerentes) {
       // Recebido = fatia do arrecadado (comissão, não venda bruta) que veio
       // dos clientes da carteira do gerente, só com porcentagem > 0 — mesmo
-      // critério de montarDashboard em commissions_engine.cpp. producaoBruta
-      // (venda, sem aplicar %) só serve de entrada pra eficácia, que mede
-      // produção contra a meta.
-      let producaoBruta = 0;
+      // critério de montarDashboard em commissions_engine.cpp. É também a
+      // base da eficácia logo abaixo: usar venda bruta ali inflaria a
+      // "produção" de um serviço com porcentagem baixa e nunca deixaria a
+      // eficácia cair abaixo de 100%, mesmo com o gerente bem abaixo da meta.
       let recebido = 0;
       for (const s of doMes) {
         if ((g.condominioIds || []).includes(s.condominioId) && (s.porcentagem || 0) > 0) {
-          producaoBruta += s.venda || 0;
           recebido += (s.venda || 0) * (s.porcentagem || 0) / 100;
         }
       }
@@ -571,7 +570,7 @@ export async function installDevMock() {
         eficacia = override.eficacia;
       } else {
         porcentagem = rateioGerentesPadrao;
-        eficacia = eficaciaDeMock(producaoBruta, carteira, metaPorCondominio);
+        eficacia = eficaciaDeMock(recebido, carteira, metaPorCondominio);
       }
 
       const recebidoComPct = recebido * porcentagem / 100;
@@ -588,9 +587,11 @@ export async function installDevMock() {
     }
     out.gerentes.sort((a, b) => a.gerenteNome.localeCompare(b.gerenteNome, 'pt-BR'));
 
+    // Recebidos é a comissão que a FL arrecadou dos serviços daquela
+    // parceira, não a venda bruta — mesmo critério do Recebido dos gerentes.
     for (const e of state.empresas.filter((x) => x.parceira)) {
       let recebidos = 0;
-      for (const s of doMes) if (s.parceiroId === e.id) recebidos += s.venda || 0;
+      for (const s of doMes) if (s.parceiroId === e.id) recebidos += (s.venda || 0) * (s.porcentagem || 0) / 100;
       out.empresas.push({ empresaId: e.id, empresaNome: e.nome, recebidos });
     }
 
