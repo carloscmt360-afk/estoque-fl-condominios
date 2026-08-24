@@ -765,18 +765,18 @@ export function buildDashboardFechamentoDoc(dash, filtroTxt) {
   // com essas linhas.
   const gerentesComComissao = dash.gerentes.filter((g) => Math.abs(g.comissao) > 0.004);
   const gerentesTabela = `<div class="pr-sec">Gerentes</div>
-    <table><thead><tr><th>Gerente</th><th class="num">Produzido</th><th class="num">Recebido</th>
+    <table><thead><tr><th>Gerente</th><th class="num">Recebido</th>
       <th class="num">Carteira</th><th class="num">Meta</th><th class="num">Eficácia</th><th class="num">(%)</th>
       <th class="num">Descontos</th><th class="num">Comissão</th><th class="num">Retido p/ FL</th></tr></thead>
     <tbody>${gerentesComComissao.length ? gerentesComComissao.map((g) => `<tr>
-        <td>${escapeHtml(g.gerenteNome)}</td><td class="num">${moedaSimples(g.produzido)}</td>
+        <td>${escapeHtml(g.gerenteNome)}</td>
         <td class="num">${moedaSimples(g.recebido)}</td>
         <td class="num">${g.carteira}</td><td class="num">${moedaSimples(g.meta)}</td>
         <td class="num">${fmtPct(g.eficacia / 100, 0)}</td>
         <td class="num">${fmtPct(g.porcentagem / 100, 0)}</td><td class="num">${moedaSimples(g.descontos)}</td>
         <td class="num">${moedaSimples(g.comissao)}</td><td class="num">${moedaSimples(g.retido)}</td></tr>`).join('')
-      : `<tr><td colspan="10">${dash.gerentes.length ? 'Nenhum gerente com comissão neste mês.' : 'Nenhum gerente cadastrado.'}</td></tr>`}</tbody>
-    <tfoot><tr><td colspan="8"><b>Gerência líquido</b></td>
+      : `<tr><td colspan="9">${dash.gerentes.length ? 'Nenhum gerente com comissão neste mês.' : 'Nenhum gerente cadastrado.'}</td></tr>`}</tbody>
+    <tfoot><tr><td colspan="7"><b>Gerência líquido</b></td>
       <td class="num"><b>${moedaSimples(dash.gerenciaLiquido)}</b></td>
       <td class="num"><b>${moedaSimples(dash.retido)}</b></td></tr></tfoot></table>`;
 

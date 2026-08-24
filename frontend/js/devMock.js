@@ -536,12 +536,18 @@ export async function installDevMock() {
       .filter((d) => d.dataReferencia === entrada.mesReferencia);
 
     for (const g of state.gerentes) {
-      // Produzido = venda dos serviços da carteira do gerente, só com
-      // porcentagem > 0 — mesmo critério de montarDashboard em
-      // commissions_engine.cpp.
-      let produzido = 0;
+      // Recebido = fatia do arrecadado (comissão, não venda bruta) que veio
+      // dos clientes da carteira do gerente, só com porcentagem > 0 — mesmo
+      // critério de montarDashboard em commissions_engine.cpp. producaoBruta
+      // (venda, sem aplicar %) só serve de entrada pra eficácia, que mede
+      // produção contra a meta.
+      let producaoBruta = 0;
+      let recebido = 0;
       for (const s of doMes) {
-        if ((g.condominioIds || []).includes(s.condominioId) && (s.porcentagem || 0) > 0) produzido += s.venda || 0;
+        if ((g.condominioIds || []).includes(s.condominioId) && (s.porcentagem || 0) > 0) {
+          producaoBruta += s.venda || 0;
+          recebido += (s.venda || 0) * (s.porcentagem || 0) / 100;
+        }
       }
       let descontos = 0;
       for (const d of out.deltaSindicos) {
@@ -565,18 +571,18 @@ export async function installDevMock() {
         eficacia = override.eficacia;
       } else {
         porcentagem = rateioGerentesPadrao;
-        eficacia = eficaciaDeMock(produzido, carteira, metaPorCondominio);
+        eficacia = eficaciaDeMock(producaoBruta, carteira, metaPorCondominio);
       }
 
-      const recebido = produzido * porcentagem / 100;
-      const retido = recebido * (1 - eficacia / 100);
-      let comissao = recebido * eficacia / 100 - descontos;
+      const recebidoComPct = recebido * porcentagem / 100;
+      const retido = recebidoComPct * (1 - eficacia / 100);
+      let comissao = recebidoComPct * eficacia / 100 - descontos;
       if (comissao < 0) comissao = 0;
 
       out.gerenciaLiquido += comissao;
       out.retido += retido;
       out.gerentes.push({
-        gerenteId: g.id, gerenteNome: g.nome, produzido, recebido, carteira, meta, porcentagem, eficacia,
+        gerenteId: g.id, gerenteNome: g.nome, recebido, carteira, meta, porcentagem, eficacia,
         descontos, comissao, retido,
       });
     }

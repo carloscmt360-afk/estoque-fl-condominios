@@ -149,16 +149,19 @@ std::vector<DeltaSindico> listDeltaSindicos(Database& db);
 // é gravado junto no retrato.
 //
 // Fórmulas derivadas (conferidas contra a planilha real de jul/26):
-//   arrecadado          = Σ venda dos serviços PAGOS do mês (não pago não
+//   arrecadado          = Σ comissão (venda × porcentagem) dos serviços
+//                         PAGOS do mês — não a venda bruta (não pago não
 //                         entra na distribuição de comissão de ninguém)
 //   liberadoParaComissao= arrecadado × percentualComissao
-//   gerente.produzido   = Σ venda dos serviços pagos daquele gerente no mês,
-//                         só os com porcentagem > 0
-//   gerente.recebido    = produzido × porcentagem
+//   gerente.recebido    = Σ comissão dos serviços pagos da CARTEIRA daquele
+//                         gerente no mês, só os com porcentagem > 0 — é a
+//                         fatia do arrecadado que veio dos clientes dele
+//                         (a soma do recebido de todos os gerentes bate com
+//                         o arrecadado, salvo condomínio fora de carteira)
 //   gerente.carteira    = nº de condomínios na carteira do gerente
 //   gerente.meta        = metaPorCondominio × carteira
 //   gerente.descontos   = Σ comissão do Delta Síndicos daquele gerente no mês
-//   gerente.comissao    = produzido × porcentagem × eficácia − descontos
+//   gerente.comissao    = recebido × porcentagem × eficácia − descontos
 //   gerenciaLiquido     = Σ comissão dos gerentes
 //   empresa.recebidos   = Σ venda dos serviços daquele parceiro no mês
 struct DashboardGerenteEntrada {
@@ -194,21 +197,21 @@ struct DashboardEntrada {
 struct DashboardGerenteLinha {
   std::string gerenteId;
   std::string gerenteNome;
-  // Soma das vendas pagas do mês daquele gerente, só as com porcentagem > 0
-  // (a coluna "PRODUZIDO").
-  double produzido = 0;
   int carteira = 0;
   // metaPorCondominio × carteira (a coluna "META").
   double meta = 0;
   double porcentagem = 0;
   double eficacia = 0;
   double descontos = 0;
-  // produzido × porcentagem (a coluna "RECEBIDO") — o bruto antes de aplicar
-  // eficácia/descontos.
+  // Σ comissão (venda × porcentagem) dos serviços pagos da CARTEIRA deste
+  // gerente no mês, só os com porcentagem > 0 (a coluna "RECEBIDO") — a
+  // fatia do `arrecadado` do dashboard que veio dele. Não é mais a venda
+  // bruta: era a origem do "Recebido" não bater com o "Arrecadado" do topo
+  // da tela.
   double recebido = 0;
   double comissao = 0;
-  // Fatia do recebido perdida por não atingir 100% de eficácia — fica retida
-  // para a FL, nunca é paga a ninguém.
+  // Fatia do (recebido × porcentagem) perdida por não atingir 100% de
+  // eficácia — fica retida para a FL, nunca é paga a ninguém.
   double retido = 0;
 };
 

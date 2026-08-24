@@ -143,7 +143,6 @@ function render() {
     };
     return `<tr>
       <td><b>${escapeHtml(g.gerenteNome)}</b></td>
-      <td class="num">${fmtBRL(g.produzido)}</td>
       <td class="num">${fmtBRL(g.recebido)}</td>
       <td class="num">${campo('carteira', g.carteira, 0)}</td>
       <td class="num">${fmtBRL(g.meta)}</td>
@@ -155,7 +154,7 @@ function render() {
     </tr>`;
   }).join('');
   document.getElementById('dfGerentesTfoot').innerHTML = `<tr style="font-weight:700;">
-    <td colspan="8">Total</td>
+    <td colspan="7">Total</td>
     <td class="num">${fmtBRL(d.gerenciaLiquido)}</td>
     <td class="num">${fmtBRL(d.retido)}</td></tr>`;
 

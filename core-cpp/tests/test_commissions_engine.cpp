@@ -339,7 +339,7 @@ TEST_CASE("dashboard: reproduz as fórmulas SOMASES da planilha real") {
   createCondominio(c.db, cond3);
   setConfig(c.db, sos_config::kDeltaSindica, "50");  // PAGAR = 50% do VALOR, como na planilha
 
-  // Dois gerentes com carteira, para conferir carteira/produzido/descontos.
+  // Dois gerentes com carteira, para conferir carteira/recebido/descontos.
   Gerente thamiris;
   thamiris.id = "gThamiris";
   thamiris.nome = "THAMIRIS";
@@ -407,21 +407,27 @@ TEST_CASE("dashboard: reproduz as fórmulas SOMASES da planilha real") {
   const auto ric = porNome("RICARDO");
   const auto tha = porNome("THAMIRIS");
   // Gerente sem venda no mês aparece zerado, não sumido.
-  CHECK(porNome("Fulano").produzido == doctest::Approx(0.0));
+  CHECK(porNome("Fulano").recebido == doctest::Approx(0.0));
   CHECK(porNome("Fulano").comissao == doctest::Approx(0.0));
 
-  // produzido = Σ venda dos serviços dos condomínios NA CARTEIRA do gerente
-  CHECK(ric.produzido == doctest::Approx(2362.20));
-  CHECK(tha.produzido == doctest::Approx(3939.89 + 251.82));
+  // recebido = Σ comissão (venda × porcentagem do serviço) dos condomínios
+  // NA CARTEIRA do gerente — a fatia do arrecadado que veio dele, não a
+  // venda bruta.
+  CHECK(ric.recebido == doctest::Approx(2362.20 * 0.10));
+  CHECK(tha.recebido == doctest::Approx((3939.89 + 251.82) * 0.10));
   // carteira = nº de condomínios na carteira
   CHECK(tha.carteira == 2);
   CHECK(ric.carteira == 1);
   // descontos = Σ comissão do Delta Síndicos daquele gerente
   CHECK(tha.descontos == doctest::Approx(125.91));
   CHECK(ric.descontos == doctest::Approx(0.0));
-  // comissão = produzido × % × eficácia − descontos
-  CHECK(ric.comissao == doctest::Approx(2362.20 * 0.30));
-  CHECK(tha.comissao == doctest::Approx((3939.89 + 251.82) * 0.30 - 125.91));
+  // comissão = recebido × % do gerente × eficácia − descontos
+  CHECK(ric.comissao == doctest::Approx(2362.20 * 0.10 * 0.30));
+  // Aqui o desconto (125.91, calculado sobre a venda bruta do Delta
+  // Síndicos) é maior que a fatia da THAMIRIS (419.171 × 30% = 125.7513) —
+  // comissão nunca vira dívida, fica zerada (mesmo critério de "eficácia
+  // reduz a comissão e desconto nunca vira dívida" abaixo).
+  CHECK(tha.comissao == doctest::Approx(0.0));
   // gerência líquido = Σ comissão dos gerentes
   CHECK(dash.gerenciaLiquido == doctest::Approx(ric.comissao + tha.comissao));
 
@@ -458,7 +464,8 @@ TEST_CASE("dashboard: eficácia reduz a comissão e desconto nunca vira dívida"
     return *it;
   };
   auto dash = montarDashboard(c.db, entrada);
-  CHECK(alencarEm(dash).comissao == doctest::Approx(1000 * 0.30 * 0.55));
+  // recebido = 1000 × 10% (comissão do serviço) = 100; comissão = recebido × 30% × 55%.
+  CHECK(alencarEm(dash).comissao == doctest::Approx(1000 * 0.10 * 0.30 * 0.55));
 
   // Um desconto maior que o bruto zera a comissão (não fica negativa). O
   // desconto vem de um serviço pago em condomínio Delta com o gerenteId de
@@ -543,9 +550,10 @@ TEST_CASE("dashboard: gerente sem override usa porcentagem/eficácia de Configur
                          [](const DashboardGerenteLinha& l) { return l.gerenteNome == "SEM OVERRIDE"; });
   REQUIRE(it != dash.gerentes.end());
   CHECK(it->porcentagem == doctest::Approx(40.0));
-  // 1200 produzidos ÷ 1 condomínio na carteira == meta exata -> 100%.
+  // 1200 produzidos (venda bruta) ÷ 1 condomínio na carteira == meta exata -> 100%.
   CHECK(it->eficacia == doctest::Approx(100.0));
-  CHECK(it->comissao == doctest::Approx(1200 * 0.40));
+  // recebido = 1200 × 10% (comissão do serviço) = 120; comissão = recebido × 40%.
+  CHECK(it->comissao == doctest::Approx(1200 * 0.10 * 0.40));
   CHECK(it->retido == doctest::Approx(0.0));
 }
 
@@ -569,7 +577,8 @@ TEST_CASE("dashboard: retido é a fatia do bruto perdida por eficácia abaixo de
   auto it = std::find_if(dash.gerentes.begin(), dash.gerentes.end(),
                          [](const DashboardGerenteLinha& l) { return l.gerenteNome == "ALENCAR"; });
   REQUIRE(it != dash.gerentes.end());
-  // bruto = 1000 × 30% = 300; retido = 300 × (1 − 55%) = 135.
-  CHECK(it->retido == doctest::Approx(135.0));
-  CHECK(dash.retido == doctest::Approx(135.0));
+  // recebido = 1000 × 10% (comissão do serviço) = 100; bruto = 100 × 30% =
+  // 30; retido = 30 × (1 − 55%) = 13.5.
+  CHECK(it->retido == doctest::Approx(13.5));
+  CHECK(dash.retido == doctest::Approx(13.5));
 }

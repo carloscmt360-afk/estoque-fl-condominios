@@ -444,17 +444,29 @@ DashboardFechamento montarDashboard(Database& db, const DashboardEntrada& entrad
     linha.gerenteId = g.id;
     linha.gerenteNome = g.nome;
 
-    // Produzido = venda dos serviços dos condomínios NA CARTEIRA do gerente
-    // (portfólio), não dos serviços que trazem o gerenteId dele no registro
-    // — os dois divergem sempre que quem lançou o serviço marcou outro
-    // gerente responsável pela execução, mas o condomínio pertence à
-    // carteira deste (esclarecido pelo usuário: "Venda dos serviços da
-    // carteira dele"). Só entram serviços com porcentagem > 0 — venda sem
-    // percentual lançado não conta como produção do gerente.
+    // Produção bruta (venda) dos serviços dos condomínios NA CARTEIRA do
+    // gerente (portfólio), não dos serviços que trazem o gerenteId dele no
+    // registro — os dois divergem sempre que quem lançou o serviço marcou
+    // outro gerente responsável pela execução, mas o condomínio pertence à
+    // carteira deste. Só entram serviços com porcentagem > 0. Não é mais
+    // exibida como coluna própria (sumiu da tela) — sobrevive só como base
+    // da fórmula de eficácia (produção contra a meta), que continua em
+    // venda bruta, não em comissão.
+    //
+    // Recebido é a fatia do ARRECADADO (a comissão que a FL já cobrou em
+    // cada serviço, não a venda bruta) que veio da carteira deste gerente —
+    // é o que faz a soma de "Recebido" de todos os gerentes bater com o
+    // "Arrecadado" do topo da tela (esclarecido pelo usuário: produzido em
+    // venda bruta não tinha nenhuma relação com o valor realmente
+    // arrecadado no mês).
+    double producaoBruta = 0;
     for (const auto& s : doMes) {
       bool naCarteira = std::find(g.condominioIds.begin(), g.condominioIds.end(), s.condominioId) !=
                         g.condominioIds.end();
-      if (naCarteira && s.porcentagem > 0) linha.produzido += s.venda;
+      if (naCarteira && s.porcentagem > 0) {
+        producaoBruta += s.venda;
+        linha.recebido += comissaoDe(s);
+      }
     }
     for (const auto& d : out.deltaSindicos) {
       if (d.gerenteId == g.id) linha.descontos += comissaoDeltaDe(d);
@@ -489,20 +501,20 @@ DashboardFechamento montarDashboard(Database& db, const DashboardEntrada& entrad
       linha.eficacia = it->eficacia;
     } else {
       linha.porcentagem = rateioGerentesPadrao;
-      linha.eficacia = eficaciaDe(linha.produzido, linha.carteira, metaPorCondominio);
+      linha.eficacia = eficaciaDe(producaoBruta, linha.carteira, metaPorCondominio);
     }
 
-    // produzido × % — o bruto antes de aplicar a eficácia (a coluna
-    // "RECEBIDO"). Abaixo de 100% de eficácia, só a fração proporcional é
-    // PAGA (comissão); o resto do recebido fica RETIDO para a FL (nunca é
-    // uma dívida do gerente, e nunca é pago a mais ninguém).
-    linha.recebido = linha.produzido * linha.porcentagem / 100.0;
-    linha.retido = linha.recebido * (1.0 - linha.eficacia / 100.0);
+    // Recebido × % do gerente — o bruto antes de aplicar a eficácia.
+    // Abaixo de 100% de eficácia, só a fração proporcional é PAGA
+    // (comissão); o resto fica RETIDO para a FL (nunca é uma dívida do
+    // gerente, e nunca é pago a mais ninguém).
+    double recebidoComPct = linha.recebido * linha.porcentagem / 100.0;
+    linha.retido = recebidoComPct * (1.0 - linha.eficacia / 100.0);
 
     // − descontos (Delta Síndicos). Nunca negativa: um desconto maior que a
     // comissão do mês vira zero, não uma dívida do gerente — é assim que a
     // planilha se comporta (ULISSES, PAULO).
-    linha.comissao = linha.recebido * linha.eficacia / 100.0 - linha.descontos;
+    linha.comissao = recebidoComPct * linha.eficacia / 100.0 - linha.descontos;
     if (linha.comissao < 0) linha.comissao = 0;
 
     out.gerenciaLiquido += linha.comissao;

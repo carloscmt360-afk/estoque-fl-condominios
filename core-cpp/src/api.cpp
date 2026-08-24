@@ -1291,7 +1291,7 @@ json dashboardToJson(const DashboardFechamento& d) {
   json gerentes = json::array();
   for (const auto& g : d.gerentes) {
     gerentes.push_back({{"gerenteId", g.gerenteId}, {"gerenteNome", g.gerenteNome},
-                        {"produzido", g.produzido}, {"recebido", g.recebido},
+                        {"recebido", g.recebido},
                         {"carteira", g.carteira}, {"meta", g.meta},
                         {"porcentagem", g.porcentagem}, {"eficacia", g.eficacia},
                         {"descontos", g.descontos}, {"comissao", g.comissao},
