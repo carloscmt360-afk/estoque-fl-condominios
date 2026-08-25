@@ -295,6 +295,7 @@ async function switchView(view, opts) {
       else if (view === 'programarPagamento') await initProgramarPagamento();
       else if (view === 'historicoPagamentos') await initHistoricoPagamentos();
       else if (view === 'configuracoesSos') await initSosConfig();
+      else if (view === 'deltaConfig') await initSosConfig();
       else if (view === 'importExport') initImportExport();
     } else {
       // views já inicializadas recarregam os dados ao voltar a ficar visíveis
@@ -327,6 +328,7 @@ async function switchView(view, opts) {
       else if (view === 'programarPagamento') await reloadProgramarPagamento();
       else if (view === 'historicoPagamentos') await reloadHistoricoPagamentos();
       else if (view === 'configuracoesSos') await reloadSosConfig();
+      else if (view === 'deltaConfig') await reloadSosConfig();
       else if (view === 'importExport') initImportExport();
     }
   } catch (e) {

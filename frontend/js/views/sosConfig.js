@@ -12,10 +12,13 @@ let wired = false;
 
 // Campos do painel "Dashboard de Fechamento — percentuais" — cada grupo tem
 // sua própria checagem de soma (renderSomas), mas todos são salvos juntos
-// num único botão: são todos a mesma "aba de percentuais", trocar um sem
-// revisar os outros do mesmo grupo é o erro mais provável (grupo que não
-// soma 100%), então salvar tudo de uma vez deixa o aviso de soma visível
-// no momento exato em que valeria a pena parar e conferir.
+// pela mesma função: são todos a mesma "aba de percentuais" (trocar um sem
+// revisar os outros do mesmo grupo é o erro mais provável — grupo que não
+// soma 100% —, então salvar tudo de uma vez deixa o aviso de soma visível
+// no momento exato em que valeria a pena parar e conferir). Os campos de
+// pagamento da Delta (texto, não percentual) moraram nesta mesma aba até a
+// aba própria "Delta" (view-deltaConfig) existir — continuam salvos pela
+// mesma função/tabela, só com um botão "Salvar" próprio naquela aba.
 const CAMPOS_DASHBOARD_CONFIG = [
   ['cfgRateioFl', 'rateioFl'], ['cfgRateioGerentes', 'rateioGerentes'],
   ['cfgRateioSuprimentos', 'rateioSuprimentos'],
@@ -29,6 +32,7 @@ export async function initSosConfig() {
     wired = true;
     document.getElementById('btnSalvarSosConfig').addEventListener('click', salvarPadrao);
     document.getElementById('btnSalvarDashboardConfig').addEventListener('click', salvarDashboardConfig);
+    document.getElementById('btnSalvarDeltaConfig').addEventListener('click', salvarDashboardConfig);
     ['cfgRateioFl', 'cfgRateioGerentes', 'cfgRateioSuprimentos',
      'cfgSuprimentosEncarregado', 'cfgSuprimentosAssistente',
      'cfgDeltaSindica', 'cfgDeltaGerente'].forEach((id) =>
@@ -66,6 +70,7 @@ export async function reload() {
   document.getElementById('cfgDeltaChavePix').value = config.deltaChavePix || '';
   document.getElementById('cfgDeltaChavePix').disabled = !podeEditar;
   document.getElementById('btnSalvarDashboardConfig').style.display = podeEditar ? '' : 'none';
+  document.getElementById('btnSalvarDeltaConfig').style.display = podeEditar ? '' : 'none';
   renderSomas();
 }
 

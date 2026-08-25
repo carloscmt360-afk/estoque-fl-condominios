@@ -279,6 +279,7 @@
         <button type="button" class="config-hub-btn active" data-view="gerentes">Gerentes</button>
         <button type="button" class="config-hub-btn" data-view="carteiras">Carteiras</button>
         <button type="button" class="config-hub-btn" data-view="suprimentos">Suprimentos</button>
+        <button type="button" class="config-hub-btn" data-view="deltaConfig">Delta</button>
       </div>
       <div class="toolbar">
         <button class="btn-primary" id="btnNovoGerente">＋ Novo Gerente</button>
@@ -312,6 +313,7 @@
         <button type="button" class="config-hub-btn" data-view="gerentes">Gerentes</button>
         <button type="button" class="config-hub-btn active" data-view="carteiras">Carteiras</button>
         <button type="button" class="config-hub-btn" data-view="suprimentos">Suprimentos</button>
+        <button type="button" class="config-hub-btn" data-view="deltaConfig">Delta</button>
       </div>
       <div id="carteirasLista"></div>
     </section>
@@ -329,6 +331,7 @@
         <button type="button" class="config-hub-btn" data-view="gerentes">Gerentes</button>
         <button type="button" class="config-hub-btn" data-view="carteiras">Carteiras</button>
         <button type="button" class="config-hub-btn active" data-view="suprimentos">Suprimentos</button>
+        <button type="button" class="config-hub-btn" data-view="deltaConfig">Delta</button>
       </div>
       <div class="toolbar">
         <button class="btn-primary" id="btnNovoSuprimento">＋ Novo</button>
@@ -585,6 +588,7 @@
               <thead><tr><th>Condomínio</th><th>Síndico</th><th>Gerente</th>
                 <th class="num">Venda</th><th class="num">%</th><th class="num">Comissão</th></tr></thead>
               <tbody id="dfDeltaTbody"></tbody>
+              <tfoot id="dfDeltaTfoot"></tfoot>
             </table>
           </div>
         </div>
@@ -682,6 +686,7 @@
         <button type="button" class="config-hub-btn" data-view="gerentes">Gerentes</button>
         <button type="button" class="config-hub-btn" data-view="carteiras">Carteiras</button>
         <button type="button" class="config-hub-btn" data-view="suprimentos">Suprimentos</button>
+        <button type="button" class="config-hub-btn" data-view="deltaConfig">Delta</button>
       </div>
       <div class="panel" style="max-width:420px;">
         <div class="field"><label>Porcentagem padrão de comissão (%)</label>
@@ -721,14 +726,6 @@
         </div>
         <div id="cfgSomaDelta" class="pill" style="margin-top:var(--sp-2);"></div>
 
-        <div class="section-title" style="margin-top:var(--sp-4);">Dados de pagamento da Delta</div>
-        <div class="field-hint">Usados em Programar pagamento — a Delta recebe como uma entidade só, não um
-          pagamento por síndico.</div>
-        <div class="field-row-eq3">
-          <div class="field"><label>Nome do titular</label><input type="text" id="cfgDeltaTitular" placeholder="Delta" /></div>
-          <div class="field"><label>Chave PIX</label><input type="text" id="cfgDeltaChavePix" /></div>
-        </div>
-
         <div class="section-title" style="margin-top:var(--sp-4);">Meta de produção</div>
         <div class="field" style="max-width:280px;">
           <label>Meta por condomínio na carteira (R$)</label>
@@ -740,6 +737,34 @@
           Fechamento (ex.: diretor que não bate meta).</div>
 
         <button class="btn-primary" id="btnSalvarDashboardConfig" style="margin-top:var(--sp-4);">Salvar percentuais</button>
+      </div>
+    </section>
+
+    <!-- ================== GESTÃO SOS: DELTA (config) ==================
+         Só os dados de cadastro/pagamento da Delta (nome do titular + chave
+         PIX) — o rateio Delta/Gerente (%) continua em Percentuais, junto do
+         resto do rateio. Reusa initSosConfig/reloadSosConfig (sosConfig.js):
+         os mesmos campos cfgDeltaTitular/cfgDeltaChavePix, só que agora
+         morando aqui em vez de dentro do painel de Percentuais. -->
+    <section class="view" id="view-deltaConfig">
+      <div class="content-header">
+        <div><h1>Configurações</h1>
+          <div class="sub">Parâmetros de Gestão SOS › Serviços</div></div>
+      </div>
+      <div class="segmented" style="margin-bottom:var(--sp-3);">
+        <button type="button" class="config-hub-btn" data-view="configuracoesSos">Percentuais</button>
+        <button type="button" class="config-hub-btn" data-view="gerentes">Gerentes</button>
+        <button type="button" class="config-hub-btn" data-view="carteiras">Carteiras</button>
+        <button type="button" class="config-hub-btn" data-view="suprimentos">Suprimentos</button>
+        <button type="button" class="config-hub-btn active" data-view="deltaConfig">Delta</button>
+      </div>
+      <div class="panel" style="max-width:420px;">
+        <div class="panel-head"><h2>Dados de pagamento da Delta</h2></div>
+        <div class="field-hint">Usados em Programar pagamento — a Delta recebe como uma entidade só, não um
+          pagamento por síndico.</div>
+        <div class="field"><label>Nome do titular</label><input type="text" id="cfgDeltaTitular" placeholder="Delta" /></div>
+        <div class="field"><label>Chave PIX</label><input type="text" id="cfgDeltaChavePix" /></div>
+        <button class="btn-primary" id="btnSalvarDeltaConfig" style="margin-top:var(--sp-3);">Salvar</button>
       </div>
     </section>
 
