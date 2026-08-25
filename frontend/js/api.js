@@ -277,9 +277,9 @@ export const api = {
     JSON.parse(await call('marcar_proposta_recomendada', { input: { ordemId, propostaId } })),
   desmarcarPropostaRecomendada: async (ordemId) =>
     JSON.parse(await call('desmarcar_proposta_recomendada', { ordemId })),
-  enviarOrcamentoParaCliente: async (ordemId, destinatarioEmail, mensagemExtra) =>
+  enviarOrcamentoParaCliente: async (ordemId, destinatarioEmail, mensagemExtra, propostaIds) =>
     JSON.parse(await call('enviar_orcamento_para_cliente', {
-      input: { payload: JSON.stringify({ ordemId, destinatarioEmail, mensagemExtra }), nowIso: nowIso() },
+      input: { payload: JSON.stringify({ ordemId, destinatarioEmail, mensagemExtra, propostaIds }), nowIso: nowIso() },
     })),
   aprovarPropostaOrcamento: async (ordemId, propostaId) =>
     JSON.parse(await call('aprovar_proposta_orcamento', { input: { ordemId, propostaId, nowIso: nowIso() } })),

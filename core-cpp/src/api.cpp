@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cstdio>
 #include <ctime>
+#include <set>
 
 #include <nlohmann/json.hpp>
 
@@ -2124,6 +2125,16 @@ std::string Api::enviarOrcamentoParaCliente(const std::string& payload, const st
   std::string destinatarioOverride = jstr(j, "destinatarioEmail");
   std::string mensagemExtra = jstr(j, "mensagemExtra");
 
+  // "Enviar a parte": o mapa impresso e o modal já deixam o usuário
+  // desmarcar quem não quer incluir — sem propostaIds no payload (chamada
+  // antiga ou script), mantém todas as respondidas, mesmo critério de
+  // sempre.
+  std::set<std::string> propostaIdsSelecionadas;
+  bool temFiltro = j.contains("propostaIds") && j["propostaIds"].is_array();
+  if (temFiltro) {
+    for (const auto& pid : j["propostaIds"]) propostaIdsSelecionadas.insert(pid.get<std::string>());
+  }
+
   auto updated = estoque::enviarOrcamentoParaCliente(db_, ordemId, nowIso);
 
   std::string condominioEmail;
@@ -2131,13 +2142,21 @@ std::string Api::enviarOrcamentoParaCliente(const std::string& payload, const st
   std::string destinatario = !destinatarioOverride.empty() ? destinatarioOverride : condominioEmail;
   json emails = json::array();
   if (!destinatario.empty()) {
+    OrdemOrcamento paraEmail = updated;
+    if (temFiltro) {
+      std::vector<PropostaOrcamento> filtradas;
+      for (auto& p : paraEmail.propostas) {
+        if (propostaIdsSelecionadas.count(p.id)) filtradas.push_back(p);
+      }
+      paraEmail.propostas = std::move(filtradas);
+    }
     std::vector<std::string> anexos;
-    for (const auto& p : updated.propostas) {
+    for (const auto& p : paraEmail.propostas) {
       if (!p.anexoPath.empty()) anexos.push_back(p.anexoPath);
     }
     std::string assunto = "Orçamentos — " + updated.descricao;
     if (!updated.condominioNome.empty()) assunto += " (" + updated.condominioNome + ")";
-    emails.push_back(emailParaJson(destinatario, assunto, composeEnvioClienteBody(updated, mensagemExtra), anexos));
+    emails.push_back(emailParaJson(destinatario, assunto, composeEnvioClienteBody(paraEmail, mensagemExtra), anexos));
   }
 
   json out = ordemOrcamentoToJson(db_, updated, nowIso);

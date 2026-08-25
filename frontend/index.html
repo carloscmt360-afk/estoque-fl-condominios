@@ -1923,9 +1923,12 @@
   <div class="modal-head"><h3>Enviar propostas para o cliente</h3>
     <button class="btn-ghost" data-close="modalEnviarCliente">✕</button></div>
   <div class="modal-body">
-    <p class="field-hint">Envia todas as propostas já respondidas (com PDF anexado), ordenadas do mais
-      caro pro mais barato, com a recomendada pela FL destacada. Pode enviar de novo depois — as
-      propostas novas entram no mesmo e-mail, sem perder as anteriores.</p>
+    <p class="field-hint">Primeiro gera o mapa de orçamentos (a comparação das propostas) para o cliente
+      analisar e decidir — desmarque quem não quer incluir pra enviar só uma parte. Pode enviar de novo
+      depois — as propostas novas entram no mesmo e-mail, sem perder as anteriores.</p>
+    <div class="section-title">Propostas no mapa</div>
+    <div id="envClientePropostasLista" style="margin-bottom:var(--sp-3);"></div>
+    <button class="btn-outline" id="btnImprimirMapaOrcamento" style="margin-bottom:var(--sp-3);">🖨 Imprimir mapa</button>
     <div class="field"><label>E-mail do cliente</label><input type="email" id="envClienteEmail" /></div>
     <div class="field"><label>Mensagem adicional (opcional)</label><textarea id="envClienteMensagem" rows="3"></textarea></div>
   </div>

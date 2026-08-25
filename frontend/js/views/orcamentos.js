@@ -4,6 +4,7 @@ import { openModal, closeModal } from '../components/modal.js';
 import { toast } from '../components/toast.js';
 import { can, isSuperadmin } from '../session.js';
 import { enableRowSelection } from '../components/tableTools.js';
+import { printDocument, buildOrcamentoMapaDoc } from '../print.js';
 
 // Compras > Orçamentos — fluxo de cotação: uma Ordem (ligada a um
 // condomínio) recebe N Propostas (uma por empresa solicitada). Ver
@@ -74,6 +75,7 @@ export async function initOrcamentos() {
     document.getElementById('solicEmpresaBusca').addEventListener('input', renderSolicEmpresasLista);
     document.getElementById('btnEnviarCliente').addEventListener('click', openEnviarClienteModal);
     document.getElementById('btnConfirmarEnviarCliente').addEventListener('click', confirmarEnviarCliente);
+    document.getElementById('btnImprimirMapaOrcamento').addEventListener('click', imprimirMapaOrcamento);
   }
   await reload();
 }
@@ -631,6 +633,11 @@ async function confirmarSolicitar() {
 
 // ------------------------------------------------- enviar ao cliente
 
+// Quais propostas entram no mapa/e-mail desta rodada de envio — por padrão
+// TODAS as respondidas (o comum), mas o usuário pode desmarcar pra "enviar
+// a parte" antes de imprimir o mapa ou mandar o e-mail.
+let envClientePropostasSelecionadas = new Set();
+
 function openEnviarClienteModal() {
   const ordemId = document.getElementById('detOrdemId').value;
   const ordem = ordens.find((o) => o.id === ordemId);
@@ -639,18 +646,58 @@ function openEnviarClienteModal() {
     toast('Nenhuma proposta respondida ainda — aguarde ao menos um valor antes de enviar ao cliente.', 'error');
     return;
   }
+  envClientePropostasSelecionadas = new Set(ordem.propostas.filter((p) => p.temResposta).map((p) => p.id));
+  renderEnvClientePropostasLista(ordem);
   document.getElementById('envClienteEmail').value = ordem.condominioEmail || '';
   document.getElementById('envClienteMensagem').value = '';
   openModal('modalEnviarCliente');
 }
 
+function renderEnvClientePropostasLista(ordem) {
+  const respondidas = ordenarPropostas(ordem.propostas.filter((p) => p.temResposta));
+  const lista = document.getElementById('envClientePropostasLista');
+  lista.innerHTML = respondidas.map((p) => `<label style="display:flex;align-items:center;gap:8px;padding:4px 2px;">
+      <input type="checkbox" style="width:auto;" data-proposta-check="${p.id}"
+        ${envClientePropostasSelecionadas.has(p.id) ? 'checked' : ''} />
+      <span>${escapeHtml(p.empresaNome)} — ${fmtBRL(p.valor)}</span>
+      ${p.recomendada ? '<span class="pill pill-ok">★ Recomendada</span>' : ''}
+    </label>`).join('');
+  lista.querySelectorAll('[data-proposta-check]').forEach((cb) => {
+    cb.addEventListener('change', () => {
+      if (cb.checked) envClientePropostasSelecionadas.add(cb.dataset.propostaCheck);
+      else envClientePropostasSelecionadas.delete(cb.dataset.propostaCheck);
+    });
+  });
+}
+
+function propostasSelecionadasParaEnvio(ordem) {
+  return ordem.propostas.filter((p) => p.temResposta && envClientePropostasSelecionadas.has(p.id));
+}
+
+// "A primeira coisa que o sistema deve fazer" no fluxo de enviar ao cliente:
+// gerar o mapa comparativo pra ele analisar e decidir, com as propostas que
+// o usuário escolheu incluir (pode ser só uma parte).
+function imprimirMapaOrcamento() {
+  const ordemId = document.getElementById('detOrdemId').value;
+  const ordem = ordens.find((o) => o.id === ordemId);
+  if (!ordem) return;
+  const selecionadas = propostasSelecionadasParaEnvio(ordem);
+  if (!selecionadas.length) { toast('Selecione ao menos uma proposta para o mapa.', 'error'); return; }
+  printDocument(buildOrcamentoMapaDoc(ordem, selecionadas));
+}
+
 async function confirmarEnviarCliente() {
   const ordemId = document.getElementById('detOrdemId').value;
+  const ordem = ordens.find((o) => o.id === ordemId);
+  if (!ordem) return;
   const destinatarioEmail = document.getElementById('envClienteEmail').value.trim();
   if (!destinatarioEmail) { toast('Informe o e-mail do cliente.', 'error'); return; }
+  const selecionadas = propostasSelecionadasParaEnvio(ordem);
+  if (!selecionadas.length) { toast('Selecione ao menos uma proposta para enviar.', 'error'); return; }
   const mensagemExtra = document.getElementById('envClienteMensagem').value.trim();
   try {
-    const atualizada = await api.enviarOrcamentoParaCliente(ordemId, destinatarioEmail, mensagemExtra);
+    const atualizada = await api.enviarOrcamentoParaCliente(
+      ordemId, destinatarioEmail, mensagemExtra, selecionadas.map((p) => p.id));
     mergeOrdemLocal(atualizada);
     avisarEmailErros(atualizada);
     closeModal('modalEnviarCliente');
@@ -667,14 +714,14 @@ function abrirOutlookEnviarCliente() {
   const destinatario = document.getElementById('envClienteEmail').value.trim();
   if (!destinatario) { toast('Informe o e-mail do cliente.', 'error'); return; }
   const mensagemExtra = document.getElementById('envClienteMensagem').value.trim();
-  const respondidas = ordem.propostas.filter((p) => p.temResposta);
-  if (!respondidas.length) { toast('Nenhuma proposta respondida ainda.', 'error'); return; }
+  const selecionadas = propostasSelecionadasParaEnvio(ordem);
+  if (!selecionadas.length) { toast('Selecione ao menos uma proposta para enviar.', 'error'); return; }
 
   const linhas = ['Olá,',
     '', `Seguem as propostas recebidas para o pedido ${ordem.descricao}${ordem.condominioNome ? ` (${ordem.condominioNome})` : ''}:`];
   if (mensagemExtra) linhas.push('', mensagemExtra);
   linhas.push('');
-  respondidas.forEach((p) => {
+  ordenarPropostas(selecionadas).forEach((p) => {
     linhas.push(`- ${p.empresaNome}: ${fmtBRL(p.valor)}${p.recomendada ? ' (recomendada pela FL)' : ''}`);
   });
   linhas.push('', 'Anexe aqui o(s) PDF(s) das propostas antes de enviar — o Outlook não recebe anexo pronto.',

@@ -790,6 +790,7 @@ export function buildDashboardFechamentoDoc(dash, filtroTxt) {
         <td>${escapeHtml(e.empresaNome)}</td><td class="num">${moedaSimples(e.recebidos)}</td></tr>`).join('')
       : `<tr><td colspan="2">${dash.empresas.length ? 'Nenhuma parceira com movimento neste mês.' : 'Nenhuma parceira cadastrada.'}</td></tr>`}</tbody></table>`;
 
+  const totalVendaDelta = dash.deltaSindicos.reduce((s, d) => s + d.venda, 0);
   const totalComissaoDelta = dash.deltaSindicos.reduce((s, d) => s + d.comissao, 0);
   const deltaTabela = dash.deltaSindicos.length ? `<div class="pr-sec">Delta Síndicos do mês</div>
     <table><thead><tr><th>Condomínio</th><th>Síndico</th><th>Gerente</th>
@@ -799,7 +800,8 @@ export function buildDashboardFechamentoDoc(dash, filtroTxt) {
         <td>${escapeHtml(d.gerenteNome || '')}</td><td class="num">${moedaSimples(d.venda)}</td>
         <td class="num">${fmtPct(d.porcentagem / 100, 0)}</td>
         <td class="num">${moedaSimples(d.comissao)}</td></tr>`).join('')}</tbody>
-    <tfoot><tr><td colspan="5"><b>Total</b></td>
+    <tfoot><tr><td colspan="3"><b>Total</b></td>
+      <td class="num"><b>${moedaSimples(totalVendaDelta)}</b></td><td></td>
       <td class="num"><b>${moedaSimples(totalComissaoDelta)}</b></td></tr></tfoot></table>` : '';
 
   const rateioTabela = `<div class="pr-sec">Distribuição de Suprimentos</div>
@@ -846,5 +848,27 @@ export function buildPagamentosDoc(linhas, mesLabel) {
       <tbody>${corpo}</tbody>
       <tfoot><tr><td colspan="3">TOTAL</td><td class="num">${fmtBRL(total)}</td></tr></tfoot></table>` +
     rodape('Lista apenas com os pagamentos autorizados em Programar pagamento — quem não foi autorizado não aparece aqui.') +
+    assinaturas();
+}
+
+// ------------------------------------------------------ orçamentos: mapa
+
+// `propostas` já vem filtrada pela tela (modalEnviarCliente/orcamentos.js) —
+// só as escolhidas pelo usuário para o cliente ver, mesmo critério dos
+// demais documentos deste arquivo: o papel nunca refiltra por conta própria.
+// É o primeiro passo do fluxo de "Enviar para o cliente": o mapa existe pra
+// o cliente comparar e decidir ANTES de qualquer e-mail sair.
+export function buildOrcamentoMapaDoc(ordem, propostas) {
+  const ordenadas = [...propostas].sort((a, b) => b.valor - a.valor);
+  const linhas = ordenadas.map((p) => `<tr>
+      <td>${escapeHtml(p.empresaNome)}</td>
+      <td class="num">${fmtBRL(p.valor)}</td>
+      <td>${p.recomendada ? '<span class="pill pill-ok">★ Recomendada pela FL</span>' : ''}</td></tr>`).join('');
+
+  return head('Mapa de Orçamentos', ordem.condominioNome || ordem.descricao,
+      `${propostas.length} proposta(s) — Pedido: ${ordem.descricao}`) +
+    `<table><thead><tr><th>Empresa</th><th class="num">Valor</th><th>Observação</th></tr></thead>
+      <tbody>${linhas || '<tr><td colspan="3">Nenhuma proposta selecionada.</td></tr>'}</tbody></table>` +
+    rodape('Mapa comparativo para análise e decisão — ordenado do mais caro pro mais barato.') +
     assinaturas();
 }
