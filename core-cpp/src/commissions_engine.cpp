@@ -303,7 +303,7 @@ void reabrirFechamento(Database& db, const std::string& id, const std::string& r
 // listDeltaSindicos de verdade mora mais abaixo (depois de configPct, que
 // ela usa) — aqui só o que não depende disso.
 
-double comissaoDeltaDe(const DeltaSindico& d) { return d.venda * d.porcentagem / 100.0; }
+double comissaoDeltaDe(const DeltaSindico& d) { return d.comissaoServicoOrigem * d.porcentagem / 100.0; }
 
 // -------------------------------------------- Dashboard de fechamento
 
@@ -355,6 +355,7 @@ std::vector<DeltaSindico> listDeltaSindicos(Database& db) {
     d.sindico = it->second;
     d.venda = s.venda;
     d.porcentagem = pctDelta;
+    d.comissaoServicoOrigem = comissaoDe(s);
     d.dataReferencia = s.dataReferencia;
     d.observacoes = s.observacoes;
     d.createdAt = s.createdAt;

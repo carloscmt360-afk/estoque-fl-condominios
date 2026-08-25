@@ -451,6 +451,11 @@ export async function installDevMock() {
   // listDeltaSindicos em commissions_engine.cpp: um item por serviço PAGO
   // cujo condomínio tem deltaSindica=true, sindico/porcentagem resolvidos na
   // hora (cadastro do condomínio e sos_config), nunca denormalizados.
+  // A distribuição de FL/Gerentes/Suprimentos/Delta é sempre calculada em
+  // cima da COMISSÃO que o parceiro pagou pra FL (venda × porcentagem do
+  // serviço), nunca da venda bruta — mesmo critério do Arrecadado/Recebido.
+  // "venda"/"porcentagem" aqui só existem pra exibição (iguais ao Servico de
+  // origem); a comissão da Delta sai de comissaoServico × pctDelta.
   function listDeltaSindicosMock() {
     const pctDelta = configPctMock('deltaSindica', 15);
     const sindicoDoCondominioDelta = new Map(
@@ -458,13 +463,16 @@ export async function installDevMock() {
     if (!sindicoDoCondominioDelta.size) return [];
     return state.sosServicos
       .filter((s) => s.pago && sindicoDoCondominioDelta.has(s.condominioId))
-      .map((s) => ({
-        id: s.id, numero: s.numero, condominioId: s.condominioId, condominioNome: s.condominioNome,
-        gerenteId: s.gerenteId, gerenteNome: s.gerenteNome,
-        sindico: sindicoDoCondominioDelta.get(s.condominioId),
-        venda: s.venda, porcentagem: pctDelta, comissao: (s.venda || 0) * pctDelta / 100,
-        dataReferencia: s.dataReferencia, observacoes: s.observacoes, createdAt: s.createdAt,
-      }))
+      .map((s) => {
+        const comissaoServico = (s.venda || 0) * (s.porcentagem || 0) / 100;
+        return {
+          id: s.id, numero: s.numero, condominioId: s.condominioId, condominioNome: s.condominioNome,
+          gerenteId: s.gerenteId, gerenteNome: s.gerenteNome,
+          sindico: sindicoDoCondominioDelta.get(s.condominioId),
+          venda: s.venda, porcentagem: pctDelta, comissao: comissaoServico * pctDelta / 100,
+          dataReferencia: s.dataReferencia, observacoes: s.observacoes, createdAt: s.createdAt,
+        };
+      })
       .sort((a, b) => b.numero - a.numero);
   }
 

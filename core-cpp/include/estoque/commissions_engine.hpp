@@ -127,13 +127,22 @@ struct DeltaSindico {
   std::string sindico;
   double venda = 0;
   double porcentagem = 0;
+  // Comissão do SERVIÇO DE ORIGEM (venda × porcentagem do serviço, não a
+  // venda bruta acima) — a distribuição de FL/Gerentes/Suprimentos/Delta é
+  // sempre calculada sobre o que o parceiro pagou para a FL, nunca sobre a
+  // venda (esclarecido pelo usuário: a comissão de um serviço de 10% não
+  // pode gerar uma fatia pra Delta maior que a própria comissão da FL nele).
+  // Ver comissaoDeltaDe.
+  double comissaoServicoOrigem = 0;
   std::string dataReferencia;  // "YYYY-MM"
   std::string observacoes;
   std::string createdAt;
 };
 
-// venda * porcentagem / 100 — nunca gravado, sempre calculado (mesmo
-// critério de comissaoDe acima).
+// comissaoServicoOrigem × porcentagem / 100 — a fatia da Delta dentro da
+// COMISSÃO que a FL recebeu no serviço de origem, nunca da venda bruta dele
+// (venda/porcentagem acima só existem para exibição, iguais ao Servico de
+// origem). Nunca gravado, sempre calculado.
 double comissaoDeltaDe(const DeltaSindico& d);
 
 // Monta a lista inteira a partir de listServicos(db): um item por serviço

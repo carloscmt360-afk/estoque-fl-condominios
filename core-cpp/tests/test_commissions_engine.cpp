@@ -236,10 +236,14 @@ TEST_CASE("configurações: valor default e round-trip") {
 // listServicos + Condominio::deltaSindica. Os testes abaixo substituem os
 // antigos de create/update/delete (que não existem mais).
 
-TEST_CASE("comissaoDeltaDe é sempre venda * porcentagem / 100") {
+TEST_CASE("comissaoDeltaDe é sempre a comissão do serviço de origem * porcentagem / 100") {
   DeltaSindico d;
-  d.venda = 2000;
+  // venda/porcentagem só existem pra exibição (iguais ao Servico de origem)
+  // — a comissão da Delta nunca sai daí, sempre de comissaoServicoOrigem
+  // (o que a FL de fato recebeu no serviço).
+  d.venda = 999999;
   d.porcentagem = 7.5;
+  d.comissaoServicoOrigem = 2000;
   CHECK(comissaoDeltaDe(d) == doctest::Approx(150.0));
 }
 
@@ -281,7 +285,12 @@ TEST_CASE("listDeltaSindicos: só entram serviços pagos de condomínio marcado 
   CHECK(lista[0].sindico == "Maria Souza");              // resolvido do cadastro do condomínio
   CHECK(lista[0].venda == doctest::Approx(2000.0));
   CHECK(lista[0].porcentagem == doctest::Approx(10.0));  // sempre sos_config::kDeltaSindica
-  CHECK(comissaoDeltaDe(lista[0]) == doctest::Approx(200.0));
+  // comissaoServicoOrigem = venda × porcentagem DO SERVIÇO (5%, não os 10%
+  // acima, que são só a fatia da Delta) = 2000 × 5% = 100.
+  CHECK(lista[0].comissaoServicoOrigem == doctest::Approx(100.0));
+  // comissaoDeltaDe = comissão do serviço × fatia da Delta = 100 × 10% = 10
+  // — nunca a venda bruta (200 seria venda×fatia da Delta, direto, errado).
+  CHECK(comissaoDeltaDe(lista[0]) == doctest::Approx(10.0));
 }
 
 TEST_CASE("listDeltaSindicos: síndico e a marcação são lidos AGORA, nunca congelados") {
@@ -418,16 +427,16 @@ TEST_CASE("dashboard: reproduz as fórmulas SOMASES da planilha real") {
   // carteira = nº de condomínios na carteira
   CHECK(tha.carteira == 2);
   CHECK(ric.carteira == 1);
-  // descontos = Σ comissão do Delta Síndicos daquele gerente
-  CHECK(tha.descontos == doctest::Approx(125.91));
+  // descontos = Σ comissão do Delta Síndicos daquele gerente — a fatia da
+  // Delta dentro da COMISSÃO do serviço de origem (251.82 × 10% = 25.182),
+  // não da venda bruta dele: 25.182 × 50% (kDeltaSindica) = 12.591.
+  CHECK(tha.descontos == doctest::Approx(12.591));
   CHECK(ric.descontos == doctest::Approx(0.0));
   // comissão = recebido × % do gerente × eficácia − descontos
   CHECK(ric.comissao == doctest::Approx(2362.20 * 0.10 * 0.30));
-  // Aqui o desconto (125.91, calculado sobre a venda bruta do Delta
-  // Síndicos) é maior que a fatia da THAMIRIS (419.171 × 30% = 125.7513) —
-  // comissão nunca vira dívida, fica zerada (mesmo critério de "eficácia
-  // reduz a comissão e desconto nunca vira dívida" abaixo).
-  CHECK(tha.comissao == doctest::Approx(0.0));
+  // A fatia da THAMIRIS (419.171 × 30% = 125.7513) é maior que o desconto
+  // (12.591) — desconta normalmente, não zera.
+  CHECK(tha.comissao == doctest::Approx(125.7513 - 12.591));
   // gerência líquido = Σ comissão dos gerentes
   CHECK(dash.gerenciaLiquido == doctest::Approx(ric.comissao + tha.comissao));
 
@@ -477,8 +486,10 @@ TEST_CASE("dashboard: eficácia reduz a comissão e desconto nunca vira dívida"
   condDelta.deltaSindica = true;
   condDelta.createdAt = kNow;
   createCondominio(c.db, condDelta);
-  // kDeltaSindica no padrão de fábrica (15%): 10000 × 15% = 1500, bem maior
-  // que o bruto de ALENCAR (165).
+  // Comissão do serviço de origem = 10000 × 10% (porcentagem do serviço) =
+  // 1000; kDeltaSindica no padrão de fábrica (15%): 1000 × 15% = 150 de
+  // desconto — ainda bem maior que o bruto de ALENCAR antes da eficácia
+  // (recebidoComPct = 100 × 30% = 30), então zera igual.
   auto sDelta = c.servico("sDelta", 10000, 10);
   sDelta.condominioId = "condDelta";
   sDelta.gerenteId = "g1";
