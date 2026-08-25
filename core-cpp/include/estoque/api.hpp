@@ -292,6 +292,10 @@ class Api {
   std::string setPropostaAnexo(const std::string& propostaId, const std::string& anexoPath,
                                const std::string& anexoTipo);
   std::string clearPropostaAnexo(const std::string& propostaId);
+  // Escopo/forma de pagamento/validade — pedidos junto do anexo (ver
+  // comentário em purchases_engine.hpp).
+  std::string setPropostaDetalhes(const std::string& propostaId, const std::string& escopo,
+                                  const std::string& formaPagamento, const std::string& validade);
   std::string marcarPropostaRecomendada(const std::string& ordemId, const std::string& propostaId);
   std::string desmarcarPropostaRecomendada(const std::string& ordemId);
   // payload: {ordemId, destinatarioEmail (opcional — sobrepõe o e-mail do

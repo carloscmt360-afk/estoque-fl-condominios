@@ -858,17 +858,51 @@ export function buildPagamentosDoc(linhas, mesLabel) {
 // demais documentos deste arquivo: o papel nunca refiltra por conta própria.
 // É o primeiro passo do fluxo de "Enviar para o cliente": o mapa existe pra
 // o cliente comparar e decidir ANTES de qualquer e-mail sair.
+//
+// Um bloco por proposta (não uma linha de tabela) — escopo/forma de
+// pagamento/validade/CNPJ (ver modalDetalhesProposta em orcamentos.js) não
+// cabem legíveis numa célula estreita, e o pedido explícito era "encher"
+// o mapa com informação de verdade pro cliente decidir, não só comparar
+// valor.
+// Paleta só deste mapa: cada fornecedor precisa ser reconhecível à primeira
+// vista (pedido explícito), o oposto do critério dos gráficos de ranking
+// (VIZ.sequential/rankBlue em charts/palette.js), onde a cor é sempre um
+// degradê de azul por posição, nunca uma identidade fixa por nome. Aqui é o
+// contrário: cores bem distintas entre si, uma por empresa, estáveis pelo
+// empresaId (mesma empresa sempre cai na mesma cor, em qualquer reimpressão).
+const CORES_FORNECEDOR = [
+  '#1B3A5C', '#D97757', '#2E7D5B', '#8E44AD', '#C0392B',
+  '#1F8A9E', '#B8860B', '#5D6D7E', '#A6472A', '#2C6E49',
+];
+function corDoFornecedor(empresaId) {
+  let h = 0;
+  for (const c of String(empresaId || '')) h = (h * 31 + c.charCodeAt(0)) >>> 0;
+  return CORES_FORNECEDOR[h % CORES_FORNECEDOR.length];
+}
+
 export function buildOrcamentoMapaDoc(ordem, propostas) {
   const ordenadas = [...propostas].sort((a, b) => b.valor - a.valor);
-  const linhas = ordenadas.map((p) => `<tr>
-      <td>${escapeHtml(p.empresaNome)}</td>
-      <td class="num">${fmtBRL(p.valor)}</td>
-      <td>${p.recomendada ? '<span class="pill pill-ok">★ Recomendada pela FL</span>' : ''}</td></tr>`).join('');
+  const blocos = ordenadas.map((p) => {
+    const linhaDetalhe = (rotulo, valor) => valor
+      ? `<div><b>${escapeHtml(rotulo)}:</b> ${escapeHtml(valor)}</div>` : '';
+    const cor = corDoFornecedor(p.empresaId);
+    return `<div class="pr-note pr-keep" style="border-left:3pt solid ${cor};padding-left:8pt;">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8pt;">
+        <div><span style="display:inline-block;width:8pt;height:8pt;border-radius:50%;
+            background:${cor};margin-right:5pt;"></span><b style="font-size:10pt;color:${cor};">${escapeHtml(p.empresaNome)}</b>
+          ${p.recomendada ? ' <span class="pill pill-ok">★ Recomendada pela FL</span>' : ''}</div>
+        <div style="font-size:11pt;font-weight:700;">${fmtBRL(p.valor)}</div>
+      </div>
+      ${linhaDetalhe('CNPJ', p.cnpjFornecedor)}
+      ${linhaDetalhe('Escopo da proposta', p.escopo)}
+      ${linhaDetalhe('Forma de pagamento', p.formaPagamento)}
+      ${linhaDetalhe('Validade da proposta', p.validade)}
+    </div>`;
+  }).join('');
 
   return head('Mapa de Orçamentos', ordem.condominioNome || ordem.descricao,
       `${propostas.length} proposta(s) — Pedido: ${ordem.descricao}`) +
-    `<table><thead><tr><th>Empresa</th><th class="num">Valor</th><th>Observação</th></tr></thead>
-      <tbody>${linhas || '<tr><td colspan="3">Nenhuma proposta selecionada.</td></tr>'}</tbody></table>` +
+    (blocos || '<div class="pr-vazio">Nenhuma proposta selecionada.</div>') +
     rodape('Mapa comparativo para análise e decisão — ordenado do mais caro pro mais barato.') +
     assinaturas();
 }

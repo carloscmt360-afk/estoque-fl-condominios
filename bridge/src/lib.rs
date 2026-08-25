@@ -406,6 +406,13 @@ pub mod ffi {
             anexo_tipo: &str,
         ) -> Result<String>;
         fn clear_proposta_anexo(self: Pin<&mut Session>, proposta_id: &str) -> Result<String>;
+        fn set_proposta_detalhes(
+            self: Pin<&mut Session>,
+            proposta_id: &str,
+            escopo: &str,
+            forma_pagamento: &str,
+            validade: &str,
+        ) -> Result<String>;
         fn marcar_proposta_recomendada(
             self: Pin<&mut Session>,
             ordem_id: &str,

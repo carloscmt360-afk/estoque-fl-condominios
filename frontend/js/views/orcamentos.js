@@ -76,6 +76,7 @@ export async function initOrcamentos() {
     document.getElementById('btnEnviarCliente').addEventListener('click', openEnviarClienteModal);
     document.getElementById('btnConfirmarEnviarCliente').addEventListener('click', confirmarEnviarCliente);
     document.getElementById('btnImprimirMapaOrcamento').addEventListener('click', imprimirMapaOrcamento);
+    document.getElementById('btnConfirmarDetalhesProposta').addEventListener('click', confirmarDetalhesProposta);
   }
   await reload();
 }
@@ -328,6 +329,8 @@ function renderPropostasTableImpl(o, tbody) {
           <button class="btn-sm btn-outline" data-ver-anexo="${p.id}" data-tipo="${p.anexoTipo}"
             title="Abrir em nova aba">${p.anexoTipo === 'pdf' ? '📄 Ver PDF' : '🖼 Ver imagem'}</button>
           <button class="btn-sm btn-ghost" data-baixar-anexo="${p.id}" title="Baixar para o computador">⬇</button>
+          <button class="btn-sm btn-ghost" data-detalhes-proposta="${p.id}"
+            title="Escopo, forma de pagamento, validade e CNPJ">✎ Detalhes</button>
           <button class="btn-sm btn-ghost" data-remover-anexo="${p.id}" title="Remover anexo">✕</button>
         </div>`
       : `<div class="anexo-dropzone" data-dropzone="${p.id}">Arraste o PDF aqui<br/>ou clique
@@ -363,6 +366,9 @@ function renderPropostasTableImpl(o, tbody) {
   tbody.querySelectorAll('[data-remover-anexo]').forEach((b) => {
     b.addEventListener('click', () => removerAnexoProposta(b.dataset.removerAnexo));
   });
+  tbody.querySelectorAll('[data-detalhes-proposta]').forEach((b) => {
+    b.addEventListener('click', () => abrirDetalhesPropostaModal(o.id, b.dataset.detalhesProposta, null));
+  });
   tbody.querySelectorAll('[data-reenviar-solicitacao]').forEach((b) => {
     b.addEventListener('click', () => reenviarSolicitacao(b.dataset.reenviarSolicitacao));
   });
@@ -394,6 +400,10 @@ function renderPropostasTableImpl(o, tbody) {
   wireDropzones(tbody, o.id);
 }
 
+// Selecionar/soltar o arquivo NÃO anexa direto — abre o modal de Detalhes
+// primeiro (pedido explícito: escopo/forma de pagamento/validade/CNPJ são
+// pedidos "no momento de anexar"), e o anexo só sobe de fato quando o
+// usuário confirma o modal (ver confirmarDetalhesProposta).
 function wireDropzones(tbody, ordemId) {
   tbody.querySelectorAll('[data-dropzone]').forEach((zone) => {
     const propostaId = zone.dataset.dropzone;
@@ -401,7 +411,8 @@ function wireDropzones(tbody, ordemId) {
     zone.addEventListener('click', () => input.click());
     input.addEventListener('change', () => {
       const file = input.files && input.files[0];
-      if (file) enviarAnexoProposta(ordemId, propostaId, file);
+      if (file) abrirDetalhesPropostaModal(ordemId, propostaId, file);
+      input.value = '';
     });
     zone.addEventListener('dragover', (e) => { e.preventDefault(); zone.classList.add('is-dragover'); });
     zone.addEventListener('dragleave', () => zone.classList.remove('is-dragover'));
@@ -409,22 +420,80 @@ function wireDropzones(tbody, ordemId) {
       e.preventDefault();
       zone.classList.remove('is-dragover');
       const file = e.dataTransfer.files && e.dataTransfer.files[0];
-      if (file) enviarAnexoProposta(ordemId, propostaId, file);
+      if (file) abrirDetalhesPropostaModal(ordemId, propostaId, file);
     });
   });
 }
 
-async function enviarAnexoProposta(ordemId, propostaId, file) {
+async function enviarAnexoProposta(ordemId, propostaId, file, detalhes) {
   if (!TIPOS_ANEXO_ACEITOS.includes(file.type)) {
     toast('Envie um PDF ou uma imagem (JPG, PNG, WebP).', 'error');
     return;
   }
   try {
     const fileBase64 = await fileToBase64(file);
-    const atualizada = await api.uploadPropostaAttachment({ ordemId, propostaId, fileBase64 });
+    const atualizada = await api.uploadPropostaAttachment({
+      ordemId, propostaId, fileBase64,
+      escopo: detalhes.escopo, formaPagamento: detalhes.formaPagamento, validade: detalhes.validade,
+    });
     mergePropostaLocal(atualizada);
     toast('Proposta anexada.', 'success');
   } catch (e) { toast('Erro ao anexar: ' + errorText(e), 'error'); }
+}
+
+// ------------------------------------------------- detalhes da proposta
+
+// Contexto do modal aberto: qual proposta, e o arquivo pendente (null se foi
+// aberto pelo botão "✎ Detalhes" de uma proposta que já tem anexo).
+let detalhesPropostaContexto = null;
+
+function abrirDetalhesPropostaModal(ordemId, propostaId, file) {
+  const ordem = ordens.find((o) => o.id === ordemId);
+  const proposta = ordem && ordem.propostas.find((p) => p.id === propostaId);
+  if (!proposta) return;
+  detalhesPropostaContexto = { ordemId, propostaId, file: file || null };
+  document.getElementById('detPropEmpresaNome').value = proposta.empresaNome;
+  document.getElementById('detPropCnpj').value = proposta.cnpjFornecedor || '';
+  document.getElementById('detPropEscopo').value = proposta.escopo || '';
+  document.getElementById('detPropFormaPagamento').value = proposta.formaPagamento || '';
+  document.getElementById('detPropValidade').value = proposta.validade || '';
+  document.getElementById('detPropAnexoInfo').textContent = file
+    ? `Anexando "${file.name}" — preencha os detalhes para o Mapa de Orçamentos.`
+    : 'Essas informações entram no Mapa de Orçamentos, para o cliente ver o que cada proposta inclui.';
+  openModal('modalDetalhesProposta');
+}
+
+async function confirmarDetalhesProposta() {
+  if (!detalhesPropostaContexto) return;
+  const { ordemId, propostaId, file } = detalhesPropostaContexto;
+  const ordem = ordens.find((o) => o.id === ordemId);
+  const proposta = ordem && ordem.propostas.find((p) => p.id === propostaId);
+  if (!proposta) return;
+  const cnpj = document.getElementById('detPropCnpj').value.trim();
+  const escopo = document.getElementById('detPropEscopo').value.trim();
+  const formaPagamento = document.getElementById('detPropFormaPagamento').value.trim();
+  const validade = document.getElementById('detPropValidade').value.trim();
+  try {
+    // CNPJ mora no cadastro da empresa (Fornecedores e Prestadores de
+    // Serviços), nunca na proposta — só grava se realmente mudou, e atualiza
+    // o cadastro dela, não um valor solto por cotação.
+    if (cnpj !== (proposta.cnpjFornecedor || '')) {
+      const empresa = empresas.find((e) => e.id === proposta.empresaId);
+      if (empresa) {
+        await api.updateEmpresa({ ...empresa, cnpj });
+        empresa.cnpj = cnpj;
+      }
+    }
+    if (file) {
+      await enviarAnexoProposta(ordemId, propostaId, file, { escopo, formaPagamento, validade });
+    } else {
+      const atualizada = await api.setPropostaDetalhes(propostaId, escopo, formaPagamento, validade);
+      mergePropostaLocal(atualizada);
+      toast('Detalhes salvos.', 'success');
+    }
+    closeModal('modalDetalhesProposta');
+    detalhesPropostaContexto = null;
+  } catch (e) { toast('Erro: ' + errorText(e), 'error'); }
 }
 
 async function removerAnexoProposta(propostaId) {

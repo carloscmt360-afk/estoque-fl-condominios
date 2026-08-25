@@ -204,6 +204,8 @@ class Session {
   rust::String set_proposta_valor(rust::Str proposta_id, double valor);
   rust::String set_proposta_anexo(rust::Str proposta_id, rust::Str anexo_path, rust::Str anexo_tipo);
   rust::String clear_proposta_anexo(rust::Str proposta_id);
+  rust::String set_proposta_detalhes(rust::Str proposta_id, rust::Str escopo, rust::Str forma_pagamento,
+                                     rust::Str validade);
   rust::String marcar_proposta_recomendada(rust::Str ordem_id, rust::Str proposta_id);
   rust::String desmarcar_proposta_recomendada(rust::Str ordem_id);
   rust::String enviar_orcamento_para_cliente(rust::Str payload, rust::Str now_iso);

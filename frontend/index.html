@@ -1900,6 +1900,32 @@
   </div>
 </div></div>
 
+<!-- MODAL: detalhes da proposta — pedidos no momento de anexar (ou
+     editáveis depois, sem re-anexar). Alimenta o Mapa de Orçamentos, que
+     antes só tinha Empresa/Valor. CNPJ mora no cadastro da empresa
+     (Fornecedores e Prestadores de Serviços), não na proposta — editar aqui
+     atualiza o cadastro dela. -->
+<div class="overlay" id="modalDetalhesProposta"><div class="modal">
+  <div class="modal-head"><h3>Detalhes da proposta</h3>
+    <button class="btn-ghost" data-close="modalDetalhesProposta">✕</button></div>
+  <div class="modal-body">
+    <p class="field-hint" id="detPropAnexoInfo">Essas informações entram no Mapa de Orçamentos, para o
+      cliente ver o que cada proposta inclui.</p>
+    <div class="field"><label>Empresa</label><input type="text" id="detPropEmpresaNome" disabled /></div>
+    <div class="field"><label>CNPJ do fornecedor</label>
+      <input type="text" id="detPropCnpj" placeholder="00.000.000/0000-00" /></div>
+    <div class="field"><label>Escopo da proposta</label><textarea id="detPropEscopo" rows="3"></textarea></div>
+    <div class="field-row">
+      <div class="field"><label>Forma de pagamento</label>
+        <input type="text" id="detPropFormaPagamento" placeholder="Ex.: 30/60/90 dias" /></div>
+      <div class="field"><label>Validade da proposta</label>
+        <input type="text" id="detPropValidade" placeholder="Ex.: 15 dias" /></div>
+    </div>
+  </div>
+  <div class="modal-foot"><button class="btn-outline" data-close="modalDetalhesProposta">Cancelar</button>
+    <button class="btn-primary" id="btnConfirmarDetalhesProposta">Salvar</button></div>
+</div></div>
+
 <!-- MODAL: seleção de empresas para solicitar orçamento — agrupadas por
      categoria (especialidade), destacando quem é parceiro. -->
 <div class="overlay" id="modalSolicitarEmpresas"><div class="modal">

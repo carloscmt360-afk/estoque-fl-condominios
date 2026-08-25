@@ -270,6 +270,8 @@ export const api = {
   setPropostaValor: async (propostaId, valor) =>
     JSON.parse(await call('set_proposta_valor', { input: { propostaId, valor } })),
   uploadPropostaAttachment: async (input) => JSON.parse(await call('upload_proposta_attachment', { input })),
+  setPropostaDetalhes: async (propostaId, escopo, formaPagamento, validade) =>
+    JSON.parse(await call('set_proposta_detalhes', { input: { propostaId, escopo, formaPagamento, validade } })),
   deletePropostaAttachment: async (ordemId, propostaId) =>
     JSON.parse(await call('delete_proposta_attachment', { input: { ordemId, propostaId } })),
   readPropostaAttachment: (relativePath) => call('read_proposta_attachment', { relativePath }),

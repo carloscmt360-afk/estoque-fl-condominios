@@ -121,7 +121,7 @@ OrdemOrcamento rowToOrdemOrcamento(Statement& st) {
 
 constexpr const char* kPropostaOrcamentoCols =
     "id, ordem_id, empresa_id, empresa_nome, valor, anexo_path, anexo_tipo, email_enviado_em, "
-    "recomendada, created_at";
+    "recomendada, created_at, escopo, forma_pagamento, validade";
 
 PropostaOrcamento rowToPropostaOrcamento(Statement& st) {
   PropostaOrcamento p;
@@ -135,6 +135,9 @@ PropostaOrcamento rowToPropostaOrcamento(Statement& st) {
   p.emailEnviadoEm = textOrEmpty(st, 7);
   p.recomendada = st.columnDouble(8) != 0;
   p.createdAt = st.columnText(9);
+  p.escopo = textOrEmpty(st, 10);
+  p.formaPagamento = textOrEmpty(st, 11);
+  p.validade = textOrEmpty(st, 12);
   return p;
 }
 
@@ -465,6 +468,18 @@ PropostaOrcamento clearPropostaAnexo(Database& db, const std::string& propostaId
   if (!findPropostaOrcamento(db, propostaId)) throw NotFoundError("proposta não encontrada: " + propostaId);
   db.prepare("UPDATE compras_propostas_orcamento SET anexo_path=NULL, anexo_tipo=NULL WHERE id=?")
       .bind(1, propostaId)
+      .step();
+  return *findPropostaOrcamento(db, propostaId);
+}
+
+PropostaOrcamento setPropostaDetalhes(Database& db, const std::string& propostaId, const std::string& escopo,
+                                      const std::string& formaPagamento, const std::string& validade) {
+  if (!findPropostaOrcamento(db, propostaId)) throw NotFoundError("proposta não encontrada: " + propostaId);
+  db.prepare("UPDATE compras_propostas_orcamento SET escopo=?, forma_pagamento=?, validade=? WHERE id=?")
+      .bind(1, escopo)
+      .bind(2, formaPagamento)
+      .bind(3, validade)
+      .bind(4, propostaId)
       .step();
   return *findPropostaOrcamento(db, propostaId);
 }

@@ -877,6 +877,19 @@ CREATE TABLE sos_pagamentos (
 CREATE UNIQUE INDEX idx_sos_pagamentos_mes ON sos_pagamentos(mes_referencia);
 )SQL";
 
+// Mapa de Orçamentos (impresso pra o cliente) ficava só com Empresa/Valor —
+// pouca informação pra decidir. Estes três campos são só da PROPOSTA (não do
+// cadastro da empresa, que já tem CNPJ próprio — ver companies_engine.hpp):
+// cada cotação pode vir com escopo/forma de pagamento/validade diferentes,
+// então não fazem sentido "resolvidos na hora" de um cadastro fixo. Pedidos
+// junto do anexo (ver setPropostaDetalhes em purchases_engine.cpp) porque é
+// o momento em que o usuário está com a proposta em mãos.
+constexpr const char* kSchemaV28 = R"SQL(
+ALTER TABLE compras_propostas_orcamento ADD COLUMN escopo TEXT;
+ALTER TABLE compras_propostas_orcamento ADD COLUMN forma_pagamento TEXT;
+ALTER TABLE compras_propostas_orcamento ADD COLUMN validade TEXT;
+)SQL";
+
 }  // namespace
 
 Database::Database(const std::string& path) {
@@ -1049,6 +1062,10 @@ void Database::migrate() {
   if (version < 27) {
     execute(kSchemaV27);
     execute("PRAGMA user_version = 27;");
+  }
+  if (version < 28) {
+    execute(kSchemaV28);
+    execute("PRAGMA user_version = 28;");
   }
 }
 

@@ -707,8 +707,12 @@ export async function installDevMock() {
     return dias >= DIAS_DECLINIO_AUTOMATICO ? 'declinado' : ordem.status;
   }
 
+  // cnpjFornecedor nunca mora na proposta — vem do cadastro da empresa
+  // (Empresa.cnpj), resolvido na hora — mesmo critério do lado C++ real
+  // (ver propostaOrcamentoToJson em api.cpp).
   function propostaOrcamentoToJsonMock(p) {
-    return { ...p, temResposta: p.valor >= 0 };
+    const empresa = state.empresas.find((e) => e.id === p.empresaId);
+    return { ...p, temResposta: p.valor >= 0, cnpjFornecedor: empresa ? (empresa.cnpj || '') : '' };
   }
 
   // Sem resposta por último; entre respondidas, do mais caro pro mais barato
@@ -1744,6 +1748,7 @@ export async function installDevMock() {
               id: ordem.id + '-' + empresa.id, ordemId: ordem.id, empresaId: empresa.id,
               empresaNome: empresa.nome, valor: -1, anexoPath: '', anexoTipo: '',
               emailEnviadoEm: agora, recomendada: false, createdAt: agora,
+              escopo: '', formaPagamento: '', validade: '',
             });
           }
           chamadas.push(empresa);
@@ -1805,6 +1810,24 @@ export async function installDevMock() {
         try { ehPdf = atob(i.fileBase64.slice(0, 8)).startsWith('%PDF'); } catch { /* trata como imagem */ }
         proposta.anexoTipo = ehPdf ? 'pdf' : 'imagem';
         proposta.anexoPath = `data:${ehPdf ? 'application/pdf' : 'image/webp'};base64,${i.fileBase64}`;
+        // Escopo/forma de pagamento/validade — pedidos na mesma tela do
+        // anexo, gravados junto (mesmo critério de upload_proposta_attachment
+        // em src-tauri/src/commands.rs).
+        proposta.escopo = i.escopo || '';
+        proposta.formaPagamento = i.formaPagamento || '';
+        proposta.validade = i.validade || '';
+        return JSON.stringify(propostaOrcamentoToJsonMock(proposta));
+      }
+
+      case 'set_proposta_detalhes': {
+        exigir('orcamentos', 'update');
+        const { propostaId, escopo, formaPagamento, validade } = args.input;
+        const ordem = state.ordensOrcamento.find((o) => o.propostas.some((p) => p.id === propostaId));
+        if (!ordem) throw new Error('proposta não encontrada: ' + propostaId);
+        const proposta = ordem.propostas.find((p) => p.id === propostaId);
+        proposta.escopo = escopo || '';
+        proposta.formaPagamento = formaPagamento || '';
+        proposta.validade = validade || '';
         return JSON.stringify(propostaOrcamentoToJsonMock(proposta));
       }
 

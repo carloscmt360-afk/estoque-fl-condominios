@@ -600,6 +600,12 @@ rust::String Session::clear_proposta_anexo(rust::Str proposta_id) {
   return rust::String(api_.clearPropostaAnexo(std::string(proposta_id)));
 }
 
+rust::String Session::set_proposta_detalhes(rust::Str proposta_id, rust::Str escopo, rust::Str forma_pagamento,
+                                            rust::Str validade) {
+  return rust::String(api_.setPropostaDetalhes(std::string(proposta_id), std::string(escopo),
+                                               std::string(forma_pagamento), std::string(validade)));
+}
+
 rust::String Session::marcar_proposta_recomendada(rust::Str ordem_id, rust::Str proposta_id) {
   return rust::String(api_.marcarPropostaRecomendada(std::string(ordem_id), std::string(proposta_id)));
 }

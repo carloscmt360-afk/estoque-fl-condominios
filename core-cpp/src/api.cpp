@@ -1798,7 +1798,12 @@ std::string formatarReal(double v) {
   return std::string(negativo ? "-R$ " : "R$ ") + comSeparador + "," + centavos;
 }
 
-json propostaOrcamentoToJson(const PropostaOrcamento& p) {
+// cnpjFornecedor NUNCA vem de PropostaOrcamento — é lido agora do cadastro
+// da empresa (Empresa::cnpj), a mesma fonte que Fornecedores e Prestadores
+// de Serviços usa. Resolvido aqui (não guardado na proposta) pra nunca
+// divergir do cadastro: editar o CNPJ da empresa atualiza toda proposta
+// dela na hora, sem precisar corrigir uma por uma.
+json propostaOrcamentoToJson(Database& db, const PropostaOrcamento& p) {
   json j;
   j["id"] = p.id;
   j["ordemId"] = p.ordemId;
@@ -1811,6 +1816,12 @@ json propostaOrcamentoToJson(const PropostaOrcamento& p) {
   j["emailEnviadoEm"] = p.emailEnviadoEm;
   j["recomendada"] = p.recomendada;
   j["createdAt"] = p.createdAt;
+  j["escopo"] = p.escopo;
+  j["formaPagamento"] = p.formaPagamento;
+  j["validade"] = p.validade;
+  std::string cnpjFornecedor;
+  if (auto emp = findEmpresa(db, p.empresaId)) cnpjFornecedor = emp->cnpj;
+  j["cnpjFornecedor"] = cnpjFornecedor;
   return j;
 }
 
@@ -1835,7 +1846,7 @@ json ordemOrcamentoToJson(Database& db, const OrdemOrcamento& o, const std::stri
   j["reabertoEm"] = o.reabertoEm;
   j["createdAt"] = o.createdAt;
   json propostas = json::array();
-  for (const auto& p : o.propostas) propostas.push_back(propostaOrcamentoToJson(p));
+  for (const auto& p : o.propostas) propostas.push_back(propostaOrcamentoToJson(db, p));
   j["propostas"] = propostas;
   return j;
 }
@@ -2090,20 +2101,27 @@ std::string Api::reenviarSolicitacaoProposta(const std::string& propostaId, cons
 std::string Api::setPropostaValor(const std::string& propostaId, double valor) {
   require(features::kOrcamentos, PermAction::Update);
   auto updated = estoque::setPropostaValor(db_, propostaId, valor);
-  return propostaOrcamentoToJson(updated).dump();
+  return propostaOrcamentoToJson(db_, updated).dump();
 }
 
 std::string Api::setPropostaAnexo(const std::string& propostaId, const std::string& anexoPath,
                                   const std::string& anexoTipo) {
   require(features::kOrcamentos, PermAction::Update);
   auto updated = estoque::setPropostaAnexo(db_, propostaId, anexoPath, anexoTipo);
-  return propostaOrcamentoToJson(updated).dump();
+  return propostaOrcamentoToJson(db_, updated).dump();
 }
 
 std::string Api::clearPropostaAnexo(const std::string& propostaId) {
   require(features::kOrcamentos, PermAction::Update);
   auto updated = estoque::clearPropostaAnexo(db_, propostaId);
-  return propostaOrcamentoToJson(updated).dump();
+  return propostaOrcamentoToJson(db_, updated).dump();
+}
+
+std::string Api::setPropostaDetalhes(const std::string& propostaId, const std::string& escopo,
+                                     const std::string& formaPagamento, const std::string& validade) {
+  require(features::kOrcamentos, PermAction::Update);
+  auto updated = estoque::setPropostaDetalhes(db_, propostaId, escopo, formaPagamento, validade);
+  return propostaOrcamentoToJson(db_, updated).dump();
 }
 
 std::string Api::marcarPropostaRecomendada(const std::string& ordemId, const std::string& propostaId) {

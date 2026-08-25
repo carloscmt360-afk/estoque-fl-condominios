@@ -1042,6 +1042,16 @@ pub struct UploadPropostaAttachmentInput {
     /// Bytes do arquivo original (JPG/PNG/WebP ou PDF) em base64 — mesmo
     /// critério de UploadAquisicaoAttachmentInput.
     pub file_base64: String,
+    // Escopo/forma de pagamento/validade — pedidos na mesma tela do anexo
+    // (ver modalDetalhesProposta em orcamentos.js), salvos junto num só
+    // comando pra não deixar o anexo gravado sem os detalhes se a segunda
+    // chamada falhasse.
+    #[serde(default)]
+    pub escopo: String,
+    #[serde(default)]
+    pub forma_pagamento: String,
+    #[serde(default)]
+    pub validade: String,
 }
 
 #[tauri::command]
@@ -1053,7 +1063,10 @@ pub fn upload_proposta_attachment(
     let data_dir = resolve_data_dir()?;
     let saved =
         bridge::attachments::save_proposta_attachment(&data_dir, &input.ordem_id, &input.proposta_id, &bytes)?;
-    with_session(&state, |s| s.set_proposta_anexo(&input.proposta_id, &saved.path, &saved.kind))
+    with_session(&state, |s| s.set_proposta_anexo(&input.proposta_id, &saved.path, &saved.kind))?;
+    with_session(&state, |s| {
+        s.set_proposta_detalhes(&input.proposta_id, &input.escopo, &input.forma_pagamento, &input.validade)
+    })
 }
 
 #[derive(serde::Deserialize)]
@@ -1071,6 +1084,25 @@ pub fn delete_proposta_attachment(
     let data_dir = resolve_data_dir()?;
     bridge::attachments::delete_proposta_attachment(&data_dir, &input.ordem_id, &input.proposta_id)?;
     with_session(&state, |s| s.clear_proposta_anexo(&input.proposta_id))
+}
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SetPropostaDetalhesInput {
+    pub proposta_id: String,
+    pub escopo: String,
+    pub forma_pagamento: String,
+    pub validade: String,
+}
+
+// Editar depois, sem mexer no anexo — upload_proposta_attachment já grava
+// os detalhes na hora de anexar; este comando é só pra corrigir escopo/forma
+// de pagamento/validade de uma proposta que já tem anexo.
+#[tauri::command]
+pub fn set_proposta_detalhes(state: State<AppState>, input: SetPropostaDetalhesInput) -> Result<String, String> {
+    with_session(&state, |s| {
+        s.set_proposta_detalhes(&input.proposta_id, &input.escopo, &input.forma_pagamento, &input.validade)
+    })
 }
 
 #[tauri::command]

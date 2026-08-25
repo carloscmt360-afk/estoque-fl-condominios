@@ -238,6 +238,7 @@ fn main() {
             commands::reenviar_solicitacao_proposta,
             commands::set_proposta_valor,
             commands::upload_proposta_attachment,
+            commands::set_proposta_detalhes,
             commands::delete_proposta_attachment,
             commands::read_proposta_attachment,
             commands::marcar_proposta_recomendada,

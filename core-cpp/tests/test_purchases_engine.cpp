@@ -281,6 +281,32 @@ TEST_CASE("setPropostaAnexo/clearPropostaAnexo gravam e removem a referência") 
   CHECK(semAnexo.anexoTipo.empty());
 }
 
+TEST_CASE("setPropostaDetalhes grava escopo/forma de pagamento/validade juntos") {
+  Cenario c;
+  createOrdemOrcamento(c.db, c.ordem("ord1"));
+  auto depois = solicitarOrcamentoParaEmpresas(c.db, "ord1", {{"forn2", "Barata & Cia"}}, kNow);
+  auto propostaId = depois.propostas[0].id;
+
+  // Recém-solicitada: os três campos começam vazios (nunca preenchidos).
+  CHECK(depois.propostas[0].escopo.empty());
+  CHECK(depois.propostas[0].formaPagamento.empty());
+  CHECK(depois.propostas[0].validade.empty());
+
+  auto atualizado = setPropostaDetalhes(c.db, propostaId, "Limpeza das caixas d'água (2x)", "30/60/90 dias",
+                                        "15 dias");
+  CHECK(atualizado.escopo == "Limpeza das caixas d'água (2x)");
+  CHECK(atualizado.formaPagamento == "30/60/90 dias");
+  CHECK(atualizado.validade == "15 dias");
+
+  // String vazia é um valor válido (limpa o campo), não "não mexer".
+  auto limpo = setPropostaDetalhes(c.db, propostaId, "", "", "");
+  CHECK(limpo.escopo.empty());
+  CHECK(limpo.formaPagamento.empty());
+  CHECK(limpo.validade.empty());
+
+  CHECK_THROWS_AS(setPropostaDetalhes(c.db, "fantasma", "x", "y", "z"), NotFoundError);
+}
+
 TEST_CASE("deleteOrdemOrcamento leva as propostas junto (cascade)") {
   Cenario c;
   createOrdemOrcamento(c.db, c.ordem("ord1"));

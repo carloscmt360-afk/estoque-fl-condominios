@@ -101,6 +101,15 @@ struct PropostaOrcamento {
   std::string emailEnviadoEm;  // quando a solicitação foi enviada a esta empresa
   bool recomendada = false;
   std::string createdAt;
+  // Detalhes da proposta em si (ver setPropostaDetalhes) — pedidos junto do
+  // anexo, porque cada cotação pode ter escopo/forma de pagamento/validade
+  // diferentes; NUNCA "resolvidos na hora" de um cadastro fixo como
+  // sindico/gerente em outras telas. CNPJ do fornecedor não mora aqui: já
+  // existe em Empresa::cnpj (companies_engine.hpp) e é lido de lá — evita
+  // duas fontes divergentes para o mesmo CNPJ.
+  std::string escopo;
+  std::string formaPagamento;
+  std::string validade;
 };
 
 struct OrdemOrcamento {
@@ -166,6 +175,13 @@ PropostaOrcamento setPropostaValor(Database& db, const std::string& propostaId, 
 PropostaOrcamento setPropostaAnexo(Database& db, const std::string& propostaId, const std::string& anexoPath,
                                    const std::string& anexoTipo);
 PropostaOrcamento clearPropostaAnexo(Database& db, const std::string& propostaId);
+
+// Escopo/forma de pagamento/validade — grava os três juntos (mesma tela,
+// pedidos no momento de anexar a proposta). String vazia é um valor válido
+// (limpa o campo), não "não mexer" — a tela sempre manda os três de uma vez.
+PropostaOrcamento setPropostaDetalhes(Database& db, const std::string& propostaId,
+                                      const std::string& escopo, const std::string& formaPagamento,
+                                      const std::string& validade);
 
 // Reenvio da solicitação a uma empresa que JÁ estava na lista — regrava
 // emailEnviadoEm=nowIso, sem duplicar proposta nem mexer em status/valor.
