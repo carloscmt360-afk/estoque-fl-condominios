@@ -790,6 +790,7 @@ export function buildDashboardFechamentoDoc(dash, filtroTxt) {
         <td>${escapeHtml(e.empresaNome)}</td><td class="num">${moedaSimples(e.recebidos)}</td></tr>`).join('')
       : `<tr><td colspan="2">${dash.empresas.length ? 'Nenhuma parceira com movimento neste mês.' : 'Nenhuma parceira cadastrada.'}</td></tr>`}</tbody></table>`;
 
+  const totalComissaoDelta = dash.deltaSindicos.reduce((s, d) => s + d.comissao, 0);
   const deltaTabela = dash.deltaSindicos.length ? `<div class="pr-sec">Delta Síndicos do mês</div>
     <table><thead><tr><th>Condomínio</th><th>Síndico</th><th>Gerente</th>
       <th class="num">Venda</th><th class="num">%</th><th class="num">Comissão</th></tr></thead>
@@ -797,7 +798,9 @@ export function buildDashboardFechamentoDoc(dash, filtroTxt) {
         <td>${escapeHtml(d.condominioNome)}</td><td>${escapeHtml(d.sindico || '')}</td>
         <td>${escapeHtml(d.gerenteNome || '')}</td><td class="num">${moedaSimples(d.venda)}</td>
         <td class="num">${fmtPct(d.porcentagem / 100, 0)}</td>
-        <td class="num">${moedaSimples(d.comissao)}</td></tr>`).join('')}</tbody></table>` : '';
+        <td class="num">${moedaSimples(d.comissao)}</td></tr>`).join('')}</tbody>
+    <tfoot><tr><td colspan="5"><b>Total</b></td>
+      <td class="num"><b>${moedaSimples(totalComissaoDelta)}</b></td></tr></tfoot></table>` : '';
 
   const rateioTabela = `<div class="pr-sec">Distribuição de Suprimentos</div>
     <table><thead><tr><th>Destino</th><th class="num">Valor</th></tr></thead>

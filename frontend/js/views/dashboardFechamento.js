@@ -134,6 +134,14 @@ function render() {
   ].map((t) => `<div class="stat-tile"><div class="label">${escapeHtml(t.label)}</div>
     <div class="value">${t.value}</div></div>`).join('');
 
+  // Arredonda com PONTO decimal (round2(62.833) -> 62.83) — nunca
+  // toLocaleString aqui: um <input type="number"> só aceita ponto, e
+  // "62,83" (vírgula do pt-BR) é um valor inválido pro atributo value, que o
+  // navegador simplesmente não mostra (campo aparece em branco). É por isso
+  // que só o gerente que NÃO bate 100% da meta via o campo sumir: eficácia
+  // exata em 100 é redonda, qualquer fração vinha formatada com vírgula.
+  const round2 = (n) => Math.round(n * 100) / 100;
+
   document.getElementById('dfGerentesTbody').innerHTML = d.gerentes.map((g) => {
     const campo = (nome, valor, casas) => {
       const destacado = overridesManuais.has(`${g.gerenteId}:${nome}`);
@@ -146,8 +154,8 @@ function render() {
       <td class="num">${fmtBRL(g.recebido)}</td>
       <td class="num">${campo('carteira', g.carteira, 0)}</td>
       <td class="num">${fmtBRL(g.meta)}</td>
-      <td class="num">${campo('eficacia', g.eficacia.toLocaleString('pt-BR', { maximumFractionDigits: 2 }))}%</td>
-      <td class="num">${campo('porcentagem', g.porcentagem.toLocaleString('pt-BR', { maximumFractionDigits: 2 }))}%</td>
+      <td class="num">${campo('eficacia', round2(g.eficacia))}%</td>
+      <td class="num">${campo('porcentagem', round2(g.porcentagem))}%</td>
       <td class="num">${fmtBRL(g.descontos)}</td>
       <td class="num"><b>${fmtBRL(g.comissao)}</b></td>
       <td class="num">${fmtBRL(g.retido)}</td>
