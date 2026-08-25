@@ -1584,6 +1584,12 @@ tfoot td {
 .modal.modal-import-lote {
   max-width: min(1120px, 96vw);
 }
+/* Novo Vínculo (Gestão de Prazos): com .modal-largo (720px) o select de
+   tipo de serviço + o campo de data ficavam espremidos e forçavam rolagem
+   horizontal dentro do modal — pedido explícito de pelo menos 980px. */
+.modal.modal-vinculo {
+  max-width: min(980px, 96vw);
+}
 .imp-resumo-bar {
   display: flex;
   align-items: center;

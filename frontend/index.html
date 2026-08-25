@@ -813,6 +813,7 @@
               <option value="ok">Em dia</option>
             </select>
             <input type="text" id="gpVinculosBusca" placeholder="Buscar por condomínio, serviço ou empresa..." style="min-width:240px;" />
+            <button class="btn-outline" id="btnImprimirPrazos" title="Imprime a lista filtrada acima">🖨 Imprimir relatório</button>
             <button class="btn-primary" id="btnNovoVinculo">＋ Novo vínculo</button>
           </div>
         </div>
@@ -1872,6 +1873,11 @@
       <div class="field"><label>Condomínio</label><div id="detOrdemCondominio" class="field-static"></div></div>
       <div class="field"><label>Status</label><div id="detOrdemStatusPill"></div></div>
     </div>
+    <!-- Dados do condomínio (CNPJ/endereço) são sempre lidos ao vivo do
+         cadastro (Cadastro de Condomínios) — nunca copiados pra ordem, pra
+         não desatualizar aqui quando o cadastro mudar. Ver
+         renderDetalheOrdem/condominioInfoHtml em orcamentos.js. -->
+    <div id="detOrdemCondominioInfo" class="field-hint" style="margin-top:-6px;margin-bottom:var(--sp-3);"></div>
     <div class="field"><label>Descrição</label><input type="text" id="detOrdemDescricao" /></div>
     <div class="field"><label>Informações adicionais</label><textarea id="detOrdemObservacoes" rows="3"></textarea></div>
     <button class="btn-outline btn-sm" id="btnSalvarInfoOrdem">Salvar informações</button>
@@ -1886,6 +1892,7 @@
       não seja a mais barata — é ela que aparece destacada no e-mail para o cliente.</div>
     <div class="toolbar" style="padding:0;margin:var(--sp-2) 0;">
       <button class="btn-outline btn-sm" id="btnSolicitarEmpresas">📨 Solicitar para empresas</button>
+      <button class="btn-outline btn-sm" id="btnImprimirMapaOrdem" title="Imprime o mapa comparativo das propostas já respondidas">🖨 Imprimir mapa de cotações</button>
       <button class="btn-primary btn-sm" id="btnEnviarCliente">✉ Enviar para o cliente</button>
     </div>
     <div style="overflow-x:auto;">
@@ -2191,7 +2198,7 @@
 </div></div>
 
 <!-- MODAL: Vínculo de serviço (condomínio × tipo de serviço) -->
-<div class="overlay" id="modalVinculo"><div class="modal">
+<div class="overlay" id="modalVinculo"><div class="modal modal-vinculo">
   <div class="modal-head"><h3 id="modalVinculoTitulo">Novo Vínculo</h3>
     <button class="btn-ghost" data-close="modalVinculo">✕</button></div>
   <div class="modal-body">

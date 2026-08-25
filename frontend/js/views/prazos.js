@@ -4,6 +4,7 @@ import { openModal, closeModal } from '../components/modal.js';
 import { toast } from '../components/toast.js';
 import { can } from '../session.js';
 import { enableRowSelection } from '../components/tableTools.js';
+import { printDocument, buildPrazosRelatorioDoc } from '../print.js';
 
 // Gestão de Prazos: tipos de serviço (catálogo com prazo de vencimento),
 // vínculos (qual condomínio contratou qual serviço, e quando renovou pela
@@ -50,6 +51,7 @@ export async function initPrazos() {
       buscaVinculos = e.target.value.toLowerCase();
       renderVinculos();
     });
+    document.getElementById('btnImprimirPrazos').addEventListener('click', imprimirRelatorioPrazos);
     enableRowSelection(document.getElementById('gpVinculosTbody'));
     enableRowSelection(document.getElementById('gpTiposTbody'));
     enableRowSelection(document.getElementById('gpHistoricoTbody'));
@@ -96,8 +98,10 @@ function statusPillHtml(v) {
   return `<span class="pill ${cls}">${escapeHtml(texto)}</span>`;
 }
 
-function renderVinculos() {
-  const tbody = document.getElementById('gpVinculosTbody');
+// Mesmo filtro (situação + busca por condomínio/serviço/empresa) usado na
+// tela e no relatório impresso — o botão "Imprimir relatório" sempre traz
+// exatamente o que está na tela, nunca uma lista à parte.
+function vinculosFiltrados() {
   let lista = [...vinculos];
   if (filtroStatus) lista = lista.filter((v) => v.status === filtroStatus);
   if (buscaVinculos) {
@@ -106,6 +110,12 @@ function renderVinculos() {
   }
   // O mais urgente primeiro: quem já venceu (dias negativos) encabeça a lista.
   lista.sort((a, b) => a.diasRestantes - b.diasRestantes);
+  return lista;
+}
+
+function renderVinculos() {
+  const tbody = document.getElementById('gpVinculosTbody');
+  const lista = vinculosFiltrados();
 
   if (!lista.length) {
     const vazio = !vinculos.length
@@ -138,6 +148,15 @@ function renderVinculos() {
     b.addEventListener('click', () => openVinculoModal(b.dataset.editar)));
   tbody.querySelectorAll('[data-excluir]').forEach((b) =>
     b.addEventListener('click', () => deleteVinculo(b.dataset.excluir)));
+}
+
+function imprimirRelatorioPrazos() {
+  const lista = vinculosFiltrados();
+  if (!lista.length) { toast('Nenhum serviço para imprimir com esses filtros.', 'error'); return; }
+  printDocument(buildPrazosRelatorioDoc(lista, {
+    status: STATUS_LABEL[filtroStatus] || 'Todas as situações',
+    busca: buscaVinculos,
+  }));
 }
 
 function renderTiposServico() {

@@ -1255,6 +1255,17 @@ fn percent_encode(s: &str) -> String {
     out
 }
 
+/// O cadastro de e-mails aceita "um ou mais, separados por vírgula" (ver
+/// placeholder de #empEmails no index.html), e é natural digitar com espaço
+/// depois da vírgula ("a@x.com, b@y.com"). Esse espaço cru dentro do
+/// destinatário de uma URI mailto: é inválido — o Windows não reporta erro
+/// nenhum, só não abre nada. enviar_emails_compostos/parse_mailboxes
+/// (bridge/src/mailer.rs) já faz esse trim para o envio por SMTP; esta função
+/// faz o mesmo para a URI.
+fn normalizar_destinatarios_mailto(to: &str) -> String {
+    to.split(',').map(str::trim).filter(|s| !s.is_empty()).collect::<Vec<_>>().join(",")
+}
+
 /// Abre o cliente de e-mail padrão do Windows (Outlook, na máquina do
 /// usuário) com destinatário/assunto/corpo já preenchidos, pronto pra
 /// revisar e clicar Enviar — alternativa ao envio automático por SMTP
@@ -1263,7 +1274,12 @@ fn percent_encode(s: &str) -> String {
 /// suporta anexo — limitação do protocolo, não deste app).
 #[tauri::command]
 pub fn abrir_email_outlook(to: String, subject: String, body: String) -> Result<(), String> {
-    let uri = format!("mailto:{}?subject={}&body={}", to, percent_encode(&subject), percent_encode(&body));
+    let uri = format!(
+        "mailto:{}?subject={}&body={}",
+        normalizar_destinatarios_mailto(&to),
+        percent_encode(&subject),
+        percent_encode(&body)
+    );
     // `open::that` chama ShellExecuteW no Windows — o mesmo mecanismo que o
     // próprio Explorer usa por baixo pra despachar uma URI pro handler
     // registrado (mailto: -> cliente de e-mail padrão). Trocou de
@@ -1272,4 +1288,36 @@ pub fn abrir_email_outlook(to: String, subject: String, body: String) -> Result<
     // real (nada abria, sem erro nenhum) — enquanto ShellExecuteW é a API
     // correta e documentada da Microsoft pra isso, sem essa dependência.
     open::that(&uri).map_err(|e| format!("não foi possível abrir o cliente de e-mail: {e}"))
+}
+
+#[cfg(test)]
+mod mailto_tests {
+    use super::*;
+
+    #[test]
+    fn normaliza_espaco_apos_virgula() {
+        assert_eq!(normalizar_destinatarios_mailto("a@x.com, b@y.com"), "a@x.com,b@y.com");
+    }
+
+    #[test]
+    fn normaliza_espacos_extras_e_entradas_vazias() {
+        assert_eq!(normalizar_destinatarios_mailto("  a@x.com , , b@y.com  "), "a@x.com,b@y.com");
+    }
+
+    #[test]
+    fn mantem_um_unico_destinatario_sem_virgula() {
+        assert_eq!(normalizar_destinatarios_mailto("a@x.com"), "a@x.com");
+    }
+
+    #[test]
+    fn uri_montada_nao_contem_espaco_cru_no_destinatario() {
+        let uri = format!(
+            "mailto:{}?subject={}&body={}",
+            normalizar_destinatarios_mailto("a@x.com, b@y.com"),
+            percent_encode("Assunto de teste"),
+            percent_encode("Corpo do e-mail")
+        );
+        let destino = uri.split('?').next().unwrap();
+        assert!(!destino.contains(' '), "destinatário não pode ter espaço cru: {destino}");
+    }
 }

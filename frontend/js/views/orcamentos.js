@@ -74,6 +74,7 @@ export async function initOrcamentos() {
     document.getElementById('btnConfirmarSolicitar').addEventListener('click', confirmarSolicitar);
     document.getElementById('solicEmpresaBusca').addEventListener('input', renderSolicEmpresasLista);
     document.getElementById('btnEnviarCliente').addEventListener('click', openEnviarClienteModal);
+    document.getElementById('btnImprimirMapaOrdem').addEventListener('click', imprimirMapaOrdemAtual);
     document.getElementById('btnConfirmarEnviarCliente').addEventListener('click', confirmarEnviarCliente);
     document.getElementById('btnImprimirMapaOrcamento').addEventListener('click', imprimirMapaOrcamento);
     document.getElementById('btnConfirmarDetalhesProposta').addEventListener('click', confirmarDetalhesProposta);
@@ -223,10 +224,28 @@ function abrirDetalheOrdem(id) {
   openModal('modalDetalheOrdem');
 }
 
+// CNPJ e endereço nunca vêm na ordem — são lidos ao vivo do cadastro do
+// condomínio (mesma regra do CNPJ do fornecedor em orçamentos: uma fonte só,
+// pra não desatualizar aqui quando o cadastro mudar).
+function condominioInfoHtml(condominioId) {
+  const c = condominios.find((x) => x.id === condominioId);
+  if (!c) return '';
+  const linhaEndereco = [c.endereco, c.numero].filter(Boolean).join(', ') + (c.complemento ? ` — ${c.complemento}` : '');
+  const linhaLocal = [c.bairro, [c.cidade, c.estado].filter(Boolean).join('/')].filter(Boolean).join(' — ');
+  const partes = [
+    c.cnpj ? `CNPJ: ${c.cnpj}` : '',
+    linhaEndereco.trim(),
+    linhaLocal,
+    c.cep ? `CEP: ${c.cep}` : '',
+  ].filter(Boolean);
+  return partes.length ? escapeHtml(partes.join(' · ')) : '';
+}
+
 function renderDetalheOrdem(o) {
   document.getElementById('detOrdemId').value = o.id;
   document.getElementById('detOrdemTitulo').textContent = `Ordem #${o.numero}`;
   document.getElementById('detOrdemCondominio').textContent = o.condominioNome;
+  document.getElementById('detOrdemCondominioInfo').innerHTML = condominioInfoHtml(o.condominioId);
   document.getElementById('detOrdemStatusPill').innerHTML = statusPill(o.statusEfetivo);
   document.getElementById('detOrdemDescricao').value = o.descricao;
   document.getElementById('detOrdemObservacoes').value = o.observacoes;
@@ -303,17 +322,22 @@ function recomendadaCelHtml(o, p) {
   return p.temResposta ? `<button class="btn-sm btn-outline" data-recomendar="${p.id}">Marcar</button>` : '<span class="muted">—</span>';
 }
 
+// Um erro em QUALQUER ponto daqui (dado inesperado numa proposta, ou até
+// "propostas" vindo ausente do backend) NÃO pode deixar a tabela em branco
+// silenciosamente — isso parece "a ordem não tem proposta nenhuma" quando na
+// verdade tem, só que travou no meio do render. Por isso a função inteira
+// está dentro do try, não só a parte que desenha as linhas: um `.length` em
+// algo que não é array já bastava pra travar tudo ANTES de qualquer
+// mensagem aparecer (foi exatamente o que um usuário viu: nem a tabela nem
+// o aviso de "nenhuma empresa" — nada).
 function renderPropostasTable(o) {
   const tbody = document.getElementById('detPropostasTbody');
-  if (!o.propostas.length) {
-    tbody.innerHTML = '<tr class="empty-row"><td colspan="5">Nenhuma empresa solicitada ainda.</td></tr>';
-    return;
-  }
-  // Um erro aqui dentro (dado inesperado numa proposta) NÃO pode deixar a
-  // tabela em branco silenciosamente — isso parece "a ordem não tem
-  // proposta nenhuma" quando na verdade tem, só que travou no meio do
-  // render. Melhor mostrar o erro e logar no console pra dar pra investigar.
   try {
+    const propostas = Array.isArray(o.propostas) ? o.propostas : [];
+    if (!propostas.length) {
+      tbody.innerHTML = '<tr class="empty-row"><td colspan="5">Nenhuma empresa solicitada ainda.</td></tr>';
+      return;
+    }
     renderPropostasTableImpl(o, tbody);
   } catch (e) {
     console.error('Falha ao renderizar propostas da ordem', o.id, e);
@@ -744,6 +768,20 @@ function propostasSelecionadasParaEnvio(ordem) {
 }
 
 // "A primeira coisa que o sistema deve fazer" no fluxo de enviar ao cliente:
+// Botão "Imprimir mapa de cotações" na própria tela da ordem — direto, sem
+// precisar passar pelo fluxo de "Enviar para o cliente" só pra conseguir
+// imprimir. Sempre traz TODAS as propostas já respondidas (quem quiser
+// enviar só uma parte ao cliente usa o mapa de dentro daquele modal, que aí
+// sim respeita a seleção — ver imprimirMapaOrcamento abaixo).
+function imprimirMapaOrdemAtual() {
+  const ordemId = document.getElementById('detOrdemId').value;
+  const ordem = ordens.find((o) => o.id === ordemId);
+  if (!ordem) return;
+  const respondidas = ordenarPropostas(ordem.propostas.filter((p) => p.temResposta));
+  if (!respondidas.length) { toast('Nenhuma proposta respondida ainda para incluir no mapa.', 'error'); return; }
+  printDocument(buildOrcamentoMapaDoc(ordem, respondidas));
+}
+
 // gerar o mapa comparativo pra ele analisar e decidir, com as propostas que
 // o usuário escolheu incluir (pode ser só uma parte).
 function imprimirMapaOrcamento() {

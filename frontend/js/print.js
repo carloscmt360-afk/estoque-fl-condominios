@@ -906,3 +906,44 @@ export function buildOrcamentoMapaDoc(ordem, propostas) {
     rodape('Mapa comparativo para análise e decisão — ordenado do mais caro pro mais barato.') +
     assinaturas();
 }
+
+const PRAZOS_STATUS_CLS = { ok: 'pr-st-good', atencao: 'pr-st-warn', vencido: 'pr-st-critical' };
+
+// Gestão de Prazos > "Imprimir relatório" — traz exatamente a lista já
+// filtrada na tela (por situação e/ou busca de condomínio/serviço/empresa),
+// nunca recalcula nada: vencimento e situação já vêm prontos do backend em
+// cada vínculo (ver dates_engine.hpp), este documento só formata.
+export function buildPrazosRelatorioDoc(lista, filtro) {
+  const contagem = { ok: 0, atencao: 0, vencido: 0 };
+  lista.forEach((v) => { contagem[v.status] = (contagem[v.status] || 0) + 1; });
+
+  const linhas = lista.map((v) => {
+    const cls = PRAZOS_STATUS_CLS[v.status] || '';
+    const situacaoTxt = v.status === 'vencido'
+      ? `Vencido há ${Math.abs(v.diasRestantes)} dia(s)`
+      : `${v.status === 'ok' ? 'Em dia' : 'Atenção'} · ${v.diasRestantes} dia(s)`;
+    return `<tr>
+      <td>${escapeHtml(v.condominioNome)}</td>
+      <td>${escapeHtml(v.tipoServicoNome)}</td>
+      <td>${v.empresaContratada ? escapeHtml(v.empresaContratada) : '—'}</td>
+      <td>${fmtDateBR(v.dataUltimaRenovacao)}</td>
+      <td>${fmtDateBR(v.dataVencimento)}</td>
+      <td><span class="${cls}">${escapeHtml(situacaoTxt)}</span></td></tr>`;
+  }).join('');
+
+  const filtrosTxt = [filtro.status, filtro.busca ? `busca: "${filtro.busca}"` : '']
+    .filter(Boolean).join(' · ');
+
+  return head('Gestão de Prazos', filtrosTxt, `${lista.length} serviço(s)`) +
+    kpiGrid([
+      { k: 'Serviços no filtro', v: fmtNum(lista.length) },
+      { k: 'Em dia', v: fmtNum(contagem.ok) },
+      { k: 'Vencem em até 30 dias', v: fmtNum(contagem.atencao) },
+      { k: 'Vencidos', v: fmtNum(contagem.vencido) },
+    ]) +
+    `<table><thead><tr><th>Condomínio</th><th>Serviço</th><th>Empresa contratada</th>
+      <th>Última renovação</th><th>Vencimento</th><th>Situação</th></tr></thead>
+      <tbody>${linhas}</tbody></table>` +
+    rodape('Vencimento = data da última renovação + prazo do tipo de serviço.') +
+    assinaturas();
+}
