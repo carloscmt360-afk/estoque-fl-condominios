@@ -152,10 +152,17 @@ class Api {
   // Condomínios: cadastro de referência. É lido tanto pela tela "Cadastro de
   // Condomínios" quanto pela "Gestão de Prazos" (para o seletor de vínculo) —
   // mesmo critério de requireAny já usado em listProducts/listDepartments.
-  std::vector<Condominio> listCondominios();
+  // hojeIso aplica de vez qualquer aviso prévio vencido (ver
+  // aplicarAvisosPrevioVencidos em dates_engine.hpp) ANTES de montar a
+  // lista — quem abre esta tela depois da data combinada já vê o
+  // condomínio inativo com o código novo, sem precisar de ação nenhuma.
+  std::vector<Condominio> listCondominios(const std::string& hojeIso);
   Condominio createCondominio(const Condominio& input);
   Condominio updateCondominio(const Condominio& input);
   void deleteCondominio(const std::string& id);
+  Condominio iniciarAvisoPrevio(const std::string& condominioId, const std::string& ate,
+                                const std::string& novoCodigo);
+  Condominio cancelarAvisoPrevio(const std::string& condominioId);
 
   // Tipos de serviço: catálogo (nome, prazo em dias, cor de identificação).
   std::vector<TipoServico> listTiposServico();

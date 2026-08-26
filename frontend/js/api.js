@@ -138,10 +138,16 @@ export const api = {
   restoreBackup: (payload) => call('restore_backup', { payload }),
 
   // ---- gestão de prazos ----
-  listCondominios: async () => JSON.parse(await call('list_condominios')),
+  // nowIso: a cada listagem, aviso prévio vencido (ver iniciarAvisoPrevio) é
+  // aplicado de vez pelo backend antes de montar a lista.
+  listCondominios: async () => JSON.parse(await call('list_condominios', { input: { nowIso: nowIso() } })),
   createCondominio: async (condominio) => JSON.parse(await call('create_condominio', { condominio })),
   updateCondominio: async (condominio) => JSON.parse(await call('update_condominio', { condominio })),
   deleteCondominio: (id) => call('delete_condominio', { id }),
+  iniciarAvisoPrevio: async (condominioId, ate, novoCodigo) =>
+    JSON.parse(await call('iniciar_aviso_previo', { input: { condominioId, ate, novoCodigo } })),
+  cancelarAvisoPrevio: async (condominioId) =>
+    JSON.parse(await call('cancelar_aviso_previo', { condominioId })),
 
   listTiposServico: async () => JSON.parse(await call('list_tipos_servico')),
   createTipoServico: async (tipo) => JSON.parse(await call('create_tipo_servico', { tipo })),

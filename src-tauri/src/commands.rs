@@ -614,9 +614,15 @@ pub fn restore_backup(state: State<AppState>, payload: String) -> Result<(), Str
 
 // ------------------------------------------------------ gestão de prazos
 
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ListCondominiosInput {
+    pub now_iso: String,
+}
+
 #[tauri::command]
-pub fn list_condominios(state: State<AppState>) -> Result<String, String> {
-    with_session(&state, |s| s.list_condominios_json())
+pub fn list_condominios(state: State<AppState>, input: ListCondominiosInput) -> Result<String, String> {
+    with_session(&state, |s| s.list_condominios_json(&input.now_iso))
 }
 
 #[tauri::command]
@@ -632,6 +638,26 @@ pub fn update_condominio(state: State<AppState>, condominio: CondominioInput) ->
 #[tauri::command]
 pub fn delete_condominio(state: State<AppState>, id: String) -> Result<(), String> {
     with_session(&state, |s| s.delete_condominio(&id))
+}
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct IniciarAvisoPrevioInput {
+    pub condominio_id: String,
+    pub ate: String,
+    pub novo_codigo: String,
+}
+
+#[tauri::command]
+pub fn iniciar_aviso_previo(state: State<AppState>, input: IniciarAvisoPrevioInput) -> Result<String, String> {
+    with_session(&state, |s| {
+        s.iniciar_aviso_previo(&input.condominio_id, &input.ate, &input.novo_codigo)
+    })
+}
+
+#[tauri::command]
+pub fn cancelar_aviso_previo(state: State<AppState>, condominio_id: String) -> Result<String, String> {
+    with_session(&state, |s| s.cancelar_aviso_previo(&condominio_id))
 }
 
 #[tauri::command]

@@ -80,6 +80,59 @@ TEST_CASE("CRUD de condomínio") {
   CHECK_THROWS_AS(updateCondominio(c.db, inexistente), NotFoundError);
 }
 
+TEST_CASE("aviso prévio: agenda a saída, mas só efetiva ativo/código quando a data vence") {
+  Cenario c;
+  Condominio input = c.condominio();
+  input.codigo = "1128";
+  createCondominio(c.db, input);
+
+  auto agendado = iniciarAvisoPrevio(c.db, "cond1", "2026-09-15", "9999");
+  CHECK(agendado.avisoPrevioAte == "2026-09-15");
+  CHECK(agendado.avisoPrevioNovoCodigo == "9999");
+  CHECK(agendado.ativo == true);
+  CHECK(agendado.codigo == "1128");  // nada muda ainda, só ficou agendado
+
+  // Antes da data: listCondominios/aplicarAvisosPrevioVencidos não mexem em nada.
+  aplicarAvisosPrevioVencidos(c.db, "2026-09-10T12:00:00.000Z");
+  auto antes = *findCondominio(c.db, "cond1");
+  CHECK(antes.ativo == true);
+  CHECK(antes.codigo == "1128");
+  CHECK(antes.avisoPrevioAte == "2026-09-15");
+
+  // Na data (ou depois): aplica de vez e limpa a agenda.
+  aplicarAvisosPrevioVencidos(c.db, "2026-09-16T12:00:00.000Z");
+  auto depois = *findCondominio(c.db, "cond1");
+  CHECK(depois.ativo == false);
+  CHECK(depois.codigo == "9999");
+  CHECK(depois.avisoPrevioAte.empty());
+  CHECK(depois.avisoPrevioNovoCodigo.empty());
+}
+
+TEST_CASE("aviso prévio: exige condomínio ativo, data e novo código; pode ser cancelado antes de vencer") {
+  Cenario c;
+  createCondominio(c.db, c.condominio());
+
+  CHECK_THROWS_AS(iniciarAvisoPrevio(c.db, "cond1", "", "9999"), std::invalid_argument);
+  CHECK_THROWS_AS(iniciarAvisoPrevio(c.db, "cond1", "2026-09-15", ""), std::invalid_argument);
+  CHECK_THROWS_AS(iniciarAvisoPrevio(c.db, "inexistente", "2026-09-15", "9999"), NotFoundError);
+
+  iniciarAvisoPrevio(c.db, "cond1", "2026-09-15", "9999");
+  auto cancelado = cancelarAvisoPrevio(c.db, "cond1");
+  CHECK(cancelado.avisoPrevioAte.empty());
+  CHECK(cancelado.avisoPrevioNovoCodigo.empty());
+  CHECK(cancelado.ativo == true);  // nunca tinha mudado, cancelar não desfaz o que não aconteceu
+
+  // Vencido o prazo original, mas como foi cancelado antes, não aplica nada.
+  aplicarAvisosPrevioVencidos(c.db, "2026-12-01T00:00:00.000Z");
+  CHECK(findCondominio(c.db, "cond1")->ativo == true);
+
+  // Condomínio já inativo não pode receber um novo aviso prévio.
+  auto inativo = c.condominio("cond2");
+  inativo.ativo = false;
+  createCondominio(c.db, inativo);
+  CHECK_THROWS_AS(iniciarAvisoPrevio(c.db, "cond2", "2026-09-15", "9999"), std::invalid_argument);
+}
+
 TEST_CASE("condomínio: campos do cadastro estendido (CNPJ, código, endereço detalhado, localização)") {
   Cenario c;
   Condominio input = c.condominio();
@@ -109,13 +162,15 @@ TEST_CASE("condomínio: campos do cadastro estendido (CNPJ, código, endereço d
   CHECK_NOTHROW(createCondominio(c.db, semLocalizacao));
 }
 
-TEST_CASE("localizacaoCatalog: seis opções fixas, na ordem da tela") {
+TEST_CASE("localizacaoCatalog: sete opções fixas, na ordem da tela") {
   const auto& cat = localizacaoCatalog();
-  REQUIRE(cat.size() == 6);
+  REQUIRE(cat.size() == 7);
   CHECK(cat[0].key == localizacao_condominio::kCentro);
-  CHECK(cat[5].key == localizacao_condominio::kOutraCidade);
-  CHECK(cat[5].label == "Outra cidade");
+  CHECK(cat[6].key == localizacao_condominio::kOutraCidade);
+  CHECK(cat[6].label == "Outra cidade");
   CHECK(isKnownLocalizacao(localizacao_condominio::kSul));
+  CHECK(isKnownLocalizacao(localizacao_condominio::kNoroeste));
+  CHECK(localizacaoLabel(localizacao_condominio::kNoroeste) == "Noroeste");
   CHECK_FALSE(isKnownLocalizacao("nordeste"));
 }
 

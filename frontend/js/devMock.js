@@ -837,10 +837,23 @@ export async function installDevMock() {
   function exigirNome(nome, mensagem) {
     if (!String(nome || '').trim()) throw new Error(mensagem);
   }
-  const LOCALIZACOES_CONDOMINIO = ['centro', 'leste', 'oeste', 'norte', 'sul', 'outra_cidade'];
+  const LOCALIZACOES_CONDOMINIO = ['centro', 'leste', 'oeste', 'norte', 'noroeste', 'sul', 'outra_cidade'];
   function exigirLocalizacao(localizacao) {
     if (localizacao && !LOCALIZACOES_CONDOMINIO.includes(localizacao)) {
       throw new Error(`localização inválida: '${localizacao}'`);
+    }
+  }
+  // Espelha aplicarAvisosPrevioVencidos em dates_engine.cpp — chamada a cada
+  // list_condominios, efetiva de vez quem já passou da data combinada.
+  function aplicarAvisosPrevioVencidosMock(hojeIso) {
+    const hoje = new Date(hojeIso).getTime();
+    for (const c of state.condominios) {
+      if (!c.avisoPrevioAte) continue;
+      if (new Date(c.avisoPrevioAte).getTime() > hoje) continue;
+      c.ativo = false;
+      c.codigo = c.avisoPrevioNovoCodigo;
+      c.avisoPrevioAte = '';
+      c.avisoPrevioNovoCodigo = '';
     }
   }
   function exigirTipoServico(t) {
@@ -2007,14 +2020,16 @@ export async function installDevMock() {
       }
 
       // ---- gestão de prazos ----
-      case 'list_condominios':
+      case 'list_condominios': {
+        aplicarAvisosPrevioVencidosMock(args.input.nowIso);
         return JSON.stringify(state.condominios);
+      }
       case 'create_condominio': {
         exigirNome(args.condominio.nome, 'informe o nome do condomínio');
         exigirLocalizacao(args.condominio.localizacao);
         // ativo=true por padrão quando ausente — mesmo default de dto.rs
         // (default_true) no lado real do Tauri.
-        const cond = { ativo: true, deltaSindica: false, ...args.condominio };
+        const cond = { ativo: true, deltaSindica: false, avisoPrevioAte: '', avisoPrevioNovoCodigo: '', ...args.condominio };
         state.condominios.push(cond);
         return JSON.stringify(cond);
       }
@@ -2032,6 +2047,24 @@ export async function installDevMock() {
         state.servicosCondominio = state.servicosCondominio.filter((v) => v.condominioId !== args.id);
         state.condominios = state.condominios.filter((c) => c.id !== args.id);
         return null;
+      }
+      case 'iniciar_aviso_previo': {
+        const { condominioId, ate, novoCodigo } = args.input;
+        const c = state.condominios.find((x) => x.id === condominioId);
+        if (!c) throw new Error('condomínio não encontrado: ' + condominioId);
+        if (!c.ativo) throw new Error('este condomínio já está inativo');
+        if (!String(ate || '').trim()) throw new Error('informe até quando o condomínio fica ativo');
+        if (!String(novoCodigo || '').trim()) throw new Error('informe o novo código após a saída');
+        c.avisoPrevioAte = ate;
+        c.avisoPrevioNovoCodigo = String(novoCodigo).trim();
+        return JSON.stringify(c);
+      }
+      case 'cancelar_aviso_previo': {
+        const c = state.condominios.find((x) => x.id === args.condominioId);
+        if (!c) throw new Error('condomínio não encontrado: ' + args.condominioId);
+        c.avisoPrevioAte = '';
+        c.avisoPrevioNovoCodigo = '';
+        return JSON.stringify(c);
       }
 
       case 'list_tipos_servico':

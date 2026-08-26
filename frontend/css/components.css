@@ -551,11 +551,6 @@ tfoot td {
   box-shadow: var(--shadow-overlay);
   overflow: hidden;
 }
-/* Modais com tabela (ex.: Entrada em Massa) precisam de mais largura que o
-   formulário padrão de 480px pra não espremer as colunas numéricas. */
-.modal-wide {
-  max-width: 760px;
-}
 /* Foto ampliada: acompanha o tamanho da própria imagem, até 1000x1000px —
    grande o bastante pra examinar o produto de verdade, não só confirmar que
    é a foto certa. Encolhe em telas menores (92vw/80vh) pra nunca vazar da
@@ -1302,9 +1297,11 @@ tfoot td {
 }
 
 /* Modal mais largo — matriz de permissões e itens de requisição não cabem
-   nos 480px do modal padrão. */
+   nos 480px do modal padrão. min() é a mesma blindagem de .modal-foto/
+   .modal-import-lote/.modal-vinculo — nunca ultrapassa a janela mesmo numa
+   tela bem pequena. */
 .modal.modal-wide {
-  max-width: 720px;
+  max-width: min(720px, 96vw);
 }
 
 /* Matriz CRUD da tela de Permissões: a primeira coluna explica o que cada
@@ -1571,9 +1568,11 @@ tfoot td {
 /* ============ Fornecedores e Prestadores de Serviços ============ */
 
 /* O cadastro de empresa tem três blocos (dados, contato, especialidades) e a
-   grade de chips precisa de largura para não virar uma coluna de um item só. */
+   grade de chips precisa de largura para não virar uma coluna de um item só.
+   min() protege janelas bem pequenas, mesma blindagem de .modal-foto/
+   .modal-import-lote/.modal-vinculo/.modal-wide. */
 .modal-largo {
-  max-width: 720px;
+  max-width: min(720px, 96vw);
 }
 
 /* Importar em Lote (Serviços): tabela de prévia com até 8 colunas (# +

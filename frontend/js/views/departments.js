@@ -4,6 +4,7 @@ import { openModal, closeModal } from '../components/modal.js';
 import { toast } from '../components/toast.js';
 import { can } from '../session.js';
 import { enableRowSelection } from '../components/tableTools.js';
+import { bindMoneyMask, setMoneyMaskedValue, parseMoneyMasked } from '../masks.js';
 
 let departments = [];
 let busca = '';
@@ -19,6 +20,7 @@ export async function initDepartments() {
       render();
     });
     enableRowSelection(document.getElementById('departmentsTbody'));
+    bindMoneyMask(document.getElementById('depLimite'));
   }
   await reload();
 }
@@ -61,11 +63,11 @@ function openDepartmentModal(id) {
     const d = departments.find((x) => x.id === id);
     document.getElementById('depNome').value = d.name;
     document.getElementById('depEncarregado').value = d.encarregado;
-    document.getElementById('depLimite').value = d.monthlyLimit || 0;
+    setMoneyMaskedValue(document.getElementById('depLimite'), d.monthlyLimit || 0);
   } else {
     document.getElementById('depNome').value = '';
     document.getElementById('depEncarregado').value = '';
-    document.getElementById('depLimite').value = 0;
+    setMoneyMaskedValue(document.getElementById('depLimite'), 0);
   }
   openModal('modalDepartamento');
 }
@@ -74,7 +76,7 @@ async function saveDepartment() {
   const id = document.getElementById('depId').value;
   const name = document.getElementById('depNome').value.trim();
   const encarregado = document.getElementById('depEncarregado').value.trim();
-  const monthlyLimit = parseFloat(document.getElementById('depLimite').value) || 0;
+  const monthlyLimit = parseMoneyMasked(document.getElementById('depLimite').value);
   if (!name || !encarregado) { toast('Preencha nome e encarregado.', 'error'); return; }
   if (monthlyLimit < 0) { toast('O limite mensal não pode ser negativo.', 'error'); return; }
   try {

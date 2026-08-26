@@ -4,6 +4,7 @@ import { openModal, closeModal } from '../components/modal.js';
 import { toast } from '../components/toast.js';
 import { can } from '../session.js';
 import { enableRowSelection } from '../components/tableTools.js';
+import { bindMask, maskTelefone } from '../masks.js';
 
 // Gestão SOS > Suprimentos — a equipe de campo, por categoria de função.
 // Cadastro simples (sem carteira, sem vínculo com condomínio): só contato +
@@ -30,6 +31,7 @@ export async function initSuprimentos() {
       render();
     });
     enableRowSelection(document.getElementById('suprimentosTbody'));
+    bindMask(document.getElementById('supTelefone'), maskTelefone);
   }
   await reload();
 }
@@ -88,7 +90,7 @@ function openSuprimentoModal(id) {
   document.getElementById('supId').value = id || '';
   document.getElementById('supNome').value = s ? s.nome : '';
   document.getElementById('supCategoria').value = s ? s.categoria : 'gestor';
-  document.getElementById('supTelefone').value = s ? s.telefone : '';
+  document.getElementById('supTelefone').value = s ? maskTelefone(s.telefone) : '';
   document.getElementById('supEmail').value = s ? s.email : '';
   document.getElementById('supChavePix').value = s ? s.chavePix : '';
   document.getElementById('supObservacoes').value = s ? s.observacoes : '';

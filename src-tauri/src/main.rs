@@ -180,6 +180,8 @@ fn main() {
             commands::create_condominio,
             commands::update_condominio,
             commands::delete_condominio,
+            commands::iniciar_aviso_previo,
+            commands::cancelar_aviso_previo,
             commands::list_tipos_servico,
             commands::create_tipo_servico,
             commands::update_tipo_servico,

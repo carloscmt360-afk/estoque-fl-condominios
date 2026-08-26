@@ -299,10 +299,17 @@ pub mod ffi {
         fn restore_from_json(self: Pin<&mut Session>, payload: &str) -> Result<()>;
 
         // ---- gestão de prazos ----
-        fn list_condominios_json(self: Pin<&mut Session>) -> Result<String>;
+        fn list_condominios_json(self: Pin<&mut Session>, now_iso: &str) -> Result<String>;
         fn create_condominio(self: Pin<&mut Session>, c: CondominioDto) -> Result<String>;
         fn update_condominio(self: Pin<&mut Session>, c: CondominioDto) -> Result<String>;
         fn delete_condominio(self: Pin<&mut Session>, id: &str) -> Result<()>;
+        fn iniciar_aviso_previo(
+            self: Pin<&mut Session>,
+            condominio_id: &str,
+            ate: &str,
+            novo_codigo: &str,
+        ) -> Result<String>;
+        fn cancelar_aviso_previo(self: Pin<&mut Session>, condominio_id: &str) -> Result<String>;
 
         fn list_tipos_servico_json(self: Pin<&mut Session>) -> Result<String>;
         fn create_tipo_servico(self: Pin<&mut Session>, t: TipoServicoDto) -> Result<String>;

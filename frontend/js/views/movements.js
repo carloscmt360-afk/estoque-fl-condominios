@@ -4,6 +4,7 @@ import { openModal, closeModal } from '../components/modal.js';
 import { toast } from '../components/toast.js';
 import { can } from '../session.js';
 import { enableRowSelection } from '../components/tableTools.js';
+import { bindMoneyMask, setMoneyMaskedValue, parseMoneyMasked } from '../masks.js';
 
 let movements = [];
 let products = [];
@@ -51,6 +52,7 @@ function wireControls() {
   document.getElementById('btnSalvarEdicaoMov').addEventListener('click', salvarEdicao);
   enableRowSelection(document.getElementById('timelineTbody'));
   document.getElementById('btnExcluirMov').addEventListener('click', excluirLancamento);
+  bindMoneyMask(document.getElementById('edtMovPreco'));
   ['edtMovQtd', 'edtMovPreco', 'edtMovQtdReal', 'edtMovDepartamento'].forEach((id) =>
     document.getElementById(id).addEventListener('input', atualizarInfoEdicao));
 
@@ -363,7 +365,7 @@ function abrirModalEdicao(id) {
   mostrar('edtMovAjusteBox', m.type === 'ajuste');
 
   document.getElementById('edtMovQtd').value = m.type === 'ajuste' ? '' : m.qty;
-  document.getElementById('edtMovPreco').value = m.unitPrice;
+  setMoneyMaskedValue(document.getElementById('edtMovPreco'), m.unitPrice);
   document.getElementById('edtMovPrecoLabel').textContent =
     m.type === 'entrada' ? 'Preço unitário de compra (R$) *' : 'Preço de valoração registrado (R$) *';
   document.getElementById('edtMovFornecedor').value = m.supplier || '';
@@ -416,7 +418,7 @@ function atualizarInfoEdicao() {
   }
 
   const qtd = parseFloat(document.getElementById('edtMovQtd').value) || 0;
-  const preco = parseFloat(document.getElementById('edtMovPreco').value) || 0;
+  const preco = parseMoneyMasked(document.getElementById('edtMovPreco').value);
   const depois = m.type === 'entrada' ? antes + qtd : antes - qtd;
   box.innerHTML = `Saldo na data deste lançamento, antes dele: <b>${fmtNum(antes)} ${escapeHtml(unit)}</b><br>` +
     `Saldo logo depois: <b>${fmtNum(depois)} ${escapeHtml(unit)}</b> — valor: <b>${fmtBRL(qtd * preco)}</b><br>` +
@@ -432,7 +434,7 @@ async function salvarEdicao() {
     id: m.id,
     qty: 0,
     qtyReal: 0,
-    unitPrice: parseFloat(document.getElementById('edtMovPreco').value) || 0,
+    unitPrice: parseMoneyMasked(document.getElementById('edtMovPreco').value),
     supplier: '',
     nf: '',
     departmentId: '',

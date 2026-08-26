@@ -4,6 +4,7 @@ import { openModal, closeModal } from '../components/modal.js';
 import { toast } from '../components/toast.js';
 import { can } from '../session.js';
 import { enableRowSelection } from '../components/tableTools.js';
+import { bindMask, maskTelefone, maskCnpj, maskCep } from '../masks.js';
 
 // Cadastro de empresas (fornecedores e prestadores de serviços).
 //
@@ -28,6 +29,9 @@ export async function initEmpresas() {
       render();
     });
     enableRowSelection(document.getElementById('empresasTbody'));
+    bindMask(document.getElementById('empTelefone'), maskTelefone);
+    bindMask(document.getElementById('empCnpj'), maskCnpj);
+    bindMask(document.getElementById('empCep'), maskCep);
   }
   await reload();
 }
@@ -141,15 +145,15 @@ function openEmpresaModal(id) {
   document.getElementById('empId').value = id || '';
   document.getElementById('empNome').value = e ? e.nome : '';
   document.getElementById('empNomeFantasia').value = e ? e.nomeFantasia : '';
-  document.getElementById('empCnpj').value = e ? e.cnpj : '';
+  document.getElementById('empCnpj').value = e ? maskCnpj(e.cnpj) : '';
   document.getElementById('empEndereco').value = e ? e.endereco : '';
   document.getElementById('empNumero').value = e ? e.numero : '';
   document.getElementById('empComplemento').value = e ? e.complemento : '';
   document.getElementById('empBairro').value = e ? e.bairro : '';
-  document.getElementById('empCep').value = e ? e.cep : '';
+  document.getElementById('empCep').value = e ? maskCep(e.cep) : '';
   document.getElementById('empCidade').value = e ? e.cidade : '';
   document.getElementById('empEstado').value = e ? e.estado : '';
-  document.getElementById('empTelefone').value = e ? e.telefone : '';
+  document.getElementById('empTelefone').value = e ? maskTelefone(e.telefone) : '';
   document.getElementById('empEmails').value = e ? e.emails : '';
   document.getElementById('empObservacoes').value = e ? e.observacoes : '';
   // Padrão "Não" no cadastro novo: parceira é uma resposta afirmativa, não algo

@@ -5,6 +5,7 @@ import { toast } from '../components/toast.js';
 import { can } from '../session.js';
 import { drawBarrasH } from '../charts/deptHBars.js';
 import { enableRowSelection } from '../components/tableTools.js';
+import { bindMoneyMask, setMoneyMaskedValue, parseMoneyMasked } from '../masks.js';
 
 // Compras > Aquisições FL — compra geral ligada a um fornecedor já
 // cadastrado em Fornecedores e Prestadores de Serviços. Sem item a item: só
@@ -47,6 +48,7 @@ export async function initAquisicoes() {
       render();
     });
     enableRowSelection(document.getElementById('aquisicoesTbody'));
+    bindMoneyMask(document.getElementById('aqValor'));
   }
   await reload();
 }
@@ -333,7 +335,7 @@ function openAquisicaoModal(id) {
   popularFornecedorSelect(a);
   document.getElementById('aqDescricao').value = a ? a.descricao : '';
   document.getElementById('aqNotaFiscal').value = a ? a.notaFiscal : '';
-  document.getElementById('aqValor').value = a ? a.valor : '';
+  setMoneyMaskedValue(document.getElementById('aqValor'), a ? a.valor : 0);
   document.getElementById('aqDataCompra').value = a ? a.dataCompra : new Date().toISOString().slice(0, 10);
   document.getElementById('aqObservacoes').value = a ? a.observacoes : '';
   openModal('modalAquisicao');
@@ -351,7 +353,7 @@ async function saveAquisicao() {
     id: id || uid('aq_'),
     fornecedorId, descricao,
     notaFiscal: document.getElementById('aqNotaFiscal').value.trim(),
-    valor: parseFloat(document.getElementById('aqValor').value) || 0,
+    valor: parseMoneyMasked(document.getElementById('aqValor').value),
     dataCompra,
     observacoes: document.getElementById('aqObservacoes').value.trim(),
     createdAt: id ? '' : nowIso(),

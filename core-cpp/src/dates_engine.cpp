@@ -34,13 +34,15 @@ const std::vector<LocalizacaoInfo> kLocalizacaoCatalog = {
     {localizacao_condominio::kLeste, "Leste"},
     {localizacao_condominio::kOeste, "Oeste"},
     {localizacao_condominio::kNorte, "Norte"},
+    {localizacao_condominio::kNoroeste, "Noroeste"},
     {localizacao_condominio::kSul, "Sul"},
     {localizacao_condominio::kOutraCidade, "Outra cidade"},
 };
 
 constexpr const char* kCondominioCols =
     "id, nome, nome_fantasia, cnpj, codigo, endereco, numero, complemento, bairro, cidade, estado, cep, "
-    "localizacao, sindico, telefone, email, observacoes, ativo, created_at, delta_sindica";
+    "localizacao, sindico, telefone, email, observacoes, ativo, created_at, delta_sindica, "
+    "aviso_previo_ate, aviso_previo_novo_codigo";
 
 Condominio rowToCondominio(Statement& st) {
   Condominio c;
@@ -64,6 +66,8 @@ Condominio rowToCondominio(Statement& st) {
   c.ativo = st.columnDouble(17) != 0;
   c.createdAt = st.columnText(18);
   c.deltaSindica = st.columnDouble(19) != 0;
+  c.avisoPrevioAte = textOrEmpty(st, 20);
+  c.avisoPrevioNovoCodigo = textOrEmpty(st, 21);
   return c;
 }
 
@@ -239,6 +243,57 @@ void deleteCondominio(Database& db, const std::string& id) {
   // ON DELETE CASCADE (ver schema v4) já leva junto os vínculos deste
   // condomínio e, em cadeia, o histórico de renovações deles.
   db.prepare("DELETE FROM condominios WHERE id=?").bind(1, id).step();
+}
+
+// Agenda a saída: o condomínio segue ativo normalmente até `ate` (inclusive)
+// — só o cadastro fica marcado; nada muda de comportamento em nenhuma outra
+// tela até aplicarAvisosPrevioVencidos decidir que já passou da data.
+Condominio iniciarAvisoPrevio(Database& db, const std::string& condominioId, const std::string& ate,
+                              const std::string& novoCodigo) {
+  auto c = findCondominio(db, condominioId);
+  if (!c) throw NotFoundError("condomínio não encontrado: " + condominioId);
+  if (!c->ativo) throw std::invalid_argument("este condomínio já está inativo");
+  if (trim(ate).empty()) throw std::invalid_argument("informe até quando o condomínio fica ativo");
+  if (trim(novoCodigo).empty()) throw std::invalid_argument("informe o novo código após a saída");
+
+  db.prepare("UPDATE condominios SET aviso_previo_ate=?, aviso_previo_novo_codigo=? WHERE id=?")
+      .bind(1, ate)
+      .bind(2, trim(novoCodigo))
+      .bind(3, condominioId)
+      .step();
+  return *findCondominio(db, condominioId);
+}
+
+// O cliente decidiu ficar — desmarca o aviso sem mexer em mais nada (o
+// condomínio nunca chegou a mudar de estado, então não há o que desfazer
+// além de limpar a agenda).
+Condominio cancelarAvisoPrevio(Database& db, const std::string& condominioId) {
+  if (!findCondominio(db, condominioId)) throw NotFoundError("condomínio não encontrado: " + condominioId);
+  db.prepare("UPDATE condominios SET aviso_previo_ate=NULL, aviso_previo_novo_codigo=NULL WHERE id=?")
+      .bind(1, condominioId)
+      .step();
+  return *findCondominio(db, condominioId);
+}
+
+// Chamada a cada listCondominios (ver Api::listCondominios) — sem scheduler
+// em background nesta app desktop, varrer no momento da listagem é o
+// equivalente prático de "acontece sozinho, sem precisar editar nada": quem
+// abrir a tela de Cadastro de Condomínios depois da data já vê o resultado
+// aplicado. Comparação por isoToEpochMs (não string) porque aviso_previo_ate
+// vem de <input type="date"> ("YYYY-MM-DD") e hojeIso pode vir com hora —
+// comparar como texto funcionaria hoje mas quebraria silenciosamente se um
+// dos dois formatos mudasse.
+void aplicarAvisosPrevioVencidos(Database& db, const std::string& hojeIso) {
+  int64_t hojeMs = time_utils::isoToEpochMs(normalizeDateOnly(hojeIso));
+  for (const auto& c : listCondominios(db)) {
+    if (c.avisoPrevioAte.empty()) continue;
+    if (time_utils::isoToEpochMs(normalizeDateOnly(c.avisoPrevioAte)) > hojeMs) continue;
+    db.prepare("UPDATE condominios SET ativo=0, codigo=?, aviso_previo_ate=NULL, "
+               "aviso_previo_novo_codigo=NULL WHERE id=?")
+        .bind(1, c.avisoPrevioNovoCodigo)
+        .bind(2, c.id)
+        .step();
+  }
 }
 
 // -------------------------------------------------------------- Tipos de serviço

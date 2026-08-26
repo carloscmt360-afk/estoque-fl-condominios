@@ -4,6 +4,7 @@ import { openModal, closeModal } from '../components/modal.js';
 import { toast } from '../components/toast.js';
 import { can } from '../session.js';
 import { enableRowSelection } from '../components/tableTools.js';
+import { bindMask, maskTelefone } from '../masks.js';
 
 // Gestão SOS > Gerentes — cadastro simples de gerentes, mesmo formato de
 // Cadastro de Condomínios. É esta lista que alimenta a tela de Carteiras (o
@@ -23,6 +24,7 @@ export async function initGerentes() {
       render();
     });
     enableRowSelection(document.getElementById('gerentesTbody'));
+    bindMask(document.getElementById('gerTelefone'), maskTelefone);
   }
   await reload();
 }
@@ -76,7 +78,7 @@ function openGerenteModal(id) {
   document.getElementById('gerId').value = id || '';
   const g = id ? gerentes.find((x) => x.id === id) : null;
   document.getElementById('gerNome').value = g ? g.nome : '';
-  document.getElementById('gerTelefone').value = g ? g.telefone : '';
+  document.getElementById('gerTelefone').value = g ? maskTelefone(g.telefone) : '';
   document.getElementById('gerEmail').value = g ? g.email : '';
   document.getElementById('gerChavePix').value = g ? g.chavePix : '';
   document.getElementById('gerObservacoes').value = g ? g.observacoes : '';

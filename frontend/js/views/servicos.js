@@ -6,6 +6,7 @@ import { can } from '../session.js';
 import { initImportarServicos } from './servicosImportar.js';
 import { printDocument, buildServicosDoc } from '../print.js';
 import { enableRowSelection } from '../components/tableTools.js';
+import { bindMoneyMask, setMoneyMaskedValue, parseMoneyMasked } from '../masks.js';
 
 // Gestão SOS > Serviços — a planilha de vendas/comissões. Cada linha liga um
 // condomínio, opcionalmente um gerente e um parceiro, a uma venda com
@@ -75,6 +76,7 @@ export async function initServicos() {
       render();
     });
     document.getElementById('btnLimparFiltrosServicos').addEventListener('click', limparFiltros);
+    bindMoneyMask(document.getElementById('srvVenda'));
     ['srvVenda', 'srvPorcentagem'].forEach((id) =>
       document.getElementById(id).addEventListener('input', atualizaComissaoPrevista));
     document.getElementById('btnImprimirServicos').addEventListener('click', abrirFiltroRelatorio);
@@ -490,7 +492,7 @@ function popularSelects(selecionado) {
 }
 
 function atualizaComissaoPrevista() {
-  const venda = parseFloat(document.getElementById('srvVenda').value) || 0;
+  const venda = parseMoneyMasked(document.getElementById('srvVenda').value);
   const pct = parseFloat(document.getElementById('srvPorcentagem').value) || 0;
   document.getElementById('srvComissaoPrevista').textContent = fmtBRL(venda * pct / 100);
 }
@@ -512,7 +514,7 @@ function openServicoModal(id) {
   document.getElementById('srvId').value = id || '';
   document.getElementById('srvCodigo').value = s ? s.codigo : '';
   popularSelects(s);
-  document.getElementById('srvVenda').value = s ? s.venda : '';
+  setMoneyMaskedValue(document.getElementById('srvVenda'), s ? s.venda : 0);
   document.getElementById('srvPorcentagem').value = s ? s.porcentagem : (porcentagemPadrao || '');
   document.getElementById('srvDataReferencia').value = s ? s.dataReferencia : new Date().toISOString().slice(0, 7);
   document.getElementById('srvObservacoes').value = s ? s.observacoes : '';
@@ -539,7 +541,7 @@ async function saveServico() {
     condominioId,
     gerenteId: document.getElementById('srvGerenteId').value,
     parceiroId: document.getElementById('srvParceiroId').value,
-    venda: parseFloat(document.getElementById('srvVenda').value) || 0,
+    venda: parseMoneyMasked(document.getElementById('srvVenda').value),
     porcentagem: parseFloat(document.getElementById('srvPorcentagem').value) || 0,
     dataReferencia,
     observacoes: document.getElementById('srvObservacoes').value.trim(),

@@ -5,6 +5,7 @@ import { toast } from '../components/toast.js';
 import { can, isSuperadmin } from '../session.js';
 import { enableRowSelection } from '../components/tableTools.js';
 import { printDocument, buildOrcamentoMapaDoc } from '../print.js';
+import { bindMask, maskCnpj } from '../masks.js';
 
 // Compras > Orçamentos — fluxo de cotação: uma Ordem (ligada a um
 // condomínio) recebe N Propostas (uma por empresa solicitada). Ver
@@ -78,6 +79,7 @@ export async function initOrcamentos() {
     document.getElementById('btnConfirmarEnviarCliente').addEventListener('click', confirmarEnviarCliente);
     document.getElementById('btnImprimirMapaOrcamento').addEventListener('click', imprimirMapaOrcamento);
     document.getElementById('btnConfirmarDetalhesProposta').addEventListener('click', confirmarDetalhesProposta);
+    bindMask(document.getElementById('detPropCnpj'), maskCnpj);
   }
   await reload();
 }
@@ -477,7 +479,7 @@ function abrirDetalhesPropostaModal(ordemId, propostaId, file) {
   if (!proposta) return;
   detalhesPropostaContexto = { ordemId, propostaId, file: file || null };
   document.getElementById('detPropEmpresaNome').value = proposta.empresaNome;
-  document.getElementById('detPropCnpj').value = proposta.cnpjFornecedor || '';
+  document.getElementById('detPropCnpj').value = maskCnpj(proposta.cnpjFornecedor || '');
   document.getElementById('detPropEscopo').value = proposta.escopo || '';
   document.getElementById('detPropFormaPagamento').value = proposta.formaPagamento || '';
   document.getElementById('detPropValidade').value = proposta.validade || '';

@@ -111,10 +111,12 @@ class Session {
   void restore_from_json(rust::Str payload);
 
   // ------------------------------------------------------ gestão de prazos
-  rust::String list_condominios_json();
+  rust::String list_condominios_json(rust::Str now_iso);
   rust::String create_condominio(CondominioDto c);
   rust::String update_condominio(CondominioDto c);
   void delete_condominio(rust::Str id);
+  rust::String iniciar_aviso_previo(rust::Str condominio_id, rust::Str ate, rust::Str novo_codigo);
+  rust::String cancelar_aviso_previo(rust::Str condominio_id);
 
   rust::String list_tipos_servico_json();
   rust::String create_tipo_servico(TipoServicoDto t);

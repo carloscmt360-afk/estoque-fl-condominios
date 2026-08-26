@@ -890,6 +890,18 @@ ALTER TABLE compras_propostas_orcamento ADD COLUMN forma_pagamento TEXT;
 ALTER TABLE compras_propostas_orcamento ADD COLUMN validade TEXT;
 )SQL";
 
+// Aviso prévio de saída: enquanto NULL, o condomínio não tem nada agendado —
+// ativo/código só mudam por edição manual, como sempre. Preenchido, é a
+// promessa "fica ativo até esta data, e depois passa a usar este código" —
+// aplicarAvisosPrevioVencidos (dates_engine.cpp), chamada a cada
+// listCondominios, varre e efetiva (ativo=0, codigo=novo, limpa os dois
+// campos) quem já passou da data. Sem scheduler em background nesta app
+// desktop, "a cada listagem" é o equivalente prático de "automaticamente".
+constexpr const char* kSchemaV29 = R"SQL(
+ALTER TABLE condominios ADD COLUMN aviso_previo_ate TEXT;
+ALTER TABLE condominios ADD COLUMN aviso_previo_novo_codigo TEXT;
+)SQL";
+
 }  // namespace
 
 Database::Database(const std::string& path) {
@@ -1066,6 +1078,10 @@ void Database::migrate() {
   if (version < 28) {
     execute(kSchemaV28);
     execute("PRAGMA user_version = 28;");
+  }
+  if (version < 29) {
+    execute(kSchemaV29);
+    execute("PRAGMA user_version = 29;");
   }
 }
 

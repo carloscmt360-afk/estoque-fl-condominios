@@ -195,7 +195,7 @@
         </div>
         <div class="table-scroll">
           <table>
-            <thead><tr><th>Condomínio</th><th>Código</th><th>Cidade/UF</th><th>Síndico</th><th>Telefone</th><th>Ativo</th><th>Ações</th></tr></thead>
+            <thead><tr><th>Condomínio</th><th>Código</th><th>Cidade/UF</th><th>Síndico</th><th>Telefone</th><th>Ativo</th><th>Aviso Prévio</th><th>Ações</th></tr></thead>
             <tbody id="condominiosTbody"></tbody>
           </table>
         </div>
@@ -1602,11 +1602,11 @@
     </div>
     <div class="field-row" id="prodInicialBox">
       <div class="field"><label>Qtd. inicial</label><input type="number" id="prodQtdInicial" min="0" step="any" value="0" /></div>
-      <div class="field"><label>Custo unitário inicial (R$)</label><input type="number" id="prodCustoInicial" min="0" step="any" value="0" /></div>
+      <div class="field"><label>Custo unitário inicial (R$)</label><input type="text" inputmode="decimal" id="prodCustoInicial" /></div>
     </div>
     <div class="info-box" id="prodInicialInfo">A quantidade e custo iniciais geram automaticamente o primeiro registro de entrada.</div>
     <div class="field" id="prodCorrecaoBox" style="display:none">
-      <label>Custo médio (R$)</label><input type="number" id="prodCustoMedio" min="0" step="any" value="0" />
+      <label>Custo médio (R$)</label><input type="text" inputmode="decimal" id="prodCustoMedio" />
       <div class="info-box">Corrige o custo médio ponderado do produto. Gera um ajuste no histórico, auditável na Linha do Tempo — a quantidade em estoque não muda.</div>
     </div>
   </div>
@@ -1667,7 +1667,7 @@
       <div class="field"><label>Nome *</label><input type="text" id="empNome" /></div>
       <div class="field"><label>Nome fantasia</label><input type="text" id="empNomeFantasia" /></div>
     </div>
-    <div class="field"><label>CNPJ</label><input type="text" id="empCnpj" placeholder="00.000.000/0000-00" /></div>
+    <div class="field"><label>CNPJ</label><input type="text" id="empCnpj" placeholder="00.000.000/0000-00" maxlength="18" /></div>
     <div class="field-row-3" style="grid-template-columns:2.2fr 0.7fr 1fr;">
       <div class="field"><label>Endereço</label><input type="text" id="empEndereco" /></div>
       <div class="field"><label>Número</label><input type="text" id="empNumero" /></div>
@@ -1675,14 +1675,14 @@
     </div>
     <div class="field-row-3" style="grid-template-columns:1fr 0.7fr 1.3fr;">
       <div class="field"><label>Bairro</label><input type="text" id="empBairro" /></div>
-      <div class="field"><label>CEP</label><input type="text" id="empCep" placeholder="00000-000" /></div>
+      <div class="field"><label>CEP</label><input type="text" id="empCep" placeholder="00000-000" maxlength="9" /></div>
       <div class="field"><label>Cidade</label><input type="text" id="empCidade" /></div>
     </div>
     <div class="field-row">
       <div class="field" style="max-width:100px;"><label>Estado (UF)</label><input type="text" id="empEstado" maxlength="2" placeholder="SP" /></div>
     </div>
     <div class="field-row">
-      <div class="field"><label>Telefone</label><input type="text" id="empTelefone" /></div>
+      <div class="field"><label>Telefone</label><input type="text" id="empTelefone" placeholder="(00)0000-0000 ou (00)0.0000-0000" maxlength="15" /></div>
       <div class="field"><label>E-mails</label>
         <input type="text" id="empEmails" placeholder="um ou mais, separados por vírgula" /></div>
     </div>
@@ -1721,7 +1721,7 @@
       <div class="field"><label>Nome fantasia</label><input type="text" id="condNomeFantasia" /></div>
     </div>
     <div class="field-row">
-      <div class="field"><label>CNPJ</label><input type="text" id="condCnpj" /></div>
+      <div class="field"><label>CNPJ</label><input type="text" id="condCnpj" placeholder="00.000.000/0000-00" maxlength="18" /></div>
       <div class="field"><label>Código</label><input type="text" id="condCodigo" /></div>
     </div>
     <div class="field">
@@ -1733,7 +1733,7 @@
     </div>
     <div class="section-title" style="margin-top:var(--sp-3);">Endereço</div>
     <div class="field-row-3">
-      <div class="field"><label>CEP</label><input type="text" id="condCep" /></div>
+      <div class="field"><label>CEP</label><input type="text" id="condCep" placeholder="00000-000" maxlength="9" /></div>
       <div class="field"><label>Endereço</label><input type="text" id="condEndereco" /></div>
       <div class="field"><label>Número</label><input type="text" id="condNumero" /></div>
     </div>
@@ -1752,13 +1752,14 @@
         <option value="leste">Leste</option>
         <option value="oeste">Oeste</option>
         <option value="norte">Norte</option>
+        <option value="noroeste">Noroeste</option>
         <option value="sul">Sul</option>
         <option value="outra_cidade">Outra cidade</option>
       </select>
     </div>
     <div class="field-row">
       <div class="field"><label>Síndico</label><input type="text" id="condSindico" /></div>
-      <div class="field"><label>Telefone</label><input type="text" id="condTelefone" /></div>
+      <div class="field"><label>Telefone</label><input type="text" id="condTelefone" placeholder="(00)0000-0000 ou (00)0.0000-0000" maxlength="15" /></div>
     </div>
     <div class="field"><label>E-mail</label><input type="email" id="condEmail"
       placeholder="destinatário padrão ao enviar orçamentos" /></div>
@@ -1766,6 +1767,32 @@
   </div>
   <div class="modal-foot"><button class="btn-outline" data-close="modalCondominio">Cancelar</button>
     <button class="btn-primary" id="btnSalvarCondominio">Salvar</button></div>
+</div></div>
+
+<!-- MODAL: Aviso Prévio — condomínio que vai deixar de ser cliente da FL,
+     mas continua ativo até a data combinada. Ao vencer, o próprio sistema
+     aplica sozinho (ativo=Não, código=o novo) na próxima vez que a lista de
+     condomínios for carregada — ver aplicarAvisosPrevioVencidos. -->
+<div class="overlay" id="modalAvisoPrevio"><div class="modal">
+  <div class="modal-head"><h3>Aviso Prévio</h3>
+    <button class="btn-ghost" data-close="modalAvisoPrevio">✕</button></div>
+  <div class="modal-body">
+    <input type="hidden" id="avpCondominioId" />
+    <p class="field-hint">O condomínio continua ativo normalmente até a data informada. Ao vencer o
+      prazo, o sistema torna o condomínio inativo automaticamente e passa a usar o novo código — sem
+      precisar editar nada na hora.</p>
+    <div class="field"><label>Condomínio</label><div id="avpCondominioNome" class="field-static"></div></div>
+    <div class="field-row">
+      <div class="field"><label>Código atual</label><div id="avpCodigoAtual" class="field-static"></div></div>
+      <div class="field"><label>Ativo até *</label><input type="date" id="avpAte" /></div>
+    </div>
+    <div class="field"><label>Novo código após a saída *</label><input type="text" id="avpNovoCodigo" /></div>
+  </div>
+  <div class="modal-foot">
+    <button class="btn-danger" id="btnCancelarAvisoPrevio" style="margin-right:auto;display:none;">Cancelar aviso prévio</button>
+    <button class="btn-outline" data-close="modalAvisoPrevio">Fechar</button>
+    <button class="btn-primary" id="btnSalvarAvisoPrevio">Salvar</button>
+  </div>
 </div></div>
 
 <!-- MODAL: Gerente (Gestão SOS) -->
@@ -1776,7 +1803,7 @@
     <input type="hidden" id="gerId" />
     <div class="field"><label>Nome *</label><input type="text" id="gerNome" /></div>
     <div class="field-row">
-      <div class="field"><label>Telefone</label><input type="text" id="gerTelefone" /></div>
+      <div class="field"><label>Telefone</label><input type="text" id="gerTelefone" placeholder="(00)0000-0000 ou (00)0.0000-0000" maxlength="15" /></div>
       <div class="field"><label>E-mail</label><input type="email" id="gerEmail" /></div>
     </div>
     <div class="field"><label>Chave PIX</label><input type="text" id="gerChavePix" /></div>
@@ -1804,7 +1831,7 @@
         </select></div>
     </div>
     <div class="field-row">
-      <div class="field"><label>Telefone</label><input type="text" id="supTelefone" /></div>
+      <div class="field"><label>Telefone</label><input type="text" id="supTelefone" placeholder="(00)0000-0000 ou (00)0.0000-0000" maxlength="15" /></div>
       <div class="field"><label>E-mail</label><input type="email" id="supEmail" /></div>
     </div>
     <div class="field"><label>Chave PIX</label><input type="text" id="supChavePix" /></div>
@@ -1836,7 +1863,7 @@
     <div class="field"><label>Descrição *</label><input type="text" id="aqDescricao" /></div>
     <div class="field-row">
       <div class="field"><label>Nota fiscal</label><input type="text" id="aqNotaFiscal" /></div>
-      <div class="field"><label>Valor (R$) *</label><input type="number" id="aqValor" min="0" step="0.01" /></div>
+      <div class="field"><label>Valor (R$) *</label><input type="text" inputmode="decimal" id="aqValor" /></div>
       <div class="field"><label>Data da compra *</label><input type="date" id="aqDataCompra" /></div>
     </div>
     <div class="field"><label>Observações</label><textarea id="aqObservacoes" rows="3"></textarea></div>
@@ -1920,7 +1947,7 @@
       cliente ver o que cada proposta inclui.</p>
     <div class="field"><label>Empresa</label><input type="text" id="detPropEmpresaNome" disabled /></div>
     <div class="field"><label>CNPJ do fornecedor</label>
-      <input type="text" id="detPropCnpj" placeholder="00.000.000/0000-00" /></div>
+      <input type="text" id="detPropCnpj" placeholder="00.000.000/0000-00" maxlength="18" /></div>
     <div class="field"><label>Escopo da proposta</label><textarea id="detPropEscopo" rows="3"></textarea></div>
     <div class="field-row">
       <div class="field"><label>Forma de pagamento</label>
@@ -2017,7 +2044,7 @@
     <div class="field"><label>Aquisição *</label><select id="pagAquisicaoId"></select></div>
     <div class="field-row">
       <div class="field"><label>Nota fiscal *</label><input type="text" id="pagNotaFiscal" /></div>
-      <div class="field"><label>Valor total (R$) *</label><input type="number" id="pagValorTotal" min="0" step="0.01" /></div>
+      <div class="field"><label>Valor total (R$) *</label><input type="text" inputmode="decimal" id="pagValorTotal" /></div>
       <div class="field"><label>Data de emissão *</label><input type="date" id="pagDataEmissao" /></div>
     </div>
     <div class="field"><label>Observações</label><textarea id="pagObservacoes" rows="2"></textarea></div>
@@ -2078,7 +2105,7 @@
       <div class="field"><label>Parceiro</label><select id="srvParceiroId"></select></div>
     </div>
     <div class="field-row-3">
-      <div class="field"><label>Venda (R$) *</label><input type="number" id="srvVenda" min="0" step="0.01" /></div>
+      <div class="field"><label>Venda (R$) *</label><input type="text" inputmode="decimal" id="srvVenda" /></div>
       <div class="field"><label>Porcentagem (%) *</label><input type="number" id="srvPorcentagem" min="0" max="100" step="0.01" /></div>
       <div class="field"><label>Comissão prevista</label>
         <div class="field-hint" id="srvComissaoPrevista" style="font-weight:700;font-size:14px;">R$ 0,00</div></div>
@@ -2248,7 +2275,7 @@
     <div class="field"><label>Produto *</label><select id="entProduto"></select></div>
     <div class="field-row">
       <div class="field"><label>Quantidade recebida *</label><input type="number" id="entQtd" min="0.0001" step="any" /></div>
-      <div class="field"><label>Preço unitário (R$) *</label><input type="number" id="entPreco" min="0" step="any" /></div>
+      <div class="field"><label>Preço unitário (R$) *</label><input type="text" inputmode="decimal" id="entPreco" /></div>
     </div>
     <div class="field-row">
       <div class="field"><label>Fornecedor *</label><input type="text" id="entFornecedor" /></div>
@@ -2353,7 +2380,7 @@
     <!-- entrada / saída -->
     <div class="field-row" id="edtMovQtdBox">
       <div class="field"><label id="edtMovQtdLabel">Quantidade *</label><input type="number" id="edtMovQtd" min="0.0001" step="any" /></div>
-      <div class="field"><label id="edtMovPrecoLabel">Preço unitário (R$) *</label><input type="number" id="edtMovPreco" min="0" step="any" /></div>
+      <div class="field"><label id="edtMovPrecoLabel">Preço unitário (R$) *</label><input type="text" inputmode="decimal" id="edtMovPreco" /></div>
     </div>
 
     <!-- entrada -->
@@ -2395,7 +2422,7 @@
     <div class="field"><label>Encarregado *</label><input type="text" id="depEncarregado" /></div>
     <div class="field">
       <label>Limite mensal de gasto (R$)</label>
-      <input type="number" id="depLimite" min="0" step="any" value="0" />
+      <input type="text" inputmode="decimal" id="depLimite" />
     </div>
     <div class="info-box" id="depLimiteInfo">0 = sem limite. Com um limite definido, o Relatório Mensal
       avisa a partir de 90% do teto e mantém o aviso enquanto estiver estourado.</div>

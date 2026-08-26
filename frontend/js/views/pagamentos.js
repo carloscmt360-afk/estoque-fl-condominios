@@ -4,6 +4,7 @@ import { openModal, closeModal } from '../components/modal.js';
 import { toast } from '../components/toast.js';
 import { can } from '../session.js';
 import { enableRowSelection } from '../components/tableTools.js';
+import { bindMoneyMask, setMoneyMaskedValue, parseMoneyMasked } from '../masks.js';
 
 // Compras > Acompanhamento de pagamentos — uma NF ligada a uma Aquisição já
 // lançada, com as parcelas dela. Cada parcela é marcada paga individualmente
@@ -29,6 +30,7 @@ export async function initPagamentos() {
       render();
     });
     enableRowSelection(document.getElementById('pagamentosTbody'));
+    bindMoneyMask(document.getElementById('pagValorTotal'));
   }
   await reload();
 }
@@ -114,9 +116,9 @@ function popularAquisicaoSelect(selecionado) {
 // quando o campo ainda está vazio (edição existente não é sobrescrita).
 function atualizaValorSugerido() {
   const campoValor = document.getElementById('pagValorTotal');
-  if (campoValor.value) return;
+  if (parseMoneyMasked(campoValor.value) > 0) return;
   const aq = aquisicoes.find((x) => x.id === document.getElementById('pagAquisicaoId').value);
-  if (aq) campoValor.value = aq.valor;
+  if (aq) setMoneyMaskedValue(campoValor, aq.valor);
 }
 
 function renderParcelasEdit() {
@@ -130,16 +132,20 @@ function renderParcelasEdit() {
   }
   tbody.innerHTML = parcelasEdit.map((p, i) => `<tr>
     <td class="num">${i + 1}</td>
-    <td class="num"><input type="number" min="0" step="0.01" data-parc-valor="${i}" value="${p.valor}"
+    <td class="num"><input type="text" inputmode="decimal" data-parc-valor="${i}"
       style="width:110px;" ${p.pago ? 'disabled' : ''} /></td>
     <td><input type="date" data-parc-vencimento="${i}" value="${p.vencimento}" ${p.pago ? 'disabled' : ''} /></td>
     <td>${p.pago ? `<span class="pill pill-ok">Paga em ${fmtDateBR(p.dataPagamento)}</span>` : '<span class="pill pill-low">Em aberto</span>'}</td>
     <td>${p.pago ? '' : `<button type="button" class="btn-sm btn-danger" data-parc-remover="${i}">Remover</button>`}</td>
   </tr>`).join('');
 
-  tbody.querySelectorAll('[data-parc-valor]').forEach((inp) => inp.addEventListener('input', (e) => {
-    parcelasEdit[Number(e.target.dataset.parcValor)].valor = parseFloat(e.target.value) || 0;
-  }));
+  tbody.querySelectorAll('[data-parc-valor]').forEach((inp) => {
+    setMoneyMaskedValue(inp, parcelasEdit[Number(inp.dataset.parcValor)].valor);
+    bindMoneyMask(inp);
+    inp.addEventListener('input', (e) => {
+      parcelasEdit[Number(e.target.dataset.parcValor)].valor = parseMoneyMasked(e.target.value);
+    });
+  });
   tbody.querySelectorAll('[data-parc-vencimento]').forEach((inp) => inp.addEventListener('input', (e) => {
     parcelasEdit[Number(e.target.dataset.parcVencimento)].vencimento = e.target.value;
   }));
@@ -162,7 +168,7 @@ function openPagamentoModal(id) {
   popularAquisicaoSelect(p);
   document.getElementById('pagAquisicaoId').disabled = !!id;  // não muda a aquisição numa NF já lançada
   document.getElementById('pagNotaFiscal').value = p ? p.notaFiscal : '';
-  document.getElementById('pagValorTotal').value = p ? p.valorTotal : '';
+  setMoneyMaskedValue(document.getElementById('pagValorTotal'), p ? p.valorTotal : 0);
   document.getElementById('pagDataEmissao').value = p ? p.dataEmissao : new Date().toISOString().slice(0, 10);
   document.getElementById('pagObservacoes').value = p ? p.observacoes : '';
   parcelasEdit = p ? p.parcelas.map((x) => ({ ...x })) : [{ id: '', numero: 0, valor: 0, vencimento: '', pago: false, dataPagamento: '' }];
@@ -183,7 +189,7 @@ async function savePagamento() {
   const payload = {
     id: id || uid('pag_'),
     aquisicaoId, notaFiscal,
-    valorTotal: parseFloat(document.getElementById('pagValorTotal').value) || 0,
+    valorTotal: parseMoneyMasked(document.getElementById('pagValorTotal').value),
     dataEmissao,
     observacoes: document.getElementById('pagObservacoes').value.trim(),
     createdAt: id ? '' : nowIso(),

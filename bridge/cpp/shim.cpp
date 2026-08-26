@@ -113,6 +113,8 @@ json condominioToJson(const Condominio& c) {
   j["ativo"] = c.ativo;
   j["deltaSindica"] = c.deltaSindica;
   j["createdAt"] = c.createdAt;
+  j["avisoPrevioAte"] = c.avisoPrevioAte;
+  j["avisoPrevioNovoCodigo"] = c.avisoPrevioNovoCodigo;
   return j;
 }
 
@@ -394,9 +396,9 @@ void Session::restore_from_json(rust::Str payload) { api_.restoreFromJson(std::s
 
 // ------------------------------------------------------ gestão de prazos
 
-rust::String Session::list_condominios_json() {
+rust::String Session::list_condominios_json(rust::Str now_iso) {
   json arr = json::array();
-  for (auto& c : api_.listCondominios()) arr.push_back(condominioToJson(c));
+  for (auto& c : api_.listCondominios(std::string(now_iso))) arr.push_back(condominioToJson(c));
   return rust::String(arr.dump());
 }
 
@@ -409,6 +411,16 @@ rust::String Session::update_condominio(CondominioDto c) {
 }
 
 void Session::delete_condominio(rust::Str id) { api_.deleteCondominio(std::string(id)); }
+
+rust::String Session::iniciar_aviso_previo(rust::Str condominio_id, rust::Str ate, rust::Str novo_codigo) {
+  return rust::String(
+      condominioToJson(api_.iniciarAvisoPrevio(std::string(condominio_id), std::string(ate), std::string(novo_codigo)))
+          .dump());
+}
+
+rust::String Session::cancelar_aviso_previo(rust::Str condominio_id) {
+  return rust::String(condominioToJson(api_.cancelarAvisoPrevio(std::string(condominio_id))).dump());
+}
 
 rust::String Session::list_tipos_servico_json() {
   json arr = json::array();

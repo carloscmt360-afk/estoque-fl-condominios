@@ -904,12 +904,13 @@ void Api::deleteRequestWindow(const std::string& id) {
 
 // ------------------------------------------------------ gestão de prazos
 
-std::vector<Condominio> Api::listCondominios() {
+std::vector<Condominio> Api::listCondominios(const std::string& hojeIso) {
   requireAny({{features::kCondominios, PermAction::Read},
               {features::kGestaoDatas, PermAction::Read},
               {features::kGestaoDatas, PermAction::Create},
               {features::kGestaoDatas, PermAction::Update},
               {features::kGerentes, PermAction::Read}});
+  estoque::aplicarAvisosPrevioVencidos(db_, hojeIso);
   return estoque::listCondominios(db_);
 }
 
@@ -926,6 +927,17 @@ Condominio Api::updateCondominio(const Condominio& input) {
 void Api::deleteCondominio(const std::string& id) {
   require(features::kCondominios, PermAction::Delete);
   estoque::deleteCondominio(db_, id);
+}
+
+Condominio Api::iniciarAvisoPrevio(const std::string& condominioId, const std::string& ate,
+                                   const std::string& novoCodigo) {
+  require(features::kCondominios, PermAction::Update);
+  return estoque::iniciarAvisoPrevio(db_, condominioId, ate, novoCodigo);
+}
+
+Condominio Api::cancelarAvisoPrevio(const std::string& condominioId) {
+  require(features::kCondominios, PermAction::Update);
+  return estoque::cancelarAvisoPrevio(db_, condominioId);
 }
 
 std::vector<TipoServico> Api::listTiposServico() {

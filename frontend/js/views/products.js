@@ -6,6 +6,7 @@ import { can } from '../session.js';
 import { openFotoAmpliada } from '../components/fotoAmpliada.js';
 import { enableRowSelection } from '../components/tableTools.js';
 import { instalarFiltroSelect } from '../components/filtroSelect.js';
+import { bindMoneyMask, setMoneyMaskedValue, parseMoneyMasked } from '../masks.js';
 
 // As seis categorias administrativas do sistema — fixas, nunca texto livre
 // (ver core-cpp/src/inventory_engine.cpp::kValidCategories, a mesma lista).
@@ -123,6 +124,9 @@ function wireControls() {
   document.getElementById('btnSalvarEntrada').addEventListener('click', saveEntrada);
   document.getElementById('btnSalvarSaida').addEventListener('click', saveSaida);
   document.getElementById('btnSalvarCorrecao').addEventListener('click', saveCorrecao);
+  bindMoneyMask(document.getElementById('prodCustoInicial'));
+  bindMoneyMask(document.getElementById('prodCustoMedio'));
+  bindMoneyMask(document.getElementById('entPreco'));
   ['entProduto', 'entQtd', 'entPreco'].forEach((id) => document.getElementById(id).addEventListener('input', updateEntradaInfo));
   ['saiProduto', 'saiQtd', 'saiDepartamento'].forEach((id) => document.getElementById(id).addEventListener('input', updateSaidaInfo));
   ['corProduto', 'corQtdReal'].forEach((id) => document.getElementById(id).addEventListener('input', updateCorrecaoInfo));
@@ -400,7 +404,7 @@ function openProductModal(id) {
     }
     unidadeSelect.value = p.unit;
     document.getElementById('prodMinimo').value = p.minStock;
-    document.getElementById('prodCustoMedio').value = p.avgCost;
+    setMoneyMaskedValue(document.getElementById('prodCustoMedio'), p.avgCost);
     skuBox.style.display = 'block';
     document.getElementById('prodSku').value = p.sku || '(sem SKU — abra o app uma vez para gerar)';
     if (p.category === NAO_CLASSIFICADO) {
@@ -422,7 +426,7 @@ function openProductModal(id) {
     catAviso.style.display = 'none';
     skuBox.style.display = 'none';
     document.getElementById('prodQtdInicial').value = 0;
-    document.getElementById('prodCustoInicial').value = 0;
+    setMoneyMaskedValue(document.getElementById('prodCustoInicial'), 0);
     inicialBox.style.display = 'grid';
     inicialInfo.style.display = 'block';
     correcaoBox.style.display = 'none';
@@ -445,8 +449,8 @@ async function saveProduct() {
       const updated = await api.updateProduct({ id, name, unit, minStock, category, qty: 0, avgCost: 0, createdAt: '' });
       productId = id;
       sku = updated.sku;
-      const novoCusto = parseFloat(document.getElementById('prodCustoMedio').value);
-      if (p && !isNaN(novoCusto) && novoCusto >= 0 && Math.abs(novoCusto - p.avgCost) > 0.0001) {
+      const novoCusto = parseMoneyMasked(document.getElementById('prodCustoMedio').value);
+      if (p && novoCusto >= 0 && Math.abs(novoCusto - p.avgCost) > 0.0001) {
         const agora = nowIso();
         await api.applyCorrecao({
           movementId: uid('m_'), productId: id, qtyReal: p.qty,
@@ -464,7 +468,7 @@ async function saveProduct() {
       productId = newId;
       sku = createdProduct.sku;
       const qtdInicial = parseFloat(document.getElementById('prodQtdInicial').value) || 0;
-      const custoInicial = parseFloat(document.getElementById('prodCustoInicial').value) || 0;
+      const custoInicial = parseMoneyMasked(document.getElementById('prodCustoInicial').value);
       if (qtdInicial > 0) {
         await api.applyEntrada({ movementId: uid('m_'), productId: newId, qty: qtdInicial, unitPrice: custoInicial, supplier: 'Saldo inicial', nf: '-', date: created, obs: 'Cadastro inicial do produto', createdAt: created });
       }
@@ -494,7 +498,7 @@ async function deleteProduct(id) {
 function openEntradaModal(productId) {
   fillProductSelect('entProduto', productId);
   document.getElementById('entQtd').value = '';
-  document.getElementById('entPreco').value = '';
+  setMoneyMaskedValue(document.getElementById('entPreco'), 0);
   document.getElementById('entFornecedor').value = '';
   document.getElementById('entNF').value = '';
   document.getElementById('entObs').value = '';
@@ -507,7 +511,7 @@ function updateEntradaInfo() {
   const box = document.getElementById('entInfoBox');
   if (!p) { box.textContent = 'Cadastre um produto primeiro.'; return; }
   const qtd = parseFloat(document.getElementById('entQtd').value) || 0;
-  const preco = parseFloat(document.getElementById('entPreco').value) || 0;
+  const preco = parseMoneyMasked(document.getElementById('entPreco').value);
   const baseQtd = Math.max(p.qty, 0);
   const novaQtd = p.qty + qtd;
   const novoCusto = (baseQtd + qtd) > 0 ? (baseQtd * p.avgCost + qtd * preco) / (baseQtd + qtd) : 0;
@@ -516,14 +520,14 @@ function updateEntradaInfo() {
 async function saveEntrada() {
   const p = products.find((x) => x.id === document.getElementById('entProduto').value);
   const qtd = parseFloat(document.getElementById('entQtd').value);
-  const preco = parseFloat(document.getElementById('entPreco').value);
+  const preco = parseMoneyMasked(document.getElementById('entPreco').value);
   const fornecedor = document.getElementById('entFornecedor').value.trim();
   const nf = document.getElementById('entNF').value.trim();
   const dataVal = document.getElementById('entData').value;
   const obs = document.getElementById('entObs').value.trim();
   if (!p) { toast('Selecione um produto.', 'error'); return; }
   if (!qtd || qtd <= 0) { toast('Informe uma quantidade válida.', 'error'); return; }
-  if (isNaN(preco) || preco < 0) { toast('Informe um preço válido.', 'error'); return; }
+  if (preco <= 0) { toast('Informe um preço válido.', 'error'); return; }
   if (!fornecedor || !nf) { toast('Informe fornecedor e nota fiscal.', 'error'); return; }
   try {
     const dataISO = dataVal ? new Date(dataVal).toISOString() : nowIso();

@@ -33,6 +33,7 @@ constexpr const char* kCentro = "centro";
 constexpr const char* kLeste = "leste";
 constexpr const char* kOeste = "oeste";
 constexpr const char* kNorte = "norte";
+constexpr const char* kNoroeste = "noroeste";
 constexpr const char* kSul = "sul";
 constexpr const char* kOutraCidade = "outra_cidade";
 }  // namespace localizacao_condominio
@@ -71,6 +72,13 @@ struct Condominio {
   // commissions_engine.cpp) — nunca é digitado serviço a serviço.
   bool deltaSindica = false;
   std::string createdAt;
+  // Aviso prévio de saída (ver iniciarAvisoPrevio/cancelarAvisoPrevio/
+  // aplicarAvisosPrevioVencidos abaixo): avisoPrevioAte vazio = nada
+  // agendado. Preenchido, é a data até quando o condomínio segue ativo — ao
+  // passar dela, o próximo listCondominios já aplica sozinho ativo=false e
+  // codigo=avisoPrevioNovoCodigo, e limpa os dois campos.
+  std::string avisoPrevioAte;
+  std::string avisoPrevioNovoCodigo;
 };
 
 struct TipoServico {
@@ -127,6 +135,22 @@ Condominio updateCondominio(Database& db, const Condominio& input);
 // excluídos junto — sem vínculo órfão apontando para um condomínio que não
 // existe mais.
 void deleteCondominio(Database& db, const std::string& id);
+
+// Aviso prévio de saída — condomínio que vai deixar de ser cliente da FL,
+// mas continua ativo até a data combinada. `ate` é obrigatório ("YYYY-MM-DD"
+// ou ISO completo) e `novoCodigo` é o código que o condomínio passa a usar
+// quando virar inativo (histórico/relatórios antigos continuam com o código
+// antigo, só o cadastro muda). Exige o condomínio estar ativo.
+Condominio iniciarAvisoPrevio(Database& db, const std::string& condominioId, const std::string& ate,
+                              const std::string& novoCodigo);
+// Desiste do aviso prévio (o condomínio decidiu continuar) — limpa a agenda
+// sem mudar ativo/código, que nunca chegaram a ser tocados.
+Condominio cancelarAvisoPrevio(Database& db, const std::string& condominioId);
+// Varre todos os condomínios com aviso prévio vencido (avisoPrevioAte <=
+// hojeIso) e aplica de vez: ativo=false, codigo=avisoPrevioNovoCodigo, limpa
+// os campos do aviso. Chamada em toda listagem de condomínios — ver
+// Api::listCondominios.
+void aplicarAvisosPrevioVencidos(Database& db, const std::string& hojeIso);
 
 // ---- Tipos de serviço ----
 std::vector<TipoServico> listTiposServico(Database& db);

@@ -1,10 +1,11 @@
 import { api, errorText } from '../api.js';
-import { escapeHtml, uid, nowIso, paraBusca } from '../format.js';
+import { escapeHtml, uid, nowIso, paraBusca, fmtDateBR } from '../format.js';
 import { openModal, closeModal } from '../components/modal.js';
 import { toast } from '../components/toast.js';
 import { can } from '../session.js';
 import { enableRowSelection } from '../components/tableTools.js';
 import { initImportarCondominios } from './condominiosImportar.js';
+import { bindMask, maskTelefone, maskCnpj, maskCep } from '../masks.js';
 
 // Cadastro de Condomínios — os clientes administrados pela FL. É a lista que
 // alimenta o seletor da Gestão de Prazos: um serviço só é vinculado a um
@@ -19,12 +20,17 @@ export async function initCondominios() {
     wired = true;
     document.getElementById('btnNovoCondominio').addEventListener('click', () => openCondominioModal());
     document.getElementById('btnSalvarCondominio').addEventListener('click', saveCondominio);
+    document.getElementById('btnSalvarAvisoPrevio').addEventListener('click', salvarAvisoPrevio);
+    document.getElementById('btnCancelarAvisoPrevio').addEventListener('click', cancelarAvisoPrevio);
     document.getElementById('condBusca').addEventListener('input', (e) => {
       busca = paraBusca(e.target.value.trim());
       render();
     });
     enableRowSelection(document.getElementById('condominiosTbody'));
     initImportarCondominios(() => condominios, reload);
+    bindMask(document.getElementById('condTelefone'), maskTelefone);
+    bindMask(document.getElementById('condCnpj'), maskCnpj);
+    bindMask(document.getElementById('condCep'), maskCep);
   }
   await reload();
 }
@@ -51,16 +57,24 @@ function render() {
     busca ? ` · ${filtrados.length} no filtro` : '';
 
   if (!filtrados.length) {
-    tbody.innerHTML = `<tr class="empty-row"><td colspan="7">${
+    tbody.innerHTML = `<tr class="empty-row"><td colspan="8">${
       sorted.length ? 'Nenhum condomínio encontrado com esse filtro.' : 'Nenhum condomínio cadastrado ainda.'}</td></tr>`;
     return;
   }
   tbody.innerHTML = filtrados.map((c) => {
     const acoes = [
+      can('condominios', 'update') && c.ativo
+        ? `<button class="btn-sm btn-ghost" data-aviso-previo="${c.id}">${
+            c.avisoPrevioAte ? 'Editar aviso' : 'Aviso prévio'}</button>`
+        : '',
       can('condominios', 'update') ? `<button class="btn-sm btn-ghost" data-editar="${c.id}">Editar</button>` : '',
       can('condominios', 'delete') ? `<button class="btn-sm btn-danger" data-excluir="${c.id}">Excluir</button>` : '',
     ].filter(Boolean).join('');
     const cidadeUf = [c.cidade, c.estado].filter(Boolean).join(' / ');
+    const avisoPrevioCel = c.avisoPrevioAte
+      ? `<span class="pill pill-warn">Até ${escapeHtml(fmtDateBR(c.avisoPrevioAte))}</span>
+         <div class="muted" style="font-size:10.5px;">novo código: ${escapeHtml(c.avisoPrevioNovoCodigo)}</div>`
+      : '<span class="muted">—</span>';
     return `<tr>
       <td><b>${escapeHtml(c.nome)}</b>${c.nomeFantasia ? `<br/><span class="muted">${escapeHtml(c.nomeFantasia)}</span>` : ''}</td>
       <td>${c.codigo ? escapeHtml(c.codigo) : '<span class="muted">—</span>'}</td>
@@ -68,12 +82,15 @@ function render() {
       <td>${c.sindico ? escapeHtml(c.sindico) : '<span class="muted">—</span>'}</td>
       <td>${c.telefone ? escapeHtml(c.telefone) : '<span class="muted">—</span>'}</td>
       <td><span class="pill ${c.ativo ? 'pill-ok' : 'pill-low'}">${c.ativo ? 'Sim' : 'Não'}</span></td>
+      <td>${avisoPrevioCel}</td>
       <td><div class="row-actions">${acoes || '<span class="muted">—</span>'}</div></td></tr>`;
   }).join('');
   tbody.querySelectorAll('[data-editar]').forEach((b) =>
     b.addEventListener('click', () => openCondominioModal(b.dataset.editar)));
   tbody.querySelectorAll('[data-excluir]').forEach((b) =>
     b.addEventListener('click', () => deleteCondominio(b.dataset.excluir)));
+  tbody.querySelectorAll('[data-aviso-previo]').forEach((b) =>
+    b.addEventListener('click', () => openAvisoPrevioModal(b.dataset.avisoPrevio)));
 }
 
 function openCondominioModal(id) {
@@ -82,9 +99,9 @@ function openCondominioModal(id) {
   const c = id ? condominios.find((x) => x.id === id) : null;
   document.getElementById('condNome').value = c ? c.nome : '';
   document.getElementById('condNomeFantasia').value = c ? c.nomeFantasia : '';
-  document.getElementById('condCnpj').value = c ? c.cnpj : '';
+  document.getElementById('condCnpj').value = c ? maskCnpj(c.cnpj) : '';
   document.getElementById('condCodigo').value = c ? c.codigo : '';
-  document.getElementById('condCep').value = c ? c.cep : '';
+  document.getElementById('condCep').value = c ? maskCep(c.cep) : '';
   document.getElementById('condEndereco').value = c ? c.endereco : '';
   document.getElementById('condNumero').value = c ? c.numero : '';
   document.getElementById('condComplemento').value = c ? c.complemento : '';
@@ -95,7 +112,7 @@ function openCondominioModal(id) {
   document.getElementById('condAtivoSim').checked = !c || c.ativo;
   document.getElementById('condAtivoNao').checked = !!c && !c.ativo;
   document.getElementById('condSindico').value = c ? c.sindico : '';
-  document.getElementById('condTelefone').value = c ? c.telefone : '';
+  document.getElementById('condTelefone').value = c ? maskTelefone(c.telefone) : '';
   document.getElementById('condEmail').value = c ? c.email : '';
   document.getElementById('condObservacoes').value = c ? c.observacoes : '';
   openModal('modalCondominio');
@@ -148,5 +165,44 @@ async function deleteCondominio(id) {
     await api.deleteCondominio(id);
     await reload();
     toast('Condomínio excluído.', 'success');
+  } catch (e) { toast('Erro: ' + errorText(e), 'error'); }
+}
+
+// --------------------------------------------------------------- Aviso Prévio
+
+function openAvisoPrevioModal(id) {
+  const c = condominios.find((x) => x.id === id);
+  if (!c) return;
+  document.getElementById('avpCondominioId').value = c.id;
+  document.getElementById('avpCondominioNome').textContent = c.nome;
+  document.getElementById('avpCodigoAtual').textContent = c.codigo || '—';
+  document.getElementById('avpAte').value = c.avisoPrevioAte ? c.avisoPrevioAte.slice(0, 10) : '';
+  document.getElementById('avpNovoCodigo').value = c.avisoPrevioNovoCodigo || '';
+  document.getElementById('btnCancelarAvisoPrevio').style.display = c.avisoPrevioAte ? '' : 'none';
+  openModal('modalAvisoPrevio');
+}
+
+async function salvarAvisoPrevio() {
+  const id = document.getElementById('avpCondominioId').value;
+  const ate = document.getElementById('avpAte').value;
+  const novoCodigo = document.getElementById('avpNovoCodigo').value.trim();
+  if (!ate) { toast('Informe até quando o condomínio fica ativo.', 'error'); return; }
+  if (!novoCodigo) { toast('Informe o novo código após a saída.', 'error'); return; }
+  try {
+    await api.iniciarAvisoPrevio(id, ate, novoCodigo);
+    await reload();
+    closeModal('modalAvisoPrevio');
+    toast('Aviso prévio agendado.', 'success');
+  } catch (e) { toast('Erro: ' + errorText(e), 'error'); }
+}
+
+async function cancelarAvisoPrevio() {
+  const id = document.getElementById('avpCondominioId').value;
+  if (!confirm('Cancelar o aviso prévio? O condomínio segue ativo normalmente, sem data de saída agendada.')) return;
+  try {
+    await api.cancelarAvisoPrevio(id);
+    await reload();
+    closeModal('modalAvisoPrevio');
+    toast('Aviso prévio cancelado.', 'success');
   } catch (e) { toast('Erro: ' + errorText(e), 'error'); }
 }
