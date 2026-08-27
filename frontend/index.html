@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Estoque FL Condomínios</title>
+<title>Gestão de Suprimentos - FL</title>
 <link rel="stylesheet" href="css/tokens.css" />
 <link rel="stylesheet" href="css/layout.css" />
 <link rel="stylesheet" href="css/components.css" />
@@ -31,7 +31,7 @@
       <div class="login-side-content">
         <div class="login-side-logo">FL</div>
         <h1>Bem-vindo(a)</h1>
-        <div class="login-side-headline">Estoque FL Condomínios</div>
+        <div class="login-side-headline">Gestão de Suprimentos - FL</div>
         <p>Estoque, compras, orçamentos e gestão de condomínios — tudo em um só lugar.</p>
       </div>
     </div>
@@ -73,8 +73,8 @@
         <button type="button" class="btn-ghost btn-sm" id="btnRemoverLogoFl" style="display:none" title="Remover logo">✕</button>
       </div>
       <div>
-        <div class="name">Estoque FL</div>
-        <div class="sub">Gestão de suprimentos</div>
+        <div class="name">Gestão de Suprimentos</div>
+        <div class="sub">FL Condomínios</div>
       </div>
     </div>
     <!-- Montado pelo app.js a partir das permissões da sessão: o menu só lista
@@ -266,6 +266,27 @@
           <div class="card-body"><div class="chart-host" id="chartPainelSosRetroEspecialidade"></div></div>
         </div>
       </div>
+
+      <!-- Retrospecto do ano por pessoa: uma linha por quem recebe, uma coluna
+           por mês, no formato da planilha que a gerência já usava. A origem é a
+           lista de pagamentos FECHADA de cada mês (Programar pagamento), não os
+           serviços — é por isso que Suprimentos e Delta entram aqui junto dos
+           gerentes, exatamente como na planilha. -->
+      <div class="section-title">Retrospecto do ano por pessoa <span class="muted" style="font-weight:400;">quanto
+        cada um recebeu mês a mês, no ano selecionado acima</span></div>
+      <div class="panel">
+        <div class="panel-head">
+          <h2 id="painelSosRetroPessoaTitulo">Ano</h2>
+          <label class="check-inline"><input type="checkbox" id="painelSosRetroPessoaOcultarZerados" checked />
+            Ocultar quem não recebeu nada no ano</label>
+        </div>
+        <div class="table-scroll">
+          <table class="matrix" id="painelSosRetroPessoaTabela"></table>
+        </div>
+        <div class="field-hint" style="padding:var(--sp-3) var(--sp-4);">Vem das listas de pagamento fechadas em
+          <b>Programar pagamento</b>, contando só o que foi autorizado. Mês ainda sem lista fechada aparece como
+          <b>—</b>, diferente de <b>0,00</b>, que é mês fechado em que a pessoa não recebeu.</div>
+      </div>
     </section>
 
     <!-- ================== GESTÃO SOS: GERENTES ================== -->
@@ -426,6 +447,13 @@
         Só entra na distribuição de comissão (Dashboard de Fechamento) e no fechamento do mês quem estiver
         marcado como <b>Pago</b>. Venda lançada sem pagamento confirmado não gera comissão pra ninguém.
       </div>
+      <!-- Problemas de carteira que bagunçam a distribuição de comissão sem
+           avisar: condomínio fora de toda carteira (a comissão não entra no
+           "Recebido" de ninguém) e condomínio na carteira de outro gerente que
+           não o lançado no serviço (vai pro Recebido da pessoa errada).
+           Preenchido por render() em servicos.js. -->
+      <div class="carteira-box" id="servicosSemCarteiraAviso"
+        style="display:none;margin-bottom:var(--sp-3);max-width:820px;"></div>
       <div class="panel">
         <div class="table-scroll">
           <table>
@@ -617,6 +645,10 @@
         <button class="btn-outline" id="btnPpBuscar">↻ Buscar mês</button>
         <button class="btn-outline" id="btnPpImprimir" disabled>🖨 Imprimir lista de pagamentos</button>
         <button class="btn-primary" id="btnPpFechar" disabled>🔒 Fechar lista de pagamentos</button>
+        <!-- Só afeta o IMPRESSO: quem está zerado continua aparecendo na tabela
+             abaixo, senão não daria pra autorizar/desautorizar essa pessoa. -->
+        <label class="check-inline" title="Ao imprimir, omite quem ficou com R$ 0,00 — na tabela abaixo eles continuam aparecendo">
+          <input type="checkbox" id="ppOcultarZerados" checked /> Imprimir só quem recebe</label>
       </div>
 
       <div class="panel modulo-vazio" id="ppVazio">
@@ -658,6 +690,11 @@
       </div>
       <div class="toolbar">
         <input type="text" id="hpBusca" placeholder="Buscar por mês/ano ou observações..." style="min-width:260px;" />
+        <span class="spacer"></span>
+        <!-- Mesma opção de Programar pagamento, para o impresso sair igual
+             vindo de qualquer uma das duas telas. -->
+        <label class="check-inline" title="Ao imprimir, omite quem ficou com R$ 0,00">
+          <input type="checkbox" id="hpOcultarZerados" checked /> Imprimir só quem recebe</label>
       </div>
       <div class="panel">
         <div class="panel-head">

@@ -2,6 +2,7 @@ import { api, errorText } from '../api.js';
 import { escapeHtml, fmtBRL, fmtPct, uid, nowIso } from '../format.js';
 import { toast } from '../components/toast.js';
 import { printDocument, buildDashboardFechamentoDoc } from '../print.js';
+import { distribuicaoDashboard, tileDistribuido } from '../sosRateio.js';
 
 // Gestão SOS > Dashboard de Fechamento — replica mês após mês as fórmulas
 // SOMASES da planilha real do usuário. Nunca calcula nada aqui: cada
@@ -131,8 +132,10 @@ function render() {
     { label: 'Liberado p/ comissão (Gerentes)', value: fmtBRL(d.liberadoParaComissao) },
     { label: 'Gerência líquido', value: fmtBRL(d.gerenciaLiquido) },
     { label: 'Retido para a FL', value: fmtBRL(d.retido) },
-  ].map((t) => `<div class="stat-tile"><div class="label">${escapeHtml(t.label)}</div>
-    <div class="value">${t.value}</div></div>`).join('');
+    tileDistribuido(distribuicaoDashboard(d)),
+  ].map((t) => `<div class="stat-tile ${t.classeTile || ''}"><div class="label">${escapeHtml(t.label)}</div>
+    <div class="value ${t.classeValor || ''}">${t.value}</div>${
+      t.foot ? `<div class="foot">${escapeHtml(t.foot)}</div>` : ''}</div>`).join('');
 
   // Arredonda com PONTO decimal (round2(62.833) -> 62.83) — nunca
   // toLocaleString aqui: um <input type="number"> só aceita ponto, e
@@ -185,6 +188,11 @@ function render() {
         <td class="num">${fmtPct(x.porcentagem / 100, 0)}</td>
         <td class="num">${fmtBRL(x.comissao)}</td></tr>`).join('')
     : '<tr class="empty-row"><td colspan="6">Nenhum lançamento de Delta Síndicos neste mês.</td></tr>';
+  document.getElementById('dfDeltaTfoot').innerHTML = d.deltaSindicos.length ? `<tr style="font-weight:700;">
+    <td colspan="3">Total</td>
+    <td class="num">${fmtBRL(d.deltaSindicos.reduce((s, x) => s + x.venda, 0))}</td>
+    <td></td>
+    <td class="num">${fmtBRL(d.deltaSindicos.reduce((s, x) => s + x.comissao, 0))}</td></tr>` : '';
 
   document.getElementById('dfObservacoes').value = d.observacoes || '';
 }

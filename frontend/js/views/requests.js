@@ -505,12 +505,17 @@ function materiaisLeituraHtml(r) {
             ? '<span class="pill pill-aprovado">reservado</span>'
             : '<span class="muted">—</span>')}</td></tr>`;
   }).join('');
+  // A lista sai INTEIRA, sem rolagem própria: uma caixa de altura fixa aqui
+  // dentro vira uma segunda barra de rolagem escondida dentro do modal (que já
+  // rola). Quem rolava o modal não movia a lista e concluía que os materiais
+  // tinham sumido — com foto na linha cabiam só 3 de cada vez. Passando de
+  // 68vh, quem rola é o corpo do modal, com uma barra só.
   return `
-    <div class="panel"><div class="table-scroll" style="max-height:300px;"><table>
+    <div class="panel"><table>
       <thead><tr><th></th><th>Material</th><th class="num">Qtd.</th><th>Unid.</th>
         <th class="num">Valor estimado</th><th>Situação do item</th></tr></thead>
       <tbody>${linhas || '<tr class="empty-row"><td colspan="6">Sem itens.</td></tr>'}</tbody>
-    </table></div></div>
+    </table></div>
     <div class="muted" style="font-size:11px;">Valor estimado pelo custo médio atual; a baixa real é
       valorizada pelo custo médio da data da entrega.</div>`;
 }
@@ -545,11 +550,14 @@ function editorItensHtml() {
   const opcoesProduto = availability.map((a) =>
     `<option value="${a.productId}">${escapeHtml(a.name)} (${escapeHtml(a.unit)})</option>`).join('');
 
+  // Sem rolagem própria, pelo mesmo motivo de materiaisLeituraHtml: aqui é
+  // ainda pior esconder linha, porque cada uma tem um campo de quantidade e um
+  // botão de remover que o usuário precisa alcançar.
   return `
-    <div class="panel"><div class="table-scroll" style="max-height:300px;"><table>
+    <div class="panel"><table>
       <thead><tr><th></th><th>Material</th><th class="num">Qtd.</th><th></th></tr></thead>
       <tbody id="reqEditItensTbody">${linhas || '<tr class="empty-row"><td colspan="4">Nenhum material — adicione pelo menos um.</td></tr>'}</tbody>
-    </table></div></div>
+    </table></div>
     <div class="field-row" style="align-items:end;margin-top:var(--sp-3);">
       <div class="field"><label>Acrescentar material</label><select id="reqEditProduto">${opcoesProduto}</select></div>
       <div class="field" style="max-width:150px;"><label>Quantidade</label>

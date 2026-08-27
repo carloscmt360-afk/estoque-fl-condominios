@@ -37,6 +37,11 @@
   --warning-soft: #faf0da;
   --danger: #c0392b;
   --danger-soft: #f8e6e3;
+  /* Cadastro divergente (não é erro nem alerta de prazo): hoje, condomínio que
+     está numa carteira, mas na do gerente errado. Roxo por não colidir com
+     nenhum dos estados acima nem com o azul institucional. */
+  --alerta-cadastro: #7d3c98;
+  --alerta-cadastro-soft: #f2e9f7;
 
   /* Paleta categórica dos gráficos — deriva da paleta institucional acima */
   --chart-s1: #1b3a5c;

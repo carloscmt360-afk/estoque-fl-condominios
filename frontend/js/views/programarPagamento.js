@@ -1,7 +1,8 @@
 import { api, errorText } from '../api.js';
 import { escapeHtml, fmtBRL, uid, nowIso } from '../format.js';
 import { toast } from '../components/toast.js';
-import { printDocument, buildPagamentosDoc } from '../print.js';
+import { printDocument, buildPagamentosDoc, pagamentosQueRecebem } from '../print.js';
+import { distribuicaoDoMes, tileDistribuido } from '../sosRateio.js';
 
 // Gestão SOS > Programar pagamento — monta quem recebe quanto no mês
 // (Gerentes/Suprimentos/Delta) a partir do Dashboard de Fechamento JÁ SALVO
@@ -81,13 +82,16 @@ function render() {
     pagamentoAtual.fechado ? '💾 Salvar correções' : '🔒 Fechar lista de pagamentos';
 
   const d = pagamentoAtual.dados;
+  const dist = distribuicaoDoMes(d.arrecadado, d.totalGerentes, d.totalSuprimentos, d.totalDelta);
   document.getElementById('ppStatGrid').innerHTML = [
     { label: 'Arrecadado', value: fmtBRL(d.arrecadado) },
     { label: 'Total Gerentes', value: fmtBRL(d.totalGerentes) },
     { label: 'Total Suprimentos', value: fmtBRL(d.totalSuprimentos) },
     { label: 'Total Delta', value: fmtBRL(d.totalDelta) },
-  ].map((t) => `<div class="stat-tile"><div class="label">${escapeHtml(t.label)}</div>
-    <div class="value">${t.value}</div></div>`).join('');
+    tileDistribuido(dist),
+  ].map((t) => `<div class="stat-tile ${t.classeTile || ''}"><div class="label">${escapeHtml(t.label)}</div>
+    <div class="value ${t.classeValor || ''}">${t.value}</div>${
+      t.foot ? `<div class="foot">${escapeHtml(t.foot)}</div>` : ''}</div>`).join('');
 
   document.getElementById('ppLinhasTbody').innerHTML = d.linhas.map((l, i) => `<tr>
       <td><b>${escapeHtml(l.nome)}</b></td>
@@ -134,5 +138,14 @@ function imprimir() {
   // nunca as linhas não autorizadas, mesmo que já tenham um valor sugerido.
   const autorizados = pagamentoAtual.dados.linhas.filter((l) => l.autorizado);
   if (!autorizados.length) { toast('Nenhum pagamento autorizado para imprimir.', 'error'); return; }
-  printDocument(buildPagamentosDoc(autorizados, mesAnoLabel(pagamentoAtual.mesReferencia)));
+  const linhas = document.getElementById('ppOcultarZerados').checked
+    ? pagamentosQueRecebem(autorizados)
+    : autorizados;
+  if (!linhas.length) {
+    toast('Todos os autorizados estão com R$ 0,00 — desmarque "Imprimir só quem recebe" para listá-los.', 'error');
+    return;
+  }
+  const d = pagamentoAtual.dados;
+  printDocument(buildPagamentosDoc(linhas, mesAnoLabel(pagamentoAtual.mesReferencia),
+    distribuicaoDoMes(d.arrecadado, d.totalGerentes, d.totalSuprimentos, d.totalDelta)));
 }

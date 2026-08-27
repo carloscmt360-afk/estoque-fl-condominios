@@ -1,7 +1,8 @@
 import { api, errorText } from '../api.js';
 import { escapeHtml, fmtBRL } from '../format.js';
 import { toast } from '../components/toast.js';
-import { printDocument, buildPagamentosDoc } from '../print.js';
+import { printDocument, buildPagamentosDoc, pagamentosQueRecebem } from '../print.js';
+import { distribuicaoDoMes } from '../sosRateio.js';
 import { abrirMes as abrirMesEmProgramarPagamento } from './programarPagamento.js';
 
 // Gestão SOS > Histórico de pagamentos — os meses com pagamento FECHADO
@@ -100,6 +101,15 @@ async function onClickAcao(e) {
     // a quantia exata autorizada — nunca as não autorizadas.
     const autorizados = p.dados.linhas.filter((l) => l.autorizado);
     if (!autorizados.length) { toast('Nenhum pagamento autorizado neste registro.', 'error'); return; }
-    printDocument(buildPagamentosDoc(autorizados, mesAnoLabel(p.mesReferencia)));
+    const linhas = document.getElementById('hpOcultarZerados').checked
+      ? pagamentosQueRecebem(autorizados)
+      : autorizados;
+    if (!linhas.length) {
+      toast('Todos os autorizados estão com R$ 0,00 — desmarque "Imprimir só quem recebe" para listá-los.', 'error');
+      return;
+    }
+    printDocument(buildPagamentosDoc(linhas, mesAnoLabel(p.mesReferencia),
+      distribuicaoDoMes(p.dados.arrecadado, p.dados.totalGerentes,
+        p.dados.totalSuprimentos, p.dados.totalDelta)));
   }
 }

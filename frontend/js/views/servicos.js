@@ -167,6 +167,129 @@ function temFiltroAtivo() {
   return !!(filtroMesDe || filtroMesAte || filtroCondominio.trim() || filtroGerente || filtroParceiro);
 }
 
+// ---- problemas de carteira
+//
+// O "Recebido" de cada gerente no Dashboard de Fechamento soma a comissão dos
+// serviços dos condomínios NA CARTEIRA dele — não dos serviços que trazem o
+// nome dele no campo Gerente (ver commissions_engine.cpp). Como os dois lados
+// são cadastrados em telas diferentes, eles divergem calados: a comissão vai
+// pro Recebido de outra pessoa, ou de ninguém, e nada na tela denuncia. Só dá
+// pra perceber muito depois, conferindo o fechamento à mão — foi assim que três
+// condomínios ficaram fora da carteira de um gerente por meses e derrubaram o
+// Recebido dele pela metade. Marcar aqui, na tela onde o serviço é lançado, é o
+// único momento em que dá pra corrigir antes do estrago. Ver situacaoCarteira
+// logo abaixo para os casos.
+
+// Dono(s) da carteira de cada condomínio. A carteira chega como
+// `condominios: [{id, nome}]` (ver gerenteToJson em api.cpp) — mesmo caminho
+// que Carteiras e Gerentes já usam. Cuidado: o simulador de desenvolvimento
+// também carrega um `condominioIds`, que o backend real NÃO manda — usar aquele
+// campo deixaria todo condomínio vermelho no aplicativo instalado.
+//
+// É uma LISTA de donos, não um dono só, porque gerente_condominios é uma tabela
+// N:N sem trava de exclusividade (ver db.cpp): nada impede o mesmo condomínio
+// de estar em duas carteiras. Quando isso acontece a comissão dele é somada no
+// Recebido dos DOIS gerentes (commissions_engine.cpp percorre gerente por
+// gerente), inflando a distribuição — por isso esse caso também é sinalizado.
+function donosDeCarteiraPorCondominio() {
+  const mapa = new Map();
+  for (const g of gerentes) {
+    for (const c of g.condominios || []) {
+      if (!mapa.has(c.id)) mapa.set(c.id, []);
+      mapa.get(c.id).push({ id: g.id, nome: g.nome });
+    }
+  }
+  return mapa;
+}
+
+function condominioExiste(condominioId) {
+  return condominios.some((c) => c.id === condominioId);
+}
+
+// Três situações, do ponto de vista de quem vai receber a comissão:
+//   'ok'          — nada a corrigir
+//   'sem'         — não está em carteira nenhuma: a comissão não entra no
+//                   Recebido de ninguém
+//   'divergente'  — está em carteira, mas não na do gerente lançado no serviço
+//                   (ou está em mais de uma): o dinheiro vai pro Recebido de
+//                   outra pessoa, ou de duas
+//
+// Serviço preso a condomínio já EXCLUÍDO do cadastro nunca é sinalizado: o nome
+// fica congelado no registro, não há o que corrigir em Carteiras, e apontar
+// para algo insolúvel só ensina a ignorar o aviso.
+//
+// Serviço SEM gerente lançado não gera divergência: sem os dois lados não há
+// como dizer que a carteira está "errada" — e o Recebido vai pro dono da
+// carteira normalmente, que é o comportamento esperado.
+function situacaoCarteira(s, donos) {
+  if (!s.condominioId || !condominioExiste(s.condominioId)) return 'ok';
+  const lista = donos.get(s.condominioId) || [];
+  if (!lista.length) return 'sem';
+  if (lista.length > 1) return 'divergente';
+  if (s.gerenteId && lista[0].id !== s.gerenteId) return 'divergente';
+  return 'ok';
+}
+
+function motivoDivergencia(s, donos) {
+  const lista = donos.get(s.condominioId) || [];
+  if (lista.length > 1) {
+    return `Está na carteira de mais de um gerente (${lista.map((d) => d.nome).join(', ')}) — `
+      + 'a comissão deste serviço é contada para todos eles no Dashboard de Fechamento.';
+  }
+  return `Está na carteira de ${lista[0].nome}, mas o serviço está lançado no nome de `
+    + `${s.gerenteNome || '(sem gerente)'} — a comissão vai para o Recebido de ${lista[0].nome}.`;
+}
+
+function condominioCelHtml(s, donos) {
+  const nome = escapeHtml(s.condominioNome);
+  const sit = situacaoCarteira(s, donos);
+  if (sit === 'ok') return nome;
+  const titulo = sit === 'sem'
+    ? 'Este condomínio não está na carteira de nenhum gerente — a comissão dele não entra no Recebido de ninguém no Dashboard de Fechamento.'
+    : motivoDivergencia(s, donos);
+  const classe = sit === 'sem' ? 'sem-carteira' : 'carteira-divergente';
+  return `<span class="${classe}" title="${escapeHtml(titulo)} Corrija em Gestão SOS > Carteiras.">⚠ ${nome}</span>`;
+}
+
+// O aviso conta os condomínios DISTINTOS (não os serviços): o que precisa ser
+// corrigido em Carteiras é o condomínio, e um mesmo condomínio costuma ter
+// vários serviços no mês — contar serviços inflaria o número sem ajudar.
+// A lista sai completa, sem "e mais N": é exatamente o que a pessoa vai
+// procurar na tela de Carteiras, e cortar obrigaria a voltar aqui pra ver o
+// resto. Considera só os serviços VISÍVEIS no filtro atual, pra não acusar
+// problema em mês nenhum quando a pessoa está olhando um mês específico.
+function renderAvisoSemCarteira(lista, donos) {
+  const box = document.getElementById('servicosSemCarteiraAviso');
+  const distintos = (sit) => [...new Map(lista.filter((s) => situacaoCarteira(s, donos) === sit)
+    .map((s) => [s.condominioId, s])).values()]
+    .sort((a, b) => String(a.condominioNome).localeCompare(String(b.condominioNome), 'pt-BR'));
+
+  const sem = distintos('sem');
+  const div = distintos('divergente');
+  if (!sem.length && !div.length) {
+    box.style.display = 'none';
+    box.innerHTML = '';
+    return;
+  }
+
+  const blocos = [];
+  if (sem.length) {
+    blocos.push(`<div><span class="sem-carteira">⚠ ${sem.length} condomínio(s) fora de qualquer
+      carteira:</span> ${sem.map((s) => escapeHtml(s.condominioNome)).join(' · ')}.
+      A comissão desses serviços entra no Arrecadado do mês, mas não no <b>Recebido</b> de nenhum gerente.</div>`);
+  }
+  if (div.length) {
+    blocos.push(`<div style="margin-top:6px;"><span class="carteira-divergente">⚠ ${div.length}
+      condomínio(s) na carteira de outro gerente:</span>
+      ${div.map((s) => escapeHtml(s.condominioNome)).join(' · ')}.
+      A comissão vai para o <b>Recebido</b> de quem tem o condomínio na carteira, não de quem está
+      lançado no serviço.</div>`);
+  }
+  box.style.display = '';
+  box.innerHTML = `${blocos.join('')}<div style="margin-top:6px;">Corrija em
+    <b>Gestão SOS &gt; Carteiras</b>.</div>`;
+}
+
 function render() {
   const tbody = document.getElementById('servicosTbody');
   const lista = listaFiltrada();
@@ -180,6 +303,9 @@ function render() {
   // linhas que não existem mais.
   const idsVisiveis = new Set(lista.map((s) => s.id));
   for (const id of selecionados) if (!idsVisiveis.has(id)) selecionados.delete(id);
+
+  const donosCarteira = donosDeCarteiraPorCondominio();
+  renderAvisoSemCarteira(lista, donosCarteira);
 
   if (!lista.length) {
     tbody.innerHTML = `<tr class="empty-row"><td colspan="13">${
@@ -232,7 +358,7 @@ function render() {
       <td>${checkbox}</td>
       <td class="num">${s.numero}</td>
       <td>${s.codigo ? escapeHtml(s.codigo) : '<span class="muted">—</span>'}</td>
-      <td>${escapeHtml(s.condominioNome)}</td>
+      <td>${condominioCelHtml(s, donosCarteira)}</td>
       <td>${s.gerenteNome ? escapeHtml(s.gerenteNome) : '<span class="muted">—</span>'}</td>
       <td>${s.parceiroNome ? escapeHtml(s.parceiroNome) : '<span class="muted">—</span>'}</td>
       <td class="num">${campoVenda}</td>

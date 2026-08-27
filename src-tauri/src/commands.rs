@@ -1224,7 +1224,7 @@ pub fn send_test_email(state: State<AppState>, to: String) -> Result<(), String>
     let data_dir = resolve_data_dir()?;
     let email = bridge::mailer::EmailToSend {
         to,
-        subject: "Teste de configuração de e-mail — Estoque FL".to_string(),
+        subject: "Teste de configuração de e-mail — Gestão de Suprimentos - FL".to_string(),
         body_html: "<p>Se esta mensagem chegou, a configuração de SMTP em \
             <b>Compras &gt; Orçamentos &gt; ⚙ E-mail</b> está funcionando.</p>".to_string(),
         attachment_paths: vec![],

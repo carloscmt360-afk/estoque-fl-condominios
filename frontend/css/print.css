@@ -263,6 +263,23 @@
     font-size: 7pt;
     color: var(--ink-secondary);
   }
+  /* % distribuído: verde dentro do limite combinado, vermelho acima. Numa
+     impressora preto e branco a cor vira cinza, por isso o rodapé do quadro
+     também diz "dentro do limite" / "ACIMA do limite" por escrito (ver
+     kpiDistribuido em js/print.js) — no papel a informação não pode depender
+     só da cor. */
+  #printArea .pr-kpi-dentro {
+    border-left-color: var(--success);
+  }
+  #printArea .pr-kpi-dentro .v {
+    color: var(--success);
+  }
+  #printArea .pr-kpi-acima {
+    border-left-color: var(--danger);
+  }
+  #printArea .pr-kpi-acima .v {
+    color: var(--danger);
+  }
 
   #printArea .pr-note {
     border: 0.5pt solid var(--border-strong);

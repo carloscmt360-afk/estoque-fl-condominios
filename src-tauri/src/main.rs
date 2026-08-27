@@ -33,6 +33,7 @@ impl AppState {
 /// novamente" da tela de erro).
 pub fn init_session(state: &AppState) {
     let result = ffi::resolve_data_dir_default().and_then(|data_dir| {
+        adotar_dados_de_instalacao_anterior(&data_dir);
         let db_path = format!("{data_dir}/estoque.db");
         ffi::open_session(&db_path)
     });
@@ -46,6 +47,32 @@ pub fn init_session(state: &AppState) {
             *state.session.lock().unwrap() = None;
             *state.init_error.lock().unwrap() = Some(e.what().to_string());
         }
+    }
+}
+
+/// Primeira abertura depois de o produto ter sido renomeado: o instalador põe
+/// o programa numa pasta nova, e como o app é portátil (banco/imagens/anexos
+/// ficam ao lado do executável), a instalação nova nasceria vazia com todos os
+/// dados presos na pasta antiga. Isto traz os dados de lá — copiando, nunca
+/// movendo. Ver bridge/src/migracao.rs.
+///
+/// Falhar aqui NUNCA pode impedir o app de abrir: os dados antigos continuam
+/// onde sempre estiveram, e o usuário consegue abrir a instalação anterior ou
+/// copiar a pasta à mão. Por isso o erro só vai pro log, não vira init_error.
+fn adotar_dados_de_instalacao_anterior(data_dir: &str) {
+    let base = match std::path::Path::new(data_dir).parent() {
+        Some(b) => b.to_path_buf(),
+        None => return,
+    };
+    match bridge::migracao::migrar_instalacao_anterior(&base) {
+        Ok(Some(m)) => eprintln!(
+            "Dados adotados da instalação anterior em '{}' ({} arquivo(s)). \
+             A pasta antiga foi mantida intacta.",
+            m.origem.display(),
+            m.arquivos_copiados
+        ),
+        Ok(None) => {}
+        Err(e) => eprintln!("Não foi possível trazer os dados da instalação anterior: {e}"),
     }
 }
 
@@ -65,7 +92,7 @@ fn mostrar_janela(app: &tauri::AppHandle) {
 /// "Abrir" e "Encerrar". Clique esquerdo simples também reabre a janela,
 /// que é o gesto que a maioria dos usuários tenta primeiro.
 fn instalar_bandeja(app: &tauri::AppHandle) -> tauri::Result<()> {
-    let abrir = MenuItem::with_id(app, "abrir", "Abrir Estoque FL", true, None::<&str>)?;
+    let abrir = MenuItem::with_id(app, "abrir", "Abrir Gestão de Suprimentos", true, None::<&str>)?;
     let encerrar = MenuItem::with_id(app, "encerrar", "Encerrar", true, None::<&str>)?;
     let menu = Menu::with_items(app, &[&abrir, &encerrar])?;
 
@@ -77,7 +104,7 @@ fn instalar_bandeja(app: &tauri::AppHandle) -> tauri::Result<()> {
         construtor = construtor.icon(icone.clone());
     }
     construtor
-        .tooltip("Estoque FL Condomínios")
+        .tooltip("Gestão de Suprimentos - FL")
         .menu(&menu)
         // false: o clique esquerdo é tratado por nós (reabrir a janela) em vez
         // de abrir o menu, que é o comportamento padrão do Windows.
@@ -259,5 +286,5 @@ fn main() {
             commands::marcar_parcela,
         ])
         .run(tauri::generate_context!())
-        .expect("erro ao iniciar o Estoque FL Condomínios");
+        .expect("erro ao iniciar a Gestão de Suprimentos - FL");
 }

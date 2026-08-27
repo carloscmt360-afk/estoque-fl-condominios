@@ -10,6 +10,7 @@
 pub mod images;
 pub mod attachments;
 pub mod mailer;
+pub mod migracao;
 
 #[cxx::bridge(namespace = "estoque::shim")]
 pub mod ffi {

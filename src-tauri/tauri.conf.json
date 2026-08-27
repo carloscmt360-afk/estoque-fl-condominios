@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Estoque FL Condomínios",
+  "productName": "Gestão de Suprimentos - FL",
   "version": "0.1.0",
   "identifier": "com.flcondominios.estoque",
   "build": {
@@ -11,7 +11,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "Estoque FL Condomínios",
+        "title": "Gestão de Suprimentos - FL",
         "width": 1280,
         "height": 800,
         "minWidth": 960,

@@ -1959,7 +1959,7 @@ export async function installDevMock() {
 
       case 'send_test_email': {
         exigirSuperadmin('configurar o envio de e-mail');
-        const erro = enviarEmailMock(args.to, 'Teste de configuração de e-mail — Estoque FL',
+        const erro = enviarEmailMock(args.to, 'Teste de configuração de e-mail — Gestão de Suprimentos - FL',
           'Se esta mensagem chegou, a configuração de SMTP está funcionando.');
         if (erro) throw new Error(erro);
         return null;

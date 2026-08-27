@@ -1,8 +1,11 @@
-# Estoque FL Condomínios
+# Gestão de Suprimentos - FL
 
-App desktop de controle de estoque — refatorado do app web original (HTML/JS
-+ localStorage) para C++ (motor de negócio + SQLite) com uma casca Rust/Tauri
-e um frontend redesenhado.
+App desktop de gestão de suprimentos: estoque e requisições, compras e
+orçamentos, cadastro de condomínios com prazos de serviço, e a Gestão SOS
+(comissões, fechamento e pagamentos). Nasceu como controle de estoque e hoje o
+estoque é só um dos módulos — refatorado do app web original (HTML/JS +
+localStorage) para C++ (motor de negócio + SQLite) com uma casca Rust/Tauri e
+um frontend redesenhado.
 
 ## Arquitetura
 

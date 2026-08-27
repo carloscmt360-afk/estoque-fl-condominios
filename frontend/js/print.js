@@ -11,6 +11,7 @@
 // montado inteiro antes de existir qualquer elemento em #printArea.
 import { fmtBRL, fmtNum, fmtPct, fmtDateBR, fmtDateTimeBR, fmtMesAnoBR, escapeHtml, deltaInfo, porCurvaDepoisNome } from './format.js';
 import { barrasHSVG } from './charts/deptHBars.js';
+import { distribuicaoDashboard, tileDistribuido } from './sosRateio.js';
 
 const MESES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
 const MESES_ABR = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
@@ -47,7 +48,7 @@ function head(titulo, sub, extras) {
   return `<div class="pr-head">
     ${logoDataUrl ? `<img class="pr-logo" src="${logoDataUrl}" alt="Logo FL" />` : ''}
     <h1>${escapeHtml(titulo)}</h1>
-    <div class="pr-sub"><b>Estoque FL Condomínios</b> — ${escapeHtml(sub)}</div>
+    <div class="pr-sub"><b>Gestão de Suprimentos - FL</b> — ${escapeHtml(sub)}</div>
     <div class="pr-meta">Emitido em ${fmtDateTimeBR(new Date().toISOString())}${extras ? ' · ' + escapeHtml(extras) : ''}</div>
   </div>`;
 }
@@ -62,9 +63,24 @@ function rodape(nota) {
 }
 
 function kpiGrid(itens) {
-  return `<div class="pr-kpis">${itens.map((i) => `<div class="pr-kpi">
+  return `<div class="pr-kpis">${itens.map((i) => `<div class="pr-kpi ${i.cls || ''}">
     <div class="k">${escapeHtml(i.k)}</div><div class="v">${escapeHtml(i.v)}</div>
     <div class="f">${escapeHtml(i.f || '')}</div></div>`).join('')}</div>`;
+}
+
+// O quadro de "% distribuído" nos dois documentos que o mostram (Dashboard de
+// Fechamento e Lista de Pagamentos), com a mesma cor da tela. Impresso em
+// preto e branco a cor some, então o rodapé do quadro diz o limite por escrito
+// — quem lê no papel precisa saber se passou sem depender do verde/vermelho.
+function kpiDistribuido(dist) {
+  const t = tileDistribuido(dist);
+  const semBase = dist.pct === null;
+  return {
+    k: '% distribuído',
+    v: t.value,
+    f: semBase ? t.foot : `${t.foot} · ${dist.acimaDoLimite ? 'ACIMA do limite' : 'dentro do limite'}`,
+    cls: semBase ? '' : (dist.acimaDoLimite ? 'pr-kpi-acima' : 'pr-kpi-dentro'),
+  };
 }
 
 // Dinheiro sem o "R$" (a matriz tem 14 colunas) e sempre com 2 casas.
@@ -708,6 +724,25 @@ export function buildSosPainelDoc(D) {
       <tbody><tr>${D.evolucaoMeses.map((m) => `<td class="num">${m.value ? moedaSimples(m.value) : '0'}</td>`).join('')}
         <td class="num">${moedaSimples(D.evolucaoMeses.reduce((s, m) => s + m.value, 0))}</td></tr></tbody></table>`;
 
+  // Retrospecto do ano por pessoa — o formato da planilha que a gerência já
+  // usava (nomes nas linhas, meses nas colunas). Vem pronto da tela; aqui o
+  // papel só desenha, como todo o resto deste arquivo.
+  const retroPessoa = D.retroPessoa && D.retroPessoa.linhas.length
+    ? `<div class="pr-sec">Retrospecto do ano por pessoa — ${D.retroPessoa.ano}</div>
+       <table><thead><tr><th>Nome</th><th>Tipo</th>
+         ${MESES_ABR.map((m) => `<th class="num">${m}</th>`).join('')}
+         <th class="num">Total</th></tr></thead>
+       <tbody>${D.retroPessoa.linhas.map((l) => `<tr>
+         <td>${escapeHtml(l.nome)}</td><td>${escapeHtml(l.tipoLabel)}</td>
+         ${l.meses.map((v, i) => `<td class="num">${
+           D.retroPessoa.mesFechado[i] ? moedaSimples(v) : '—'}</td>`).join('')}
+         <td class="num">${moedaSimples(l.total)}</td></tr>`).join('')}</tbody>
+       <tfoot><tr><td colspan="2">TOTAL</td>
+         ${D.retroPessoa.totaisMes.map((v, i) => `<td class="num">${
+           D.retroPessoa.mesFechado[i] ? moedaSimples(v) : '—'}</td>`).join('')}
+         <td class="num">${moedaSimples(D.retroPessoa.total)}</td></tr></tfoot></table>`
+    : '';
+
   return head('Painel — Gestão SOS', D.filtroTxt, `${D.lista.length} serviço(s)`) +
     kpiGrid([
       { k: 'Total de vendas', v: fmtBRL(totalVenda) },
@@ -719,7 +754,8 @@ export function buildSosPainelDoc(D) {
     tabelaRanking('Ranking por Gerente', D.rankGerente, 'Comissão') +
     tabelaRanking('Ranking por Parceiro', D.rankParceiro, 'Comissão') +
     tabelaRanking('Ranking por Condomínio', D.rankCondominio, 'Venda') +
-    rodape('Comissão = venda × porcentagem ÷ 100, somada por lançamento. Um serviço já fechado continua contando aqui — fechar só trava a edição.') +
+    retroPessoa +
+    rodape('Comissão = venda × porcentagem ÷ 100, somada por lançamento. Um serviço já fechado continua contando aqui — fechar só trava a edição. O retrospecto por pessoa sai das listas de pagamento já fechadas, contando só o que foi autorizado; mês sem lista fechada aparece como "—".') +
     assinaturas();
 }
 
@@ -809,12 +845,14 @@ export function buildDashboardFechamentoDoc(dash, filtroTxt) {
     <tbody>${dash.distribuicaoCompras.map((l) => `<tr>
         <td>${escapeHtml(l.rotulo)}</td><td class="num">${moedaSimples(l.valor)}</td></tr>`).join('')}</tbody></table>`;
 
+  const dist = distribuicaoDashboard(dash);
   return head('Dashboard de Fechamento', filtroTxt) +
     kpiGrid([
       { k: 'Arrecadado', v: fmtBRL(dash.arrecadado) },
       { k: 'Liberado p/ comissão', v: fmtBRL(dash.liberadoParaComissao) },
       { k: 'Gerência líquido', v: fmtBRL(dash.gerenciaLiquido) },
       { k: 'Retido para a FL', v: fmtBRL(dash.retido) },
+      kpiDistribuido(dist),
     ]) +
     gerentesTabela +
     rateioTabela +
@@ -826,12 +864,28 @@ export function buildDashboardFechamentoDoc(dash, filtroTxt) {
 
 // -------------------------------------------------- gestão sos: pagamentos
 
-const TIPO_PAGAMENTO_LABEL = { gerente: 'Gerente', suprimento: 'Suprimentos', delta: 'Delta' };
+// Exportado porque o Painel SOS mostra os mesmos rótulos na tela (retrospecto
+// do ano por pessoa) — duas cópias divergiriam no dia que entrar um tipo novo.
+export const TIPO_PAGAMENTO_LABEL = { gerente: 'Gerente', suprimento: 'Suprimentos', delta: 'Delta' };
+
+// Quem foi autorizado mas ficou sem nada a receber ("R$ 0,00") só ocupa linha
+// na lista que vai pro caixa — este filtro tira essas pessoas do impresso, sem
+// mexer no que a tela mostra (lá elas precisam aparecer, é onde se
+// autoriza/desautoriza). O corte é pelo valor JÁ ARREDONDADO em centavos, o
+// mesmo que o papel imprime: some quem sai como "R$ 0,00" e só quem sai assim
+// — um valor negativo (desconto) continua na lista, porque negativo não é zero.
+export function pagamentosQueRecebem(linhas) {
+  return linhas.filter((l) => Math.round(l.valor * 100) !== 0);
+}
 
 // `linhas` já vem filtrada só com o que foi AUTORIZADO (ver
 // programarPagamento.js/historicoPagamentos.js) — o impresso nunca lista
 // quem não foi autorizado, mesmo que tivesse um valor sugerido.
-export function buildPagamentosDoc(linhas, mesLabel) {
+// `dist` (opcional) vem de distribuicaoDoMes na tela que mandou imprimir — a
+// Lista de Pagamentos não tem como calculá-la sozinha, porque só recebe as
+// linhas já filtradas, e a porcentagem é sobre o mês INTEIRO (arrecadado contra
+// tudo que vai ser distribuído), não sobre o recorte impresso.
+export function buildPagamentosDoc(linhas, mesLabel, dist) {
   const total = linhas.reduce((s, l) => s + l.valor, 0);
   const corpo = linhas.map((l) => `<tr>
       <td>${escapeHtml(l.nome)}</td>
@@ -843,6 +897,7 @@ export function buildPagamentosDoc(linhas, mesLabel) {
     kpiGrid([
       { k: 'Total autorizado', v: fmtBRL(total) },
       { k: 'Pagamentos', v: fmtNum(linhas.length) },
+      ...(dist ? [kpiDistribuido(dist)] : []),
     ]) +
     `<table><thead><tr><th>Nome</th><th>Tipo</th><th>Chave PIX</th><th class="num">Valor</th></tr></thead>
       <tbody>${corpo}</tbody>

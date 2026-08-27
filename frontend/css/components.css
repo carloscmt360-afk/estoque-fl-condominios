@@ -218,6 +218,23 @@ label {
   margin-top: 4px;
   line-height: 1.15;
 }
+/* % do arrecadado que foi distribuída (Dashboard de Fechamento e Programar
+   pagamento). Verde até o limite combinado, vermelho acima dele — ver
+   LIMITE_DISTRIBUICAO_PCT em js/sosRateio.js. O quadro inteiro ganha um friso
+   da cor: só o número colorido some no meio de uma fileira de quadros iguais,
+   que é exatamente quando este precisa ser notado. */
+.stat-tile.tile-dentro-meta {
+  border-left: 4px solid var(--success);
+}
+.stat-tile.tile-acima-meta {
+  border-left: 4px solid var(--danger);
+}
+.stat-tile .value.dentro-meta {
+  color: var(--success);
+}
+.stat-tile .value.acima-meta {
+  color: var(--danger);
+}
 .stat-tile .foot {
   font-size: 11px;
   color: var(--ink-secondary);
@@ -605,6 +622,18 @@ tfoot td {
   max-height: 68vh;
   overflow-y: auto;
 }
+/* O corpo do modal já rola sozinho (overflow-y acima), então NENHUM filho dele
+   pode ser espremido: passou de 68vh, quem rola é o modal. Sem isto, qualquer
+   filho que tenha rolagem própria — as tabelas dentro de
+   <div style="overflow-x:auto"> e as .modal-table-wrap — encolhe até ALTURA
+   ZERO e desaparece inteiro, cabeçalho junto. Motivo: o flexbox só respeita o
+   tamanho mínimo do conteúdo (min-height:auto) enquanto o overflow do item é
+   visible; declarar overflow próprio zera esse mínimo e libera o item pra
+   encolher até nada. Era exatamente o que sumia com a tabela de Propostas na
+   Ordem de Orçamento (a coluna Anexo, com o campo de anexar o PDF, junto). */
+.modal-body > * {
+  flex-shrink: 0;
+}
 .modal-foot {
   padding: var(--sp-3) var(--sp-5);
   border-top: 1px solid var(--border);
@@ -743,6 +772,31 @@ tfoot td {
   padding: 9px 12px;
   font-size: 12px;
   color: var(--danger);
+}
+/* Problemas de carteira na tela de Serviços. Vermelho = o condomínio não está
+   em carteira nenhuma (a comissão não vai pra ninguém); roxo = está, mas na
+   carteira de outro gerente que não o lançado no serviço (ou em duas ao mesmo
+   tempo) — o dinheiro vai pra pessoa errada, não some.
+   Os dois levam ícone junto da cor: cor sozinha não serve como único sinal
+   para quem não distingue bem tons, e a tabela já usa cor em outras colunas. */
+.sem-carteira {
+  color: var(--danger);
+  font-weight: 700;
+}
+.carteira-divergente {
+  color: var(--alerta-cadastro);
+  font-weight: 700;
+}
+/* Caixa que resume os dois problemas de carteira de uma vez. Fundo NEUTRO de
+   propósito: ela carrega dentro os dois rótulos coloridos (vermelho e roxo), e
+   um fundo vermelho faria o roxo parecer parte do mesmo aviso. */
+.carteira-box {
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 9px 12px;
+  font-size: 12px;
+  color: var(--ink-secondary);
 }
 .danger-box b,
 .warn-box b {

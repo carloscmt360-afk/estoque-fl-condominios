@@ -144,7 +144,7 @@
 /* Logo da FL — uma foto só, configurada aqui e usada sempre no cabeçalho
    dos relatórios impressos (ver components/logoFl.js). Ocupa o lugar do
    ícone fixo do app no topo da barra lateral (.sidebar-brand), ao lado do
-   nome "Estoque FL". */
+   nome do sistema. */
 .sidebar-logo-fl {
   display: flex;
   align-items: center;

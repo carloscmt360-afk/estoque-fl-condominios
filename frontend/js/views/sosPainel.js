@@ -3,7 +3,7 @@ import { fmtBRL, fmtNum, fmtPct, escapeHtml } from '../format.js';
 import { drawBarrasH } from '../charts/deptHBars.js';
 import { emptyChart } from '../charts/palette.js';
 import { toast } from '../components/toast.js';
-import { printDocument, buildSosPainelDoc } from '../print.js';
+import { printDocument, buildSosPainelDoc, TIPO_PAGAMENTO_LABEL } from '../print.js';
 
 // Gestão SOS > Painel — visão de apresentação (números e gráficos) em cima
 // dos mesmos Serviços da planilha, sem gravar nada de novo. Existe porque
@@ -15,6 +15,7 @@ const MESES_ABR = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','
 let servicos = [];
 let gerentes = [];
 let parceiros = [];
+let pagamentos = [];
 let ano = new Date().getFullYear();
 let mes = ''; // '' = ano inteiro; senão "01".."12"
 let retroGerenteId = '';
@@ -46,18 +47,20 @@ export async function initSosPainel() {
       retroEspecialidadeId = e.target.value;
       renderRetrospectos();
     });
+    document.getElementById('painelSosRetroPessoaOcultarZerados')
+      .addEventListener('change', renderRetrospectoPessoa);
   }
   await reload();
 }
 
 export async function reload() {
   try {
-    [servicos, gerentes, parceiros] = await Promise.all([
-      api.listServicos(), api.listGerentes(), api.listParceiros(),
+    [servicos, gerentes, parceiros, pagamentos] = await Promise.all([
+      api.listServicos(), api.listGerentes(), api.listParceiros(), api.listPagamentosSos(),
     ]);
   } catch (e) {
     toast('Erro ao carregar os serviços: ' + errorText(e), 'error');
-    servicos = []; gerentes = []; parceiros = [];
+    servicos = []; gerentes = []; parceiros = []; pagamentos = [];
   }
   populaFiltros();
   render();
@@ -226,12 +229,107 @@ function renderRetrospectos() {
   }
 }
 
+// ---- retrospecto do ano POR PESSOA (formato da planilha da gerência): uma
+// linha por quem recebe, doze colunas de mês, uma de total.
+
+// Sem "R$" na célula: são 12 colunas de dinheiro lado a lado, e repetir o
+// símbolo em todas só atrapalha a leitura (mesmo critério da matriz do
+// Retrospecto de departamentos). O cabeçalho da seção já diz que é dinheiro.
+function moeda(v) {
+  return (v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+// A origem aqui NÃO são os serviços (como no resto do Painel), e sim a lista
+// de pagamentos fechada de cada mês em Programar pagamento. É de propósito:
+// a planilha inclui Suprimentos e Delta ao lado dos gerentes, e esses dois só
+// existem no fechamento de pagamento — não dá pra derivar dos serviços. Como
+// efeito, a tabela mostra o que de fato foi AUTORIZADO a pagar, que é a
+// pergunta que a planilha responde ("quanto cada um levou no ano").
+//
+// Mês sem lista fechada fica marcado como ausente (célula "—"), nunca como
+// zero: "ninguém recebeu" e "ainda não fechamos o mês" são coisas diferentes.
+function matrizRetrospectoPessoa() {
+  const doAno = pagamentos
+    .filter((p) => String(p.mesReferencia || '').slice(0, 4) === String(ano))
+    .sort((a, b) => String(a.mesReferencia).localeCompare(String(b.mesReferencia)));
+
+  const mesFechado = new Array(12).fill(false);
+  const porPessoa = new Map();
+
+  for (const p of doAno) {
+    const idx = Number(String(p.mesReferencia).slice(5, 7)) - 1;
+    if (!(idx >= 0 && idx <= 11)) continue;
+    mesFechado[idx] = true;
+    for (const l of (p.dados && p.dados.linhas) || []) {
+      // A pessoa entra na tabela por aparecer na lista do mês, mesmo sem ter
+      // sido autorizada — some da matriz seria pior que mostrar 0,00. Só o
+      // VALOR depende da autorização.
+      const chave = `${l.tipo}|${l.nome}`;
+      if (!porPessoa.has(chave)) {
+        porPessoa.set(chave, { nome: l.nome, tipo: l.tipo, meses: new Array(12).fill(0) });
+      }
+      if (l.autorizado) porPessoa.get(chave).meses[idx] += l.valor;
+    }
+  }
+
+  const linhas = [...porPessoa.values()].map((p) => ({
+    ...p, total: p.meses.reduce((s, v) => s + v, 0),
+  }));
+  // Mesma ordem da lista impressa do mês: gerentes, depois Suprimentos, depois
+  // Delta; dentro de cada tipo, por nome.
+  const ordemTipo = { gerente: 0, suprimento: 1, delta: 2 };
+  linhas.sort((a, b) => (ordemTipo[a.tipo] ?? 9) - (ordemTipo[b.tipo] ?? 9)
+    || a.nome.localeCompare(b.nome, 'pt-BR'));
+
+  const totaisMes = new Array(12).fill(0);
+  linhas.forEach((l) => l.meses.forEach((v, i) => { totaisMes[i] += v; }));
+
+  return { linhas, mesFechado, totaisMes, total: totaisMes.reduce((s, v) => s + v, 0) };
+}
+
+function renderRetrospectoPessoa() {
+  const m = matrizRetrospectoPessoa();
+  const ocultar = document.getElementById('painelSosRetroPessoaOcultarZerados').checked;
+  const linhas = ocultar ? m.linhas.filter((l) => Math.round(l.total * 100) !== 0) : m.linhas;
+
+  document.getElementById('painelSosRetroPessoaTitulo').textContent = `Ano ${ano}`;
+  const tabela = document.getElementById('painelSosRetroPessoaTabela');
+
+  if (!linhas.length) {
+    tabela.innerHTML = `<thead><tr><th class="col-dept">Nome</th></tr></thead>
+      <tbody><tr class="empty-row"><td>Nenhuma lista de pagamento fechada em ${ano}${
+        m.linhas.length ? ' com valor autorizado' : ''}.</td></tr></tbody>`;
+    return;
+  }
+
+  const celula = (v, i) => {
+    if (!m.mesFechado[i]) return '<td class="num vazio" title="mês ainda sem lista de pagamento fechada">—</td>';
+    if (Math.round(v * 100) === 0) return '<td class="num zero" title="mês fechado, sem valor autorizado">0,00</td>';
+    return `<td class="num">${moeda(v)}</td>`;
+  };
+
+  tabela.innerHTML = `<thead><tr><th class="col-dept">Nome</th><th>Tipo</th>
+      ${MESES_ABR.map((mm) => `<th class="num">${mm}</th>`).join('')}
+      <th class="num col-total">Total</th></tr></thead>
+    <tbody>${linhas.map((l) => `<tr>
+      <td class="col-dept">${escapeHtml(l.nome)}</td>
+      <td>${TIPO_PAGAMENTO_LABEL[l.tipo] || escapeHtml(l.tipo)}</td>
+      ${l.meses.map(celula).join('')}
+      <td class="num col-total">${moeda(l.total)}</td></tr>`).join('')}</tbody>
+    <tfoot><tr><td class="col-dept">TOTAL</td><td></td>
+      ${m.mesFechado.map((fechado, i) => fechado
+        ? `<td class="num">${moeda(m.totaisMes[i])}</td>`
+        : '<td class="num vazio">—</td>').join('')}
+      <td class="num col-total">${moeda(m.total)}</td></tr></tfoot>`;
+}
+
 function render() {
   const lista = servicosNoFiltro();
   renderStats(lista);
   renderEvolucao();
   renderRankings(lista);
   renderRetrospectos();
+  renderRetrospectoPessoa();
 }
 
 function filtroLabel() {
@@ -253,5 +351,16 @@ function imprimir() {
     rankGerente: ranking(lista, 'gerenteNome', 'comissao'),
     rankParceiro: ranking(lista, 'parceiroNome', 'comissao'),
     rankCondominio: ranking(lista, 'condominioNome', 'venda'),
+    retroPessoa: retroPessoaParaImpressao(),
   }));
+}
+
+// O impresso respeita a mesma caixa "Ocultar quem não recebeu nada no ano" da
+// tela: o papel sai igual ao que a pessoa está vendo na hora de imprimir.
+function retroPessoaParaImpressao() {
+  const m = matrizRetrospectoPessoa();
+  const ocultar = document.getElementById('painelSosRetroPessoaOcultarZerados').checked;
+  const linhas = (ocultar ? m.linhas.filter((l) => Math.round(l.total * 100) !== 0) : m.linhas)
+    .map((l) => ({ ...l, tipoLabel: TIPO_PAGAMENTO_LABEL[l.tipo] || l.tipo }));
+  return { ano, linhas, mesFechado: m.mesFechado, totaisMes: m.totaisMes, total: m.total };
 }
